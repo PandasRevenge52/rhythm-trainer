@@ -343,3 +343,12 @@ select,.tempo,.num{border:1px solid var(--line)}
   /* phone toolbar order: Start / Listen New Path / Notes-Count / the rest */
   #startBtn{order:1} #listenBtn,#newBtn,#pathBtn{order:2} .viewseg{order:3} #level,#meter,#barsSel,.tempo,.chip-in{order:4}
 }
+
+/* song setup */
+#ssCanvas{width:100%;height:190px;display:block;border-radius:10px;margin:12px 0 8px;border:1px solid var(--line)}
+.ss-bar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:10px}
+.ss-bar button{padding:6px 10px}
+.ss-bar .lab{margin-left:8px}
+.ss-bar .lab:first-child{margin-left:0}
+.ss-bar input[type=range]{flex:1;min-width:140px}
+.ss-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:4px 20px;margin-top:8px}

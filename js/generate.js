@@ -173,36 +173,4 @@ function buildDaily() {
   try { for (let i = 0; i < DAILY_PASSES; i++) daily.pats.push(newPattern()); } finally { rand = saved; }
   return daily;
 }
-
-// ---------- song charts: notes taken from the song itself ----------
-// Every 16th (or 8th on Easy) of the song's beat grid gets an onset strength from the song's
-// onset curve; the strongest become notes, up to a target density. Each beat is then written as a
-// 4-character cell, which always gives notation without ties.
-const CHART = {easy:{grid:2, perBeat:1.1}, normal:{grid:1, perBeat:1.8}, hard:{grid:1, perBeat:2.7}};
-function buildSongChart() {
-  if (!song.buf || !song.onset) return null;
-  const spec = CHART[S.songChart] || CHART.normal, period = 60 / song.bpm, fps = song.fps, on = song.onset;
-  const nBeats = Math.floor((song.buf.duration - song.first) / period);
-  const strength = (t) => { const c = Math.round(t * fps), w = Math.round(0.018 * fps); let m = 0; for (let k = c - w; k <= c + w; k++) if (k >= 0 && k < on.length && on[k] > m) m = on[k]; return m; };
-  const slots = [];
-  for (let j = 0; j < nBeats; j++) for (let s = 0; s < 4; s += spec.grid) slots.push({j, s, v:strength(song.first + (j + s/4) * period)});
-  const sorted = slots.map(x => x.v).filter(v => v > 0).sort((a, b) => b - a);
-  const keep = Math.min(sorted.length, Math.round(spec.perBeat * nBeats));
-  const thr = Math.max(sorted[keep - 1] ?? Infinity, (sorted[Math.floor(sorted.length / 2)] ?? 0) * 1.2);
-  const hits = new Set(slots.filter(x => x.v >= thr && x.v > 0).map(x => x.j * 4 + x.s));
-  return {hits, nBeats};
-}
-function chartPattern(startBeat) {
-  const ch = song.chart, m = METERS['4/4'], bars = [];
-  for (let b = 0; b < S.bars; b++) {
-    const ev = [];
-    for (let k = 0; k < 4; k++) {
-      const j = startBeat + b*4 + k;
-      let cell = '';
-      for (let s = 0; s < 4; s++) cell += ch && ch.hits.has(j*4 + s) ? 'x' : s === 0 ? 'r' : '-';
-      ev.push(...parseCell(cell, k*4).evs);
-    }
-    bars.push(ev);
-  }
-  return buildPattern(bars, m, null);
-}
+// song charts live in drums.js

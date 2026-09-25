@@ -131,7 +131,8 @@
       <input type="file" id="songFile" accept="audio/*,.mp3" hidden>
       <div class="songName"><b id="songName">No song loaded</b><span id="songInfo">or drop an audio file on the page</span></div>
       <div class="sgroup"><span class="lab">Notes</span><div class="chips" id="songSrcSeg"><button data-v="gen">Generated</button><button data-v="song">From the song</button></div>
-        <div class="chips" id="chartSeg"><button data-v="easy">Easy</button><button data-v="normal">Normal</button><button data-v="hard">Hard</button></div></div>
+        <div class="chips" id="chartSeg"><button data-v="easy">Easy</button><button data-v="normal">Normal</button><button data-v="hard">Hard</button></div>
+        <button id="songSetupBtn" title="Check the beat grid and detected drums">Setup…</button></div>
       <div class="sgroup" title="Song tempo. Use ½ / ×2 if the detected tempo is off by double, or tap along">
         <span class="lab">BPM</span><button id="sBpmDown" aria-label="Slower">−</button><input type="number" id="sBpm" class="num" step="0.01" min="40" max="240" aria-label="Song tempo"><button id="sBpmUp" aria-label="Faster">+</button>
         <button id="sHalf" title="Half tempo">½</button><button id="sDouble" title="Double tempo">×2</button><button id="sTap" title="Tap along to the song's beat to set the tempo">Tap</button>
@@ -164,6 +165,7 @@
 <!-- plain scripts (not modules) so the app also runs straight from the file system -->
 <script src="js/data.js"></script>
 <script src="js/generate.js"></script>
+<script src="js/drums.js"></script>
 <script src="js/notation.js"></script>
 <script src="js/audio.js"></script>
 <script src="js/engine.js"></script>
@@ -171,6 +173,7 @@
 <script src="js/progress.js"></script>
 <script src="js/calibrate.js"></script>
 <script src="js/song.js"></script>
+<script src="js/songsetup.js"></script>
 <script src="js/input.js"></script>
 <script src="js/lane.js"></script>
 <script src="js/ui.js"></script>

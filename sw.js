@@ -1,7 +1,7 @@
 // Offline support: serve the app from the cache, refresh the cache in the background.
-const CACHE = 'rhythm-trainer-v3';
+const CACHE = 'rhythm-trainer-v5';
 const FILES = ['./', 'index.html', 'css/app.css', 'icon.svg', 'manifest.webmanifest',
-  ...['data', 'generate', 'notation', 'audio', 'engine', 'judge', 'progress', 'calibrate', 'song', 'input', 'lane', 'ui'].map(f => `js/${f}.js`)];
+  ...['data', 'generate', 'drums', 'songsetup', 'notation', 'audio', 'engine', 'judge', 'progress', 'calibrate', 'song', 'input', 'lane', 'ui'].map(f => `js/${f}.js`)];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES))); self.skipWaiting(); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k))))); self.clients.claim(); });
 self.addEventListener('fetch', e => {

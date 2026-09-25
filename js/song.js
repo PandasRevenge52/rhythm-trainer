@@ -1,7 +1,8 @@
 'use strict';
 // ---------- song mode: load, find the beat, play along ----------
-const song = {buf:null, name:'', bpm:120, first:0, startAt:0, detected:null, loading:false, token:0, onset:null, fps:200, chart:null, chartKey:''};
-const chartKey = () => `${song.bpm}|${song.first.toFixed(3)}|${S.songChart}`;
+const DRUMS_VERSION = 5;   // bump when the analysis changes so cached results are redone
+const song = {buf:null, name:'', bpm:120, first:0, startAt:0, detected:null, loading:false, token:0, drums:null, chart:null, chartKey:''};
+const chartKey = () => `${song.bpm}|${song.first.toFixed(3)}|${S.songChart}|${Object.keys(S.songDrums).filter(k => S.songDrums[k])}|${S.songSens}`;
 // Tiny IndexedDB key/value store so the last song survives a reload.
 const idb = (() => {
   let p = null;
@@ -21,33 +22,7 @@ function saveSongMeta() {
   clearTimeout(metaTimer);
   metaTimer = setTimeout(() => idb.set('songMeta', {name:song.name, bpm:song.bpm, first:song.first, startAt:song.startAt, detected:song.detected}).catch(() => {}), 300);
 }
-// Onset strength over the whole song, 200 frames a second: jumps in energy, bass weighted, with a
-// local average taken off so loud and quiet sections count equally.
-function onsetCurve(buf) {
-  const sr = buf.sampleRate, FPS = 200, hop = sr / FPS, len = buf.length;
-  const chans = []; for (let c = 0; c < buf.numberOfChannels; c++) chans.push(buf.getChannelData(c));
-  const N = Math.floor(len / hop), eLo = new Float32Array(N), eAll = new Float32Array(N);
-  const a = Math.exp(-2*Math.PI*150/sr); let lp = 0;
-  for (let i = 0, j = 0; i < N; i++) {
-    const end = Math.floor((i + 1) * hop); let sl = 0, sa = 0, cnt = 0;
-    for (; j < end; j++, cnt++) {
-      let m = 0; for (const d of chans) m += d[j];
-      m /= chans.length; lp = a*lp + (1 - a)*m;
-      sl += lp*lp; sa += m*m;
-    }
-    eLo[i] = Math.log(1 + 1e4 * sl / cnt); eAll[i] = Math.log(1 + 1e3 * sa / cnt);
-  }
-  const raw = new Float32Array(N), on = new Float32Array(N);
-  for (let i = 1; i < N; i++) raw[i] = Math.max(0, eLo[i] - eLo[i-1]) + 0.6*Math.max(0, eAll[i] - eAll[i-1]);
-  const W = 20; let sum = 0;
-  for (let i = 0; i < N + W; i++) {
-    if (i < N) sum += raw[i];
-    if (i - 2*W - 1 >= 0) sum -= raw[i - 2*W - 1];
-    const c = i - W; if (c >= 0 && c < N) on[c] = Math.max(0, raw[c] - sum / (2*W + 1));
-  }
-  return {on, fps:FPS};
-}
-// Beat tracking from the onset curve (first 150 s): autocorrelation for the rough tempo, then a
+// Beat tracking from the drum onset curve (first 150 s): autocorrelation for the rough tempo, then a
 // fine search over tempo + phase for the beat grid that lines up best.
 function analyzeTempo(curve) {
   const FPS = curve.fps, on = curve.on.subarray(0, Math.min(curve.on.length, FPS * 150)), N = on.length;
@@ -74,7 +49,7 @@ function analyzeTempo(curve) {
       if (s > best.score) best = {score:s, bpm:b, phase:phs};
     }
   }
-  return {bpm:Math.round(best.bpm*100)/100, first:best.phase / FPS};
+  return {bpm:Math.round(best.bpm*100)/100, first:best.phase / FPS + (curve.t0 || 0)};
 }
 async function decodeSong(blob, meta) {
   const token = ++song.token;
@@ -84,18 +59,24 @@ async function decodeSong(blob, meta) {
     ensureAudio();
     const buf = await ctx.decodeAudioData(await blob.arrayBuffer());
     if (token !== song.token) return;
-    setSongInfo('Finding the beat…');
-    await new Promise(r => setTimeout(r, 30));
-    const curve = onsetCurve(buf);
     const name = (meta && meta.name) || blob.name || 'Song';
+    // drum analysis takes a few seconds, so it's cached per song
+    let drums = null;
+    try { const c = await idb.get('songDrums'); if (c && c.v === DRUMS_VERSION && c.name === name && Math.abs(c.dur - buf.duration) < 0.05) drums = c.drums; } catch (e) {}
+    if (!drums) {
+      drums = await analyzeDrums(buf, f => { if (token === song.token) setSongInfo(`Finding the drums… ${Math.round(f * 100)}%`); });
+      if (token !== song.token) return;
+      idb.set('songDrums', {v:DRUMS_VERSION, name, dur:buf.duration, drums}).catch(() => {});
+    }
+    const curve = drums.curve;
     let bpm, first, detected, startAt = 0;
     if (meta && meta.bpm) ({bpm, first, detected} = meta), startAt = Math.min(meta.startAt || 0, Math.max(0, buf.duration - 10));
     else { ({bpm, first} = analyzeTempo(curve)); detected = bpm; }
     if (token !== song.token) return;
-    Object.assign(song, {buf, name:name.replace(/\.[a-z0-9]{2,4}$/i, ''), bpm, first, detected, startAt, onset:curve.on, fps:curve.fps, chart:null, chartKey:''});
+    Object.assign(song, {buf, name:name.replace(/\.[a-z0-9]{2,4}$/i, ''), bpm, first, detected, startAt, drums, chart:null, chartKey:''});
     renderSong(); saveSongMeta();
     if (S.play === 'song') renderIdle();
-    if (!meta) toast(`Found ${bpm} BPM. Press L to check the beat`, true);
+    if (!meta) { toast(`Found ${bpm} BPM and ${drums.kick.length + drums.snare.length} drum hits`, true); if (S.songSource === 'song') openSongSetup(); }
   } finally { if (token === song.token) song.loading = false; }
 }
 async function loadSongFile(file) {
@@ -130,6 +111,7 @@ function renderSong() {
   document.querySelectorAll('#songSrcSeg button').forEach(b => b.classList.toggle('on', b.dataset.v === S.songSource));
   document.querySelectorAll('#chartSeg button').forEach(b => b.classList.toggle('on', b.dataset.v === S.songChart));
   $('#chartSeg').hidden = S.songSource !== 'song';
+  $('#songSetupBtn').hidden = S.songSource !== 'song';
 }
 function songEdited() {
   const p = 60 / song.bpm;
@@ -151,8 +133,8 @@ $('#sHalfBeat').addEventListener('click', () => { song.first += 30 / song.bpm; s
 $('#sStart').addEventListener('input', e => { song.startAt = +e.target.value; $('#sStartRead').textContent = fmtTime(song.startAt); });
 $('#sStart').addEventListener('change', () => songEdited());
 $('#sVol').addEventListener('input', e => { S.songVol = +e.target.value; save(); if (run && run.song) run.song.gain.gain.value = S.songVol; });
-$('#songSrcSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; if (run) stop(true); S.songSource = b.dataset.v; save(); renderSong(); refreshIdle(); });
-$('#chartSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; if (run) stop(true); S.songChart = b.dataset.v; save(); renderSong(); });
+$('#songSrcSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; if (run) stop(true); S.songSource = b.dataset.v; save(); renderSong(); refreshIdle(); if (S.songSource === 'song' && song.drums) openSongSetup(); });
+$('#chartSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; if (run) stop(true); S.songChart = b.dataset.v; save(); renderSong(); song.chart = null; });
 // tap tempo: tap along to the song's beat, 4+ taps sets the BPM
 const taps = [];
 $('#sTap').addEventListener('pointerdown', e => {

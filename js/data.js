@@ -4,7 +4,7 @@ const DEFAULTS = {level:1, bpm:65, bars:2, notes:[4,2], rests:[4,2], extras:['do
   metronome:true, metroVol:0.8, lane:true, counts:true, hitSound:true, volume:0.7, play:'practice', songVol:0.8, calBpm:60,
   meter:'4/4', hands:1, poly:false, gap:'off', sight:false, focus:true, freePlay:false,
   offsets:{key:0, midi:0, mic:0}, midi:false, mic:false, micSens:0.5,
-  view:'notes', clickSound:'click', hitKit:'snare', songSource:'gen', songChart:'normal'};
+  view:'notes', clickSound:'click', hitKit:'snare', songSource:'gen', songChart:'normal', songDrums:{kick:true, snare:true, hat:false}, songSens:0.5};
 const firstRun = (() => { try { return !localStorage.getItem('rhythm-trainer'); } catch (e) { return true; } })();
 let S = (() => { try { return Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem('rhythm-trainer') || '{}')); } catch (e) { return {...DEFAULTS}; } })();
 // older saves kept one latency offset for everything

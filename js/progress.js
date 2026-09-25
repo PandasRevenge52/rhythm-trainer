@@ -51,13 +51,14 @@ let modalKind = null;
 const modalOpen = () => modal.classList.contains('show');
 function showModal(html, kind = 'info') {
   modalCard.innerHTML = html; modalKind = kind;
-  modalCard.className = 'card' + (['profile', 'path'].includes(kind) ? ' wide' : '');
+  modalCard.className = 'card' + (['profile', 'path', 'songsetup'].includes(kind) ? ' wide' : '');
   modal.classList.add('show');
   modalCard.scrollTop = 0;
 }
 function closeModal() {
   if (!modalOpen()) return;
   if (modalKind === 'cal') calCancel();
+  if (modalKind === 'songsetup') stopSongPreview();
   stopDemo();
   modal.classList.remove('show'); modalKind = null;
 }
