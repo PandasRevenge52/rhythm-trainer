@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#141210">
+<meta name="color-scheme" content="dark">
+<title>Arcade · Rhythm Trainer</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="fonts/fonts.css">
+<link rel="stylesheet" href="css/app.css">
+<link rel="stylesheet" href="css/arcade.css">
+</head>
+<body class="arcade">
+<canvas id="field" aria-label="Playfield"></canvas>
+
+<!-- song select -->
+<div class="aov show" id="menu">
+  <div class="apanel">
+    <div class="atop"><a class="back" href="index.html">← Back to the trainer</a></div>
+    <h1 class="atitle">Arcade</h1>
+    <p class="asub">Your song, turned into falling arrows. Pick what you want to play along to.</p>
+    <div class="asong" id="songCard">
+      <div><b id="aSongName">No song loaded</b><span id="aSongInfo" class="muted">Load an MP3, or it'll pick up the last song you used in the trainer</span></div>
+      <button id="aLoad">Load a song</button><input type="file" id="aFile" accept="audio/*,.mp3" hidden>
+    </div>
+
+    <div class="aset">
+      <span class="lbl">Play along to</span>
+      <div class="seg" id="aSrc"><button data-v="drums">Drums</button><button data-v="vocals">Vocals</button><button data-v="mix">Mix</button></div>
+    </div>
+    <div class="aset">
+      <span class="lbl">Difficulty</span>
+      <div class="seg diffs" id="aDiff">
+        <button data-v="easy">Easy<small></small></button><button data-v="normal">Normal<small></small></button>
+        <button data-v="hard">Hard<small></small></button><button data-v="expert">Expert<small></small></button>
+      </div>
+    </div>
+    <p class="muted achart" id="aChartInfo"></p>
+
+    <details class="more aopts">
+      <summary><span>Options</span><span class="val">scroll, speed, volume, timing</span></summary>
+      <div class="arow"><span class="lbl">Scroll</span><div class="seg" id="aScroll"><button data-v="down">Down</button><button data-v="up">Up</button></div></div>
+      <div class="arow"><span class="lbl">Speed <b id="aSpeedRead"></b></span><input type="range" id="aSpeed" min="1" max="4" step="0.1" aria-label="Scroll speed"></div>
+      <div class="arow"><span class="lbl">Music volume <b id="aVolRead"></b></span><input type="range" id="aVol" class="aVol" min="0" max="1" step="0.05" aria-label="Music volume"></div>
+      <div class="arow"><span class="lbl">Timing offset</span><span class="offctl"><button data-off="-5" aria-label="5 ms earlier">−5</button><b id="aOffRead"></b><button data-off="5" aria-label="5 ms later">+5</button></span></div>
+      <label class="toggle">Hit sounds <input type="checkbox" id="aHitSnd"></label>
+      <label class="toggle">No fail <input type="checkbox" id="aNoFail"></label>
+    </details>
+
+    <p class="abest"><span id="aBest"></span> <button id="aBoard" class="linkish">Leaderboard</button></p>
+    <button id="aPlay" class="primary big" disabled>Play</button>
+    <p class="keys"><kbd>D</kbd> <kbd>F</kbd> <kbd>J</kbd> <kbd>K</kbd> or arrows · <kbd>Esc</kbd> pause · <kbd>Space</kbd> skip intro</p>
+  </div>
+</div>
+
+<!-- pause -->
+<div class="aov" id="pause">
+  <div class="apanel small">
+    <h2>Paused</h2>
+    <p class="preason" id="pReason" hidden></p>
+    <div class="arow"><span class="lbl">Music volume</span><input type="range" id="aVol2" class="aVol" min="0" max="1" step="0.05" aria-label="Music volume"></div>
+    <button id="aResume" class="primary big">Keep going</button>
+    <button id="aRestart">Start over</button>
+    <button id="aQuit" class="ghost">Back to song select</button>
+  </div>
+</div>
+
+<!-- results -->
+<div class="aov" id="results">
+  <div class="apanel">
+    <h2 id="rTitle" class="atitle">Results</h2>
+    <p class="muted" id="rSong"></p>
+    <div class="grade" id="rGrade"></div>
+    <div class="tiles" id="rTiles"></div>
+    <div class="rrank" id="rRank" hidden><span id="rRankText"></span><label>Name <input id="rName" maxlength="16" placeholder="Your name" autocomplete="nickname"></label></div>
+    <p class="muted rnote" id="rNote"></p>
+    <div class="actions"><button class="ghost" id="rBoard">Leaderboard</button><span class="spacer"></span><button class="ghost" id="rMenu">Song select</button><button class="primary" id="rAgain">Again</button></div>
+  </div>
+</div>
+
+<!-- leaderboard -->
+<div class="aov" id="board">
+  <div class="apanel">
+    <h2 class="atitle">Leaderboard</h2>
+    <p class="muted">Best scores on this computer, saved under each song's file name.</p>
+    <div class="aset"><span class="lbl">Song</span><select id="lbSong" aria-label="Song"></select></div>
+    <div class="aset"><div class="seg" id="lbSrc"><button data-v="drums">Drums</button><button data-v="vocals">Vocals</button><button data-v="mix">Mix</button></div>
+      <div class="seg" id="lbDiff"><button data-v="easy">Easy</button><button data-v="normal">Normal</button><button data-v="hard">Hard</button><button data-v="expert">Expert</button></div></div>
+    <div id="lbBody"></div>
+    <div class="actions"><button class="primary" id="lbBack">Back</button></div>
+  </div>
+</div>
+
+<script src="js/data.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/drums.js"></script>
+<script src="js/arcade.js"></script>
+</body>
+</html>

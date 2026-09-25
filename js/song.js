@@ -1,55 +1,11 @@
 'use strict';
 // ---------- song mode: load, find the beat, play along ----------
-const DRUMS_VERSION = 5;   // bump when the analysis changes so cached results are redone
 const song = {buf:null, name:'', bpm:120, first:0, startAt:0, detected:null, loading:false, token:0, drums:null, chart:null, chartKey:''};
 const chartKey = () => `${song.bpm}|${song.first.toFixed(3)}|${S.songChart}|${Object.keys(S.songDrums).filter(k => S.songDrums[k])}|${S.songSens}`;
-// Tiny IndexedDB key/value store so the last song survives a reload.
-const idb = (() => {
-  let p = null;
-  const open = () => p || (p = new Promise((res, rej) => {
-    const r = indexedDB.open('rhythm-trainer', 1);
-    r.onupgradeneeded = () => r.result.createObjectStore('kv');
-    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
-  }));
-  const req = (mode, fn) => open().then(db => new Promise((res, rej) => {
-    const tx = db.transaction('kv', mode), q = fn(tx.objectStore('kv'));
-    tx.oncomplete = () => res(q.result); tx.onerror = () => rej(tx.error);
-  }));
-  return {get:k => req('readonly', s => s.get(k)), set:(k, v) => req('readwrite', s => s.put(v, k))};
-})();
 let metaTimer = 0;
 function saveSongMeta() {
   clearTimeout(metaTimer);
   metaTimer = setTimeout(() => idb.set('songMeta', {name:song.name, bpm:song.bpm, first:song.first, startAt:song.startAt, detected:song.detected}).catch(() => {}), 300);
-}
-// Beat tracking from the drum onset curve (first 150 s): autocorrelation for the rough tempo, then a
-// fine search over tempo + phase for the beat grid that lines up best.
-function analyzeTempo(curve) {
-  const FPS = curve.fps, on = curve.on.subarray(0, Math.min(curve.on.length, FPS * 150)), N = on.length;
-  const minL = Math.floor(FPS*60/200), maxL = Math.ceil(FPS*60/55), ac = new Float32Array(maxL + 2);
-  for (let L = minL - 1; L <= maxL + 1; L++) { let s = 0; for (let i = 0; i + L < N; i++) s += on[i]*on[i+L]; ac[L] = s; }
-  let bestL = 0, bestV = -1;
-  for (let L = minL; L <= maxL; L++) {
-    const b = 60*FPS/L, wgt = Math.exp(-0.5 * (Math.log2(b/120) / 0.9)**2);   // gently prefer ~120
-    if (ac[L]*wgt > bestV) { bestV = ac[L]*wgt; bestL = L; }
-  }
-  if (!(bestV > 0)) return {bpm:120, first:0};
-  const y0 = ac[bestL-1], y1 = ac[bestL], y2 = ac[bestL+1], den = y0 - 2*y1 + y2;
-  const dL = den ? (y0 - y2) / (2*den) : 0;
-  let bpm = 60*FPS / (bestL + (Math.abs(dL) < 1 ? dL : 0));
-  while (bpm < 70) bpm *= 2;
-  while (bpm > 180) bpm /= 2;
-  const at = k => k >= 0 && k < N ? on[k] : 0;
-  let best = {score:-1, bpm, phase:0};
-  for (let b = bpm - 1.5; b <= bpm + 1.5; b += 0.02) {
-    const p = 60*FPS/b;
-    for (let phs = 0; phs < p; phs++) {
-      let s = 0;
-      for (let t = phs; t < N; t += p) { const k = Math.round(t); s += at(k) + 0.5*(at(k-1) + at(k+1)); }
-      if (s > best.score) best = {score:s, bpm:b, phase:phs};
-    }
-  }
-  return {bpm:Math.round(best.bpm*100)/100, first:best.phase / FPS + (curve.t0 || 0)};
 }
 async function decodeSong(blob, meta) {
   const token = ++song.token;
@@ -61,13 +17,8 @@ async function decodeSong(blob, meta) {
     if (token !== song.token) return;
     const name = (meta && meta.name) || blob.name || 'Song';
     // drum analysis takes a few seconds, so it's cached per song
-    let drums = null;
-    try { const c = await idb.get('songDrums'); if (c && c.v === DRUMS_VERSION && c.name === name && Math.abs(c.dur - buf.duration) < 0.05) drums = c.drums; } catch (e) {}
-    if (!drums) {
-      drums = await analyzeDrums(buf, f => { if (token === song.token) setSongInfo(`Finding the drums… ${Math.round(f * 100)}%`); });
-      if (token !== song.token) return;
-      idb.set('songDrums', {v:DRUMS_VERSION, name, dur:buf.duration, drums}).catch(() => {});
-    }
+    const drums = await songDrums(buf, name, f => { if (token === song.token) setSongInfo(`Finding the drums… ${Math.round(f * 100)}%`); });
+    if (token !== song.token) return;
     const curve = drums.curve;
     let bpm, first, detected, startAt = 0;
     if (meta && meta.bpm) ({bpm, first, detected} = meta), startAt = Math.min(meta.startAt || 0, Math.max(0, buf.duration - 10));

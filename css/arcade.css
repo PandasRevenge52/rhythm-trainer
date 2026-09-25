@@ -1,0 +1,60 @@
+/* Arcade page: a full-screen canvas with overlays for song select, pause and results */
+body.arcade{overflow:hidden;height:100vh}
+#field{position:fixed;inset:0;width:100vw;height:100vh;display:block;touch-action:none}
+.aov{position:fixed;inset:0;display:none;align-items:center;justify-content:center;padding:16px;background:rgba(12,10,9,.74);z-index:10}
+.aov.show{display:flex}
+.apanel{background:var(--panel);border:1px solid var(--line);border-top-color:#3a332d;border-radius:16px;padding:22px 26px 20px;width:min(560px,100%);max-height:calc(100vh - 32px);overflow:auto;box-shadow:0 24px 64px rgba(0,0,0,.5)}
+.apanel.small{width:min(360px,100%);display:flex;flex-direction:column;gap:10px}
+.apanel.small h2{margin:0 0 4px;text-align:center;font-size:26px}
+.apanel.small button{justify-content:center}
+.atop{margin-bottom:6px}
+.back{color:var(--muted);text-decoration:none;font-size:14px}
+.back:hover{color:var(--ink)}
+.atitle{font-size:34px;margin:4px 0 2px;line-height:1.1}
+.asub{margin:0 0 14px;color:var(--muted);font:italic 15px var(--serif)}
+.asong{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:16px}
+.asong>div{display:flex;flex-direction:column;min-width:0}
+.asong b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:16px}
+.asong span{font-size:13px}
+.asong button{flex:none}
+.aset{display:flex;align-items:center;justify-content:space-between;gap:14px;margin:10px 0;flex-wrap:wrap}
+.aset .lbl{font-weight:600}
+.diffs button{flex-direction:column;gap:0;min-width:76px;justify-content:center;line-height:1.2}
+.diffs small{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;min-height:15px}
+.diffs button.on small{color:var(--ok)}
+.achart{font-size:13.5px;margin:4px 0 12px;min-height:20px}
+.aopts{margin-bottom:12px}
+.arow{display:flex;align-items:center;justify-content:space-between;gap:14px;margin:12px 0;font-size:14px}
+.arow input[type=range]{max-width:220px}
+.offctl{display:inline-flex;align-items:center;gap:8px}
+.offctl button{padding:5px 10px}
+.offctl b{min-width:58px;text-align:center;font-variant-numeric:tabular-nums}
+.abest{font-size:14px;color:var(--muted);margin:6px 0 0;min-height:20px}
+.abest b{color:var(--ink)}
+button.big{width:100%;justify-content:center;padding:13px;font-size:16px;margin-top:10px}
+button:disabled{opacity:.45;cursor:not-allowed;filter:none}
+.keys{text-align:center;color:var(--muted);font-size:13px;margin:12px 0 0;line-height:2}
+.grade{display:flex;align-items:center;justify-content:center;gap:16px;margin:10px 0 6px}
+.grade b{font:italic 700 72px/1 var(--serif)}
+.grade span{font-size:22px;color:var(--ink);font-variant-numeric:tabular-nums;line-height:1.2}
+.grade small{font-size:14px;color:var(--muted)}
+.grade .badge{font-style:normal}
+#results h2,#results .muted{text-align:center}
+.rnote{font-size:14px;margin:14px 0 0}
+@media (max-width:520px){ .aset{flex-direction:column;align-items:flex-start} .seg{width:100%} .seg button{flex:1;justify-content:center} .diffs button{min-width:0} }
+
+/* leaderboard + results rank */
+.linkish{background:none;border:0;padding:0;color:var(--accent);font-weight:600;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.linkish:hover{border:0}
+#lbSong{flex:1;min-width:0;max-width:340px}
+table.lb{width:100%;border-collapse:collapse;margin-top:10px;font-size:14px}
+.lb th{text-align:left;color:var(--muted);font-weight:600;font-size:12.5px;padding:6px 8px;border-bottom:1px solid var(--line)}
+.lb td{padding:8px;border-bottom:1px solid var(--line)}
+.lb .r{text-align:right;font-variant-numeric:tabular-nums}
+.lb tr.me td{background:color-mix(in srgb,var(--accent) 12%,transparent)}
+.lb tr:first-child + tr td:nth-child(2){font-weight:700}
+.fc{font-size:11px;font-weight:700;color:var(--ok);border:1px solid var(--ok);border-radius:4px;padding:0 4px}
+.rrank{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:10px 14px;margin-top:14px;font-size:14px}
+.rrank label{display:flex;align-items:center;gap:8px;color:var(--muted)}
+.rrank input{background:var(--chip);border:1px solid var(--line);border-radius:8px;padding:6px 10px;width:150px}
+.preason{margin:0 0 6px;text-align:center;color:var(--muted);font-size:14px;line-height:1.45}

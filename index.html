@@ -3,16 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#0f1012">
+<meta name="theme-color" content="#141210">
 <meta name="color-scheme" content="dark">
 <title>Rhythm Trainer</title>
 <link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="fonts/fonts.css">
 <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
 <main>
   <header>
-    <h1>Rhythm Trainer</h1>
+    <a class="brand" href="index.html"><h1>Rhythm <em>Trainer</em></h1><span class="tagline">read it, count it, play it</span></a>
     <div class="modes" id="playSeg" role="tablist" aria-label="Game mode">
       <button data-v="practice" title="Practice (1)">Practice</button>
       <button data-v="endless" title="Endless (2)">Endless</button>
@@ -20,6 +21,7 @@
       <button data-v="song" title="Play along to a song (4)">Song</button>
     </div>
     <div class="hright">
+      <a class="ghost arcade-link" href="arcade.html" title="Arcade: a 4-lane falling-note game from your song's drums">Arcade</a>
       <button id="profBtn" class="ghost player" title="Your profile (P)">
         <span class="lvl" id="pLvl">1</span>
         <span class="pinfo"><b id="pTitle">Tapper</b><span class="xpbar"><i id="pXp"></i></span></span>
@@ -95,6 +97,12 @@
           <p class="hint">In milliseconds. Calibrate sets the one for the input you tap with.</p>
         </details>
       </section>
+      <section class="grp" id="grpKeys" aria-labelledby="hKeys">
+        <h3 id="hKeys">Shortcuts</h3>
+        <details class="more"><summary><span>Keyboard shortcuts</span><span class="val">14 keys</span></summary>
+          <table class="keytable"><tr><td>Hit</td><td><kbd>Space</kbd> <kbd>F</kbd> <kbd>J</kbd></td></tr><tr><td>Hit, two hands</td><td><kbd>F</kbd> left · <kbd>J</kbd> right</td></tr><tr><td>Start / stop</td><td><kbd>Enter</kbd></td></tr><tr><td>Stop, close</td><td><kbd>Esc</kbd></td></tr><tr><td>Listen</td><td><kbd>L</kbd></td></tr><tr><td>New rhythm</td><td><kbd>N</kbd></td></tr><tr><td>Easier / harder</td><td><kbd>[</kbd> <kbd>]</kbd></td></tr><tr><td>Tempo</td><td><kbd>↑</kbd> <kbd>↓</kbd></td></tr><tr><td>Notes / Count</td><td><kbd>V</kbd></td></tr><tr><td>Counting</td><td><kbd>C</kbd></td></tr><tr><td>Two hands</td><td><kbd>H</kbd></td></tr><tr><td>Learning path</td><td><kbd>M</kbd></td></tr><tr><td>Profile</td><td><kbd>P</kbd></td></tr><tr><td>Modes</td><td><kbd>1</kbd> Practice · <kbd>2</kbd> Endless · <kbd>3</kbd> Daily · <kbd>4</kbd> Song</td></tr></table>
+        </details>
+      </section>
     </div>
   </aside>
 
@@ -157,7 +165,7 @@
       <div class="hist" id="hist"></div>
     </div>
   </section>
-  <footer>Hit <kbd>Space</kbd> <kbd>F</kbd> <kbd>J</kbd> (two hands: <kbd>F</kbd> left, <kbd>J</kbd> right) · Start/stop <kbd>Enter</kbd> · Listen <kbd>L</kbd> · New <kbd>N</kbd> · Difficulty <kbd>[</kbd> <kbd>]</kbd> · Notes/Count <kbd>V</kbd> · Path <kbd>M</kbd> · Two hands <kbd>H</kbd> · Counting <kbd>C</kbd> · Tempo <kbd>↑</kbd> <kbd>↓</kbd> · Modes <kbd>1</kbd>–<kbd>4</kbd> · Profile <kbd>P</kbd></footer>
+  <footer><p class="sig">Made by Kaeson. Practise a little every day.</p></footer>
 </main>
 
 <div class="modal" id="modal" role="dialog" aria-modal="true"><div class="card" id="modalCard"></div></div>

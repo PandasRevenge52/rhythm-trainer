@@ -4,7 +4,9 @@ const DEFAULTS = {level:1, bpm:65, bars:2, notes:[4,2], rests:[4,2], extras:['do
   metronome:true, metroVol:0.8, lane:true, counts:true, hitSound:true, volume:0.7, play:'practice', songVol:0.8, calBpm:60,
   meter:'4/4', hands:1, poly:false, gap:'off', sight:false, focus:true, freePlay:false,
   offsets:{key:0, midi:0, mic:0}, midi:false, mic:false, micSens:0.5,
-  view:'notes', clickSound:'click', hitKit:'snare', songSource:'gen', songChart:'normal', songDrums:{kick:true, snare:true, hat:false}, songSens:0.5};
+  view:'notes', clickSound:'click', hitKit:'snare', songSource:'gen', songChart:'normal', songDrums:{kick:true, snare:true, hat:false}, songSens:0.5,
+  playerName:'',
+  arcade:{diff:'normal', src:'drums', speed:2.2, down:true, noFail:false, musicVol:0.8, hitSound:false}};
 const firstRun = (() => { try { return !localStorage.getItem('rhythm-trainer'); } catch (e) { return true; } })();
 let S = (() => { try { return Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem('rhythm-trainer') || '{}')); } catch (e) { return {...DEFAULTS}; } })();
 // older saves kept one latency offset for everything
@@ -177,7 +179,7 @@ if (!METERS[S.meter]) S.meter = '4/4';
 // ---------- player profile ----------
 const freshProfile = () => ({xp:0, hits:0, passes:0, bestCombo:0, endlessBest:0, endlessRound:0, songs:0, ach:{},
   perfects:0, flawless:0, endlessRuns:0, listens:0, cals:0, playSec:0, days:[], diffSeen:{},
-  path:{}, cells:{}, daily:{}, dailies:{}, metersSeen:{}, inputsSeen:{}});
+  path:{}, cells:{}, daily:{}, dailies:{}, metersSeen:{}, inputsSeen:{}, arcade:{}, arcadeClears:0, arcadeSongs:{}, leaderboard:{}});
 const P = (() => { try { return Object.assign(freshProfile(), JSON.parse(localStorage.getItem('rhythm-trainer-profile') || '{}')); } catch (e) { return freshProfile(); } })();
 const saveP = () => { try { localStorage.setItem('rhythm-trainer-profile', JSON.stringify(P)); } catch (e) {} };
 // XP to get from level L to L+1: ~1 minute of solid play for level 2, ~20 minutes per level by level 10
@@ -277,6 +279,21 @@ const ACH = [
   A('Endless', 'untouch', '🧱', 'Untouchable', 'Reach round 10 without losing a life', 150),
   A('Endless', 'runs10', '🎰', 'Persistent', 'Finish 10 Endless runs', 50, () => P.endlessRuns, 10),
 
+  A('Arcade', 'arcade1', '🕹️', 'Insert Coin', 'Clear a song in the Arcade', 30, () => P.arcadeClears),
+  A('Arcade', 'arcade10', '🎟️', 'Regular at the Arcade', 'Clear 10 songs in the Arcade', 100, () => P.arcadeClears, 10),
+  A('Arcade', 'arcade50', '🏆', 'High Score Hunter', 'Clear 50 songs in the Arcade', 300, () => P.arcadeClears, 50),
+  A('Arcade', 'arcadeSongs5', '📻', 'Crate Digger', 'Clear 5 different songs in the Arcade', 120, () => Object.keys(P.arcadeSongs).length, 5),
+  A('Arcade', 'arcadeFC', '✅', 'Full Combo', 'Clear an Arcade song without missing', 80),
+  A('Arcade', 'arcadePFC', '🌈', 'Perfect Full Combo', 'Every note Sick in an Arcade song', 250),
+  A('Arcade', 'arcadeS', '🅢', 'S Rank', 'Get an S or better in the Arcade', 100),
+  A('Arcade', 'arcadeVox', '🎤', 'Sing Along', 'Clear a Vocals chart', 50),
+  A('Arcade', 'arcadeMix', '🎛️', 'Mixed Signals', 'Clear a Mix chart', 50),
+  A('Arcade', 'arcadeHard', '🔥', 'Turn It Up', 'Clear a Hard chart', 80),
+  A('Arcade', 'arcadeExpert', '💀', 'Expert Hands', 'Clear an Expert chart', 200),
+  A('Arcade', 'arcadeCombo200', '⛓️', 'Chain Reaction', 'Reach a 200 combo in the Arcade', 150),
+  A('Arcade', 'arcadeScore100k', '💯', 'Six Figures', 'Score 100,000 in one Arcade song', 200),
+  A('Arcade', 'arcadeClutch', '😮‍💨', 'By a Thread', 'Clear an Arcade song with under 10% health left', 80),
+
   A('Songs', 'songs5', '💿', 'DJ', 'Finish 5 songs', 75, () => P.songs, 5),
   A('Songs', 'songs25', '📀', 'Mixtape', 'Finish 25 songs', 200, () => P.songs, 25),
   A('Songs', 'song95', '🌟', 'Encore', '95%+ over a whole song', 150),
@@ -314,3 +331,25 @@ const near = (a, b) => Math.abs(a - b) < 1e-6;
 const median = a => { const s = a.slice().sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m-1] + s[m]) / 2; };
 // small seeded generator (mulberry32) for the daily challenge
 function seeded(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+
+// ---------- achievement pop-ups (shared by the trainer and the Arcade) ----------
+// A card that slides in at the top right. They queue, so several unlocking at once all get seen.
+const achQueue = [];
+let achShowing = false;
+function achPopup(a) {
+  achQueue.push(a);
+  if (!achShowing) nextAch();
+}
+function nextAch() {
+  const a = achQueue.shift();
+  if (!a) { achShowing = false; return; }
+  achShowing = true;
+  let box = document.getElementById('achStack');
+  if (!box) { box = document.createElement('div'); box.id = 'achStack'; box.setAttribute('aria-live', 'polite'); document.body.appendChild(box); }
+  const el = document.createElement('div');
+  el.className = 'achpop';
+  el.innerHTML = `<span class="ai">${a.icon}</span><span class="at"><small>Achievement unlocked</small><b>${esc(a.name)}</b><em>${esc(a.desc)}</em></span>${a.xp ? `<span class="ax">+${a.xp} XP</span>` : ''}`;
+  box.appendChild(el);
+  requestAnimationFrame(() => el.classList.add('in'));
+  setTimeout(() => { el.classList.remove('in'); el.classList.add('out'); setTimeout(() => { el.remove(); nextAch(); }, 350); }, achQueue.length ? 2600 : 3800);
+}

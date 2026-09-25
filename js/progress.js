@@ -20,7 +20,7 @@ function unlock(id, silent) {
   const a = ACH.find(x => x.id === id);
   if (!a || P.ach[id]) return;
   P.ach[id] = Date.now(); saveP();
-  if (!silent) toast(`${a.icon} Achievement: ${a.name}` + (a.xp ? ` · +${a.xp} XP` : ''), true);
+  if (!silent) achPopup(a);
   addXP(a.xp);
 }
 // unlock any stat-based achievement whose goal has been reached
