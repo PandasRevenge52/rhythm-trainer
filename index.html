@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0f1012">
+<meta name="color-scheme" content="dark">
+<title>Rhythm Trainer</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<main>
+  <header>
+    <h1>Rhythm Trainer</h1>
+    <div class="modes" id="playSeg" role="tablist" aria-label="Game mode">
+      <button data-v="practice" title="Practice (1)">Practice</button>
+      <button data-v="endless" title="Endless (2)">Endless</button>
+      <button data-v="daily" title="Daily challenge (3)">Daily</button>
+      <button data-v="song" title="Play along to a song (4)">Song</button>
+    </div>
+    <div class="hright">
+      <button id="profBtn" class="ghost player" title="Your profile (P)">
+        <span class="lvl" id="pLvl">1</span>
+        <span class="pinfo"><b id="pTitle">Tapper</b><span class="xpbar"><i id="pXp"></i></span></span>
+      </button>
+      <button id="setBtn" class="ghost" aria-expanded="false" aria-controls="drawer">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>
+        Settings
+        <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <div class="scrim" id="scrim" hidden></div>
+  <aside class="side" id="drawer" role="dialog" aria-labelledby="sideTitle" aria-modal="false" inert>
+    <div class="side-head">
+      <h2 id="sideTitle">Settings</h2>
+      <button id="sideClose" class="ghost icon" aria-label="Close settings (Esc)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </div>
+    <div class="side-body">
+      <section class="grp" id="grpRhythm" aria-labelledby="hRhythm">
+        <h3 id="hRhythm">Rhythm</h3>
+        <div class="row"><span class="lbl">After each pass</span><div class="chips" id="modeSeg"><button data-v="loop">Repeat</button><button data-v="new">New rhythm</button></div></div>
+        <label class="toggle">Two hands <input type="checkbox" id="handsT"></label>
+        <label class="toggle" id="polyRow">Polyrhythms (3:2, 4:3) <input type="checkbox" id="polyT"></label>
+        <details class="more"><summary><span>Custom figures</span><span class="val" id="sumCustom"></span></summary>
+          <p class="hint">Changing these switches the difficulty to Custom.</p>
+          <div class="field"><div class="name">Notes</div><div class="chips" id="noteChips"></div></div>
+          <div class="field"><div class="name">Rests</div><div class="chips" id="restChips"></div></div>
+          <div class="field"><div class="name">Extra figures</div><div class="chips" id="extraChips"></div></div>
+          <div class="field"><div class="name">How many rests <span id="restRead"></span></div><input type="range" id="restChance" min="0" max="0.6" step="0.05" aria-label="How many rests"></div>
+        </details>
+      </section>
+      <section class="grp" id="grpPractice" aria-labelledby="hPractice">
+        <h3 id="hPractice">Practice</h3>
+        <div class="row col"><span class="lbl">Timing tolerance</span><div class="chips" id="timingSeg"><button data-v="relaxed">Relaxed</button><button data-v="normal">Normal</button><button data-v="strict">Strict</button></div></div>
+        <div class="row col"><span class="lbl">Metronome gaps</span><div class="chips" id="gapSeg"></div></div>
+        <label class="toggle">Metronome while playing <input type="checkbox" id="metronome"></label>
+        <label class="toggle">Sight-reading <input type="checkbox" id="sightT"></label>
+        <label class="toggle">Weak-spot focus <input type="checkbox" id="focusT"></label>
+        <details class="more"><summary><span>Display &amp; progression</span><span class="val" id="sumDisplay"></span></summary>
+          <label class="toggle">Hit lane <input type="checkbox" id="laneT"></label>
+          <label class="toggle">Counting (1 e &amp; a) <input type="checkbox" id="counts"></label>
+          <label class="toggle">Free play (all levels unlocked) <input type="checkbox" id="freeT2"></label>
+        </details>
+      </section>
+      <section class="grp" id="grpSound" aria-labelledby="hSound">
+        <h3 id="hSound">Sound</h3>
+        <div class="field"><div class="name">Volume</div><input type="range" id="volume" min="0" max="1" step="0.05" aria-label="Volume"></div>
+        <div class="field"><div class="name">Metronome volume <span id="metroRead"></span></div><input type="range" id="metroVol" min="0" max="1.5" step="0.05" aria-label="Metronome volume"></div>
+        <details class="more"><summary><span>Sounds</span><span class="val" id="sumSounds"></span></summary>
+          <div class="row"><span class="lbl">Metronome</span><select id="clickSel" aria-label="Metronome sound"></select></div>
+          <div class="row"><span class="lbl">Hits</span><select id="kitSel" aria-label="Hit sound"></select></div>
+          <label class="toggle">Hit sound on key press <input type="checkbox" id="hitSound"></label>
+        </details>
+      </section>
+      <section class="grp" id="grpInput" aria-labelledby="hInput">
+        <h3 id="hInput">Input</h3>
+        <label class="toggle">MIDI instrument <span class="dot" id="midiDot"></span><input type="checkbox" id="midiT"></label>
+        <p class="hint" id="midiStatus"></p>
+        <label class="toggle">Microphone <input type="checkbox" id="micT"></label>
+        <div id="micRow" hidden>
+          <div class="field"><div class="name">Sensitivity</div><input type="range" id="micSens" min="0" max="1" step="0.05" aria-label="Microphone sensitivity"></div>
+          <div class="meter" aria-hidden="true"><i id="micLevel"></i></div>
+          <p class="hint">Use headphones so the metronome isn't picked up as hits.</p>
+        </div>
+        <div class="row"><span class="lbl">Latency</span><button id="calBtn">Calibrate…</button></div>
+        <details class="more"><summary><span>Latency offsets</span><span class="val" id="sumOffsets"></span></summary>
+          <div class="offs">
+            <label>Keys <input type="number" class="num" id="offKey" step="1"></label>
+            <label>MIDI <input type="number" class="num" id="offMidi" step="1"></label>
+            <label>Mic <input type="number" class="num" id="offMic" step="1"></label>
+          </div>
+          <p class="hint">In milliseconds. Calibrate sets the one for the input you tap with.</p>
+        </details>
+      </section>
+    </div>
+  </aside>
+
+  <section class="stage" id="stage">
+    <div id="toast"></div>
+    <div id="lvlUp"><small>Level up</small><b id="lvlUpN"></b><span id="lvlUpT"></span></div>
+    <div class="toolbar">
+      <div class="group">
+        <button id="startBtn" class="primary" title="Start / stop (Enter)"></button>
+        <button id="listenBtn" title="Hear the rhythm (L)"></button>
+        <div class="chips viewseg" id="viewSeg" role="group" aria-label="Read from (V)" title="Read the rhythm as notes or as a count (V)"><button data-v="notes">Notes</button><button data-v="count">Count</button></div>
+        <button id="newBtn" class="ghost" title="New rhythm (N)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6"/></svg>New
+        </button>
+      </div>
+      <div class="group">
+        <button id="pathBtn" class="ghost" title="Learning path (M)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14"/></svg>Path
+        </button>
+        <select id="level" title="Difficulty ([ and ])" aria-label="Difficulty"></select>
+        <select id="meter" title="Time signature" aria-label="Time signature"></select>
+        <select id="barsSel" title="Bars per pass" aria-label="Bars per pass"><option value="1">1 bar</option><option value="2">2 bars</option><option value="4">4 bars</option></select>
+        <div class="tempo" title="Tempo (↑ ↓)">
+          <button id="bpmDown" aria-label="Slower">−</button>
+          <input type="number" id="bpmNum" min="40" max="220" aria-label="Tempo">
+          <span id="bpmUnit">BPM</span>
+          <button id="bpmUp" aria-label="Faster">+</button>
+        </div>
+        <button id="inputChip" class="ghost chip-in" title="Input source (opens Input settings)"><span class="dot" id="inputDot"></span><span id="inputName">Keys</span></button>
+      </div>
+    </div>
+    <div class="songbar" id="songBar">
+      <button id="songLoad"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>Load MP3</button>
+      <input type="file" id="songFile" accept="audio/*,.mp3" hidden>
+      <div class="songName"><b id="songName">No song loaded</b><span id="songInfo">or drop an audio file on the page</span></div>
+      <div class="sgroup"><span class="lab">Notes</span><div class="chips" id="songSrcSeg"><button data-v="gen">Generated</button><button data-v="song">From the song</button></div>
+        <div class="chips" id="chartSeg"><button data-v="easy">Easy</button><button data-v="normal">Normal</button><button data-v="hard">Hard</button></div></div>
+      <div class="sgroup" title="Song tempo. Use ½ / ×2 if the detected tempo is off by double, or tap along">
+        <span class="lab">BPM</span><button id="sBpmDown" aria-label="Slower">−</button><input type="number" id="sBpm" class="num" step="0.01" min="40" max="240" aria-label="Song tempo"><button id="sBpmUp" aria-label="Faster">+</button>
+        <button id="sHalf" title="Half tempo">½</button><button id="sDouble" title="Double tempo">×2</button><button id="sTap" title="Tap along to the song's beat to set the tempo">Tap</button>
+      </div>
+      <div class="sgroup" title="Shift the beat grid so the clicks land on the music's beat">
+        <span class="lab">Beat</span><button id="sNudgeL" aria-label="Earlier">◂</button><span id="sFirst" class="mono">0 ms</span><button id="sNudgeR" aria-label="Later">▸</button><button id="sHalfBeat" title="Shift by half a beat">+½</button>
+      </div>
+      <div class="sgroup grow"><span class="lab">Start</span><input type="range" id="sStart" min="0" max="0" step="0.5" value="0"><span id="sStartRead" class="mono">0:00</span></div>
+      <div class="sgroup"><span class="lab">Song vol</span><input type="range" id="sVol" min="0" max="1" step="0.05" style="width:80px"></div>
+      <div class="songprog"><i id="songProg"></i></div>
+    </div>
+    <div class="hud" id="hud"></div>
+    <div class="paper" id="paper">
+      <div class="sheet" id="sheetA"><span class="tag">Up next</span><svg xmlns="http://www.w3.org/2000/svg"></svg></div>
+      <div class="sheet hide" id="sheetB"><span class="tag">Up next</span><svg xmlns="http://www.w3.org/2000/svg"></svg></div>
+      <div id="countin"></div>
+    </div>
+    <canvas id="lane"></canvas>
+    <div class="stats">
+      <div id="acc"></div>
+      <div id="statText"></div>
+      <div class="hist" id="hist"></div>
+    </div>
+  </section>
+  <footer>Hit <kbd>Space</kbd> <kbd>F</kbd> <kbd>J</kbd> (two hands: <kbd>F</kbd> left, <kbd>J</kbd> right) · Start/stop <kbd>Enter</kbd> · Listen <kbd>L</kbd> · New <kbd>N</kbd> · Difficulty <kbd>[</kbd> <kbd>]</kbd> · Notes/Count <kbd>V</kbd> · Path <kbd>M</kbd> · Two hands <kbd>H</kbd> · Counting <kbd>C</kbd> · Tempo <kbd>↑</kbd> <kbd>↓</kbd> · Modes <kbd>1</kbd>–<kbd>4</kbd> · Profile <kbd>P</kbd></footer>
+</main>
+
+<div class="modal" id="modal" role="dialog" aria-modal="true"><div class="card" id="modalCard"></div></div>
+
+<!-- plain scripts (not modules) so the app also runs straight from the file system -->
+<script src="js/data.js"></script>
+<script src="js/generate.js"></script>
+<script src="js/notation.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/judge.js"></script>
+<script src="js/progress.js"></script>
+<script src="js/calibrate.js"></script>
+<script src="js/song.js"></script>
+<script src="js/input.js"></script>
+<script src="js/lane.js"></script>
+<script src="js/ui.js"></script>
+</body>
+</html>

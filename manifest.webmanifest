@@ -1,0 +1,10 @@
+{
+  "name": "Rhythm Trainer",
+  "short_name": "Rhythm",
+  "description": "Read and play rhythms: lessons, endless mode, daily challenges and songs.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f3f1ec",
+  "theme_color": "#e0592a",
+  "icons": [{"src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable"}]
+}

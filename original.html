@@ -1,0 +1,878 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Rhythm Trainer</title>
+<style>
+:root{
+  --bg:#f3f1ec; --panel:#ffffff; --paper:#ffffff; --ink:#1c1c1f; --muted:#75757c; --line:#e2dfd8;
+  --accent:#e0592a; --perfect:#1f9d55; --good:#2b7de9; --ok:#c28a00; --miss:#d93a3a; --rest:#a3a3aa;
+  --lane:#f6f5f1; --chip:#f0eee9; --shadow:0 1px 2px rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.05);
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#111113; --panel:#1b1b1f; --paper:#1b1b1f; --ink:#ececf1; --muted:#8e8e98; --line:#2e2e35;
+    --accent:#ff7a45; --perfect:#3ecf7a; --good:#5aa2ff; --ok:#f0c040; --miss:#ff5d5d; --rest:#5f5f68;
+    --lane:#161619; --chip:#26262c; --shadow:none;
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:1180px;margin:0 auto;padding:18px 16px 32px}
+button,select,input{font:inherit;color:inherit}
+button{background:var(--chip);border:1px solid transparent;border-radius:10px;padding:8px 13px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:background .15s,border-color .15s,transform .08s}
+button:hover{border-color:var(--line)}
+button:active{transform:scale(.97)}
+button svg{width:15px;height:15px;flex:none}
+button.primary{background:var(--accent);color:#fff;font-weight:600;min-width:98px;justify-content:center}
+button.ghost{background:transparent}
+button.ghost:hover{background:var(--chip)}
+.toggleBtn{font-size:13.5px;color:var(--muted);text-decoration:line-through;text-decoration-color:var(--muted)}
+.toggleBtn.on{color:var(--ink);background:var(--chip);text-decoration:none}
+
+/* header + settings drawer */
+header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+h1{font-size:19px;margin:0;font-weight:700;letter-spacing:-.01em}
+#setBtn .chev{transition:transform .25s}
+#setBtn.open .chev{transform:rotate(180deg)}
+.drawer{display:grid;grid-template-rows:0fr;transition:grid-template-rows .28s ease,margin .28s ease}
+.drawer.open{grid-template-rows:1fr;margin-bottom:14px}
+.drawer>div{overflow:hidden}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);padding:18px;
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:18px 28px;opacity:0;transform:translateY(-6px);transition:opacity .25s,transform .25s}
+.drawer.open .panel{opacity:1;transform:none}
+.panel h3{margin:0 0 8px;font-size:11.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+.field{margin:10px 0}
+.field>.name{font-size:13px;color:var(--muted);margin-bottom:5px;display:flex;justify-content:space-between}
+.chips{display:flex;flex-wrap:wrap;gap:5px}
+.chips button{padding:5px 11px;font-size:13.5px;border-radius:8px}
+.chips button.on{background:var(--ink);color:var(--bg)}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.toggle{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:9px 0;font-size:14px;cursor:pointer}
+.toggle input{appearance:none;width:34px;height:20px;border-radius:99px;background:var(--line);position:relative;cursor:pointer;transition:background .2s;flex:none;margin:0}
+.toggle input::after{content:"";position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:#fff;transition:transform .2s}
+.toggle input:checked{background:var(--accent)}
+.toggle input:checked::after{transform:translateX(14px)}
+.inline{display:flex;align-items:center;gap:8px}
+.num{width:64px;background:var(--chip);border:1px solid transparent;border-radius:8px;padding:5px 7px;text-align:center}
+.hint{font-size:12px;color:var(--muted);margin:4px 0 0}
+
+/* stage */
+.stage{background:var(--panel);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);padding:14px 16px 12px;position:relative}
+.toolbar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px}
+.group{display:flex;align-items:center;gap:6px}
+select{background:var(--chip);border:1px solid transparent;border-radius:10px;padding:8px 30px 8px 12px;cursor:pointer;appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23888' stroke-width='1.6'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 11px center}
+.tempo{display:flex;align-items:center;background:var(--chip);border-radius:10px;padding:2px}
+.tempo button{background:transparent;padding:6px 10px;border-radius:8px;font-size:17px;line-height:1}
+.tempo button:hover{background:var(--panel)}
+.tempo input{width:44px;background:transparent;border:0;text-align:center;font-weight:700;font-size:16px;font-variant-numeric:tabular-nums;-moz-appearance:textfield}
+.tempo input::-webkit-inner-spin-button{display:none}
+.tempo span{font-size:12px;color:var(--muted);margin-right:4px}
+.paper{position:relative;display:flex;flex-direction:column;align-items:center;padding:4px 0 0}
+.sheet{position:relative;width:100%;display:flex;justify-content:center;transition:opacity .4s ease}
+.sheet svg{width:100%;height:auto;display:block}
+.sheet.hide{display:none}
+.sheet.upnext{opacity:.45}
+.sheet .tag{position:absolute;left:4px;top:0;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);opacity:0;transition:opacity .4s}
+.sheet.upnext .tag{opacity:1}
+.fill{animation:fill .6s ease-out}
+@keyframes fill{from{opacity:0}to{opacity:1}}
+#countin{position:absolute;top:2px;right:0;font-size:13px;font-weight:600;color:var(--accent);background:var(--chip);padding:3px 10px;border-radius:99px;opacity:0;transition:opacity .2s;font-variant-numeric:tabular-nums}
+#countin.show{opacity:1}
+#countin b{display:inline-block;min-width:10px}
+#countin b.tick{animation:tick .3s ease-out}
+@keyframes tick{from{transform:scale(1.6)}to{transform:scale(1)}}
+#lane{width:100%;height:92px;display:block;border-radius:12px;margin-top:4px}
+#lane.off{display:none}
+.stats{display:flex;align-items:center;gap:14px;min-height:44px;margin-top:8px;font-size:13.5px;color:var(--muted)}
+#acc{font-size:26px;font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums}
+#acc:empty{display:none}
+#statText{flex:1}
+#statText b{color:var(--ink);font-weight:600}
+.hist{display:flex;gap:2px;align-items:flex-end;height:26px}
+.hist span{width:6px;border-radius:2px;background:var(--accent);opacity:.7;transition:height .3s}
+#toast{position:absolute;left:50%;top:10px;transform:translate(-50%,-6px);background:var(--ink);color:var(--bg);font-size:13px;padding:6px 12px;border-radius:99px;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;white-space:nowrap}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+footer{margin-top:12px;text-align:center;font-size:12.5px;color:var(--muted)}
+kbd{font:600 11px ui-monospace,monospace;background:var(--chip);border-radius:5px;padding:1px 5px;color:var(--ink)}
+
+/* notation */
+.staff{stroke:var(--ink);stroke-opacity:.28;stroke-width:1}
+.bar{stroke:var(--ink);stroke-opacity:.8;stroke-width:1.2}
+.ink{fill:var(--ink)}
+.tsig{font:800 27px Georgia,serif;fill:var(--ink);text-anchor:middle;dominant-baseline:central}
+.ev{color:var(--ink);transition:color .15s}
+.ev .hl{fill:var(--accent);opacity:0;transition:opacity .12s}
+.ev.cur .hl{opacity:.13}
+.ev.rest.cur .hl{fill:var(--rest);opacity:.25}
+.ev.perfect{color:var(--perfect)} .ev.good{color:var(--good)} .ev.ok{color:var(--ok)}
+.ev.miss,.ev.resthit{color:var(--miss)}
+.beat{stroke:var(--muted);stroke-width:1.6;stroke-linecap:round;opacity:.55}
+.beat.one{opacity:.9;stroke-width:2}
+.cnt{fill:var(--muted);font:600 12.5px system-ui,sans-serif;text-anchor:middle}
+.ev.rest .cnt{opacity:.45}
+.nocounts .cnt{display:none}
+.ph{fill:var(--accent);opacity:.55}
+@media (max-width:640px){ .toolbar{justify-content:center} .hist{display:none} }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Rhythm Trainer</h1>
+    <button id="setBtn" class="ghost" aria-expanded="false" aria-controls="drawer">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>
+      Settings
+      <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+    </button>
+  </header>
+
+  <div class="drawer" id="drawer"><div><div class="panel">
+    <section>
+      <h3>Rhythms</h3>
+      <div class="field"><div class="name">Notes</div><div class="chips" id="noteChips"></div></div>
+      <div class="field"><div class="name">Rests</div><div class="chips" id="restChips"></div></div>
+      <div class="field"><div class="name">How many rests <span id="restRead"></span></div><input type="range" id="restChance" min="0" max="0.6" step="0.05"></div>
+    </section>
+    <section>
+      <h3>Practice</h3>
+      <div class="field"><div class="name">Bars</div><div class="chips" id="barsSeg"><button data-v="1">1 bar</button><button data-v="2">2 bars</button><button data-v="4">4 bars</button></div></div>
+      <div class="field"><div class="name">After each pass</div><div class="chips" id="modeSeg"><button data-v="loop">Repeat it</button><button data-v="new">New rhythm</button></div></div>
+      <div class="field"><div class="name">Timing</div><div class="chips" id="timingSeg"><button data-v="relaxed">Relaxed</button><button data-v="normal">Normal</button><button data-v="strict">Strict</button></div></div>
+      <label class="toggle">Metronome while playing <input type="checkbox" id="metronome"></label>
+      <label class="toggle">Hit lane <input type="checkbox" id="laneT"></label>
+      <label class="toggle">Counting (1 e &amp; a) <input type="checkbox" id="counts"></label>
+    </section>
+    <section>
+      <h3>Sound</h3>
+      <label class="toggle">Drum sound on key press <input type="checkbox" id="hitSound"></label>
+      <div class="field"><div class="name">Volume</div><input type="range" id="volume" min="0" max="1" step="0.05"></div>
+      <div class="field"><div class="name">Latency offset</div>
+        <div class="inline"><input type="number" class="num" id="offset" step="1"><span class="hint" style="margin:0">ms</span><button id="calBtn">Calibrate</button></div>
+        <p class="hint">Tap along to 8 clicks to measure it. Worth doing once, especially with Bluetooth.</p>
+      </div>
+    </section>
+  </div></div></div>
+
+  <section class="stage">
+    <div id="toast"></div>
+    <div class="toolbar">
+      <div class="group">
+        <button id="startBtn" class="primary" title="Start / stop (Enter)"></button>
+        <button id="listenBtn" title="Hear the rhythm (L)"></button>
+        <button id="newBtn" class="ghost" title="New rhythm (N)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6"/></svg>New
+        </button>
+        <button id="countBtn" class="ghost toggleBtn" title="Show / hide counting (C)">1 e &amp; a</button>
+      </div>
+      <div class="group">
+        <select id="level" title="Difficulty level ([ and ])"></select>
+        <div class="tempo" title="Tempo (↑ ↓)">
+          <button id="bpmDown" aria-label="Slower">−</button>
+          <input type="number" id="bpmNum" min="40" max="220" aria-label="Tempo">
+          <span>BPM</span>
+          <button id="bpmUp" aria-label="Faster">+</button>
+        </div>
+      </div>
+    </div>
+    <div class="paper">
+      <div class="sheet" id="sheetA"><span class="tag">Up next</span><svg xmlns="http://www.w3.org/2000/svg"></svg></div>
+      <div class="sheet hide" id="sheetB"><span class="tag">Up next</span><svg xmlns="http://www.w3.org/2000/svg"></svg></div>
+      <div id="countin"></div>
+    </div>
+    <canvas id="lane"></canvas>
+    <div class="stats">
+      <div id="acc"></div>
+      <div id="statText">Press <kbd>Enter</kbd> to start. Hit with <kbd>Space</kbd>, <kbd>F</kbd> or <kbd>J</kbd>.</div>
+      <div class="hist" id="hist"></div>
+    </div>
+  </section>
+  <footer>Hit <kbd>Space</kbd> <kbd>F</kbd> <kbd>J</kbd> · Start/stop <kbd>Enter</kbd> · Listen <kbd>L</kbd> · New <kbd>N</kbd> · Level <kbd>[</kbd> <kbd>]</kbd> · Counting <kbd>C</kbd> · Tempo <kbd>↑</kbd> <kbd>↓</kbd></footer>
+</main>
+
+<script>
+'use strict';
+// ---------- settings ----------
+const DEFAULTS = {level:2, bpm:80, bars:2, notes:[4,2], rests:[4,2], restChance:0.25, timing:'normal', mode:'loop',
+  metronome:true, lane:true, counts:true, hitSound:true, volume:0.7, offsetMs:0};
+let S = (() => { try { return Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem('rhythm-trainer') || '{}')); } catch (e) { return {...DEFAULTS}; } })();
+const save = () => { try { localStorage.setItem('rhythm-trainer', JSON.stringify(S)); } catch (e) {} };
+
+const NAMES = {8:'Half', 4:'Quarter', 2:'8th', 1:'16th'};
+// Difficulty levels. `w` = how often each value (half, quarter, 8th, 16th) is picked where it fits,
+// so higher levels lean on the harder subdivisions instead of just allowing them.
+const LEVELS = [
+  {name:'Beginner',     bpm:60,  notes:[8,4],     rests:[8,4],   restChance:0.15, timing:'relaxed', w:{8:1, 4:3},
+   desc:'half & quarter notes, a few rests'},
+  {name:'Novice',       bpm:70,  notes:[8,4,2],   rests:[4],     restChance:0.2,  timing:'relaxed', w:{8:1, 4:3, 2:2},
+   desc:'adds 8th notes'},
+  {name:'Intermediate', bpm:80,  notes:[4,2],     rests:[4,2],   restChance:0.25, timing:'normal',  w:{4:2, 2:3},
+   desc:'8th notes and 8th rests'},
+  {name:'Advanced',     bpm:85,  notes:[4,2,1],   rests:[4,2],   restChance:0.25, timing:'normal',  w:{4:2, 2:3, 1:2},
+   desc:'adds 16th notes'},
+  {name:'Expert',       bpm:95,  notes:[8,4,2,1], rests:[4,2,1], restChance:0.3,  timing:'strict',  w:{8:1, 4:1, 2:3, 1:3},
+   desc:'16th rests, tighter timing'},
+  {name:'Master',       bpm:110, notes:[4,2,1],   rests:[4,2,1], restChance:0.35, timing:'strict',  w:{4:1, 2:2, 1:4},
+   desc:'dense 16th syncopation'},
+];
+// [perfect, good, ok] windows in seconds
+const TIMING = {relaxed:[0.05, 0.1, 0.16], normal:[0.035, 0.075, 0.14], strict:[0.025, 0.05, 0.1]};
+const sameSet = (a, b) => a.length === b.length && a.every(x => b.includes(x));
+const matchesLevel = (L) => sameSet(L.notes, S.notes) && sameSet(L.rests, S.rests) && L.restChance === S.restChance && L.timing === S.timing;
+if (S.level != null && !(LEVELS[S.level] && matchesLevel(LEVELS[S.level]))) S.level = null;
+
+// ---------- layout constants ----------
+// Notation is strictly proportional: every 16th takes U px, including across barlines.
+const U = 36, HEAD = 66, ROW_H = 118, STAFF_TOP = 36, BAR_W = 16*U, FIN = 14;
+const PX16 = 30, HIT_X = 110;
+const $ = s => document.querySelector(s);
+const lane = $('#lane'), lg = lane.getContext('2d');
+
+// ---------- pattern generation (durations in 16ths) ----------
+function genBar() {
+  const noteSet = new Set(S.notes), restSet = new Set(S.rests);
+  const w = S.level != null ? LEVELS[S.level].w : {};
+  const pick = durs => {
+    let r = Math.random() * durs.reduce((a, d) => a + (w[d] ?? 1), 0);
+    for (const d of durs) if ((r -= (w[d] ?? 1)) < 0) return d;
+    return durs[durs.length - 1];
+  };
+  for (let attempt = 0; attempt < 200; attempt++) {
+    const ev = []; let p = 0;
+    while (p < 16) {
+      // Only values that start on their own grid (half on 1/3, quarter on beats...) so no ties are needed.
+      const durs = [8,4,2,1].filter(d => (noteSet.has(d) || restSet.has(d)) && p % d === 0);
+      const d = pick(durs);
+      const rest = !noteSet.has(d) ? true : !restSet.has(d) ? false : Math.random() < S.restChance;
+      ev.push({pos:p, dur:d, rest});
+      p += d;
+    }
+    if (ev.some(e => !e.rest)) return ev;
+  }
+  return [0,4,8,12].map(pos => ({pos, dur:4, rest:false}));
+}
+function buildPattern(measures) {
+  const events = [];
+  measures.forEach((bar, b) => bar.forEach(e => { e.bar = b; e.t16 = b*16 + e.pos; e.idx = events.length; events.push(e); }));
+  return {bars:measures.length, measures, events};
+}
+const newPattern = () => buildPattern(Array.from({length:S.bars}, genBar));
+const calPattern = () => buildPattern([0,1].map(() => [0,4,8,12].map(pos => ({pos, dur:4, rest:false}))));
+const countLabel = (pos, svgText) => pos % 4 === 0 ? String(pos/4 + 1) : ['', 'e', svgText ? '&amp;' : '&', 'a'][pos % 4];
+
+// ---------- notation rendering ----------
+let lay = null, evEls = [], ph = null;
+const shown = {pat:null, seg:null, cur:-1};
+
+function noteSVG(dur, x, T, beamed) {
+  const y = T + 15, sx = x + 5.9, top = T - 20, half = dur === 8;
+  let s = `<ellipse cx="${x}" cy="${y}" rx="${half?7:6.6}" ry="${half?4.9:4.7}" transform="rotate(-22 ${x} ${y})" ` +
+    (half ? `fill="var(--paper)" stroke="currentColor" stroke-width="1.9"/>` : `fill="currentColor"/>`);
+  s += `<line x1="${sx}" y1="${y-1}" x2="${sx}" y2="${top}" stroke="currentColor" stroke-width="1.6"/>`;
+  if (!beamed) {
+    const flags = dur === 2 ? 1 : dur === 1 ? 2 : 0;
+    for (let i = 0; i < flags; i++) {
+      const fy = top + i*8;
+      s += `<path d="M${sx},${fy} C${sx+1.5},${fy+7} ${sx+11},${fy+9} ${sx+8.5},${fy+21} C${sx+9.5},${fy+13} ${sx+4},${fy+11} ${sx},${fy+9} Z" fill="currentColor"/>`;
+    }
+  }
+  return s;
+}
+function restSVG(dur, x, T) {
+  const st = `fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"`;
+  if (dur === 8) return `<rect x="${x-7}" y="${T+15}" width="14" height="5" fill="currentColor"/>`;
+  if (dur === 4) return `<path d="M${x-2},${T+5} L${x+4},${T+14} L${x-2},${T+21} L${x+4},${T+28} C${x-4},${T+25} ${x-4},${T+32} ${x+1},${T+36}" ${st} stroke-width="3.2"/>`;
+  if (dur === 2) return `<circle cx="${x-3}" cy="${T+14}" r="3.2" fill="currentColor"/>` +
+    `<path d="M${x-4},${T+15.5} Q${x+1},${T+18} ${x+5},${T+12} L${x-1},${T+31}" ${st} stroke-width="1.8"/>`;
+  return `<circle cx="${x-2}" cy="${T+14}" r="3.1" fill="currentColor"/><circle cx="${x-5}" cy="${T+23}" r="3.1" fill="currentColor"/>` +
+    `<path d="M${x-3},${T+15.5} Q${x+2},${T+18} ${x+6},${T+12} L${x-2},${T+38}" ${st} stroke-width="1.8"/>` +
+    `<path d="M${x-6},${T+24.5} Q${x-1},${T+27} ${x+3.1},${T+21.5}" ${st} stroke-width="1.8"/>`;
+}
+// Beam consecutive 8ths/16ths inside the same beat; rests break a group.
+function beamGroups(bar) {
+  const groups = []; let cur = [];
+  for (const e of bar) {
+    const beamable = !e.rest && e.dur <= 2;
+    if (beamable && cur.length && Math.floor(cur[0].pos/4) === Math.floor(e.pos/4)) cur.push(e);
+    else { if (cur.length) groups.push(cur); cur = beamable ? [e] : []; }
+  }
+  if (cur.length) groups.push(cur);
+  return groups.filter(g => g.length > 1);
+}
+function beamSVG(g, X, T) {
+  const top = T - 20, xs = g.map(e => X(e) + 5.1);
+  const rect = (a, b, y) => `<rect x="${a}" y="${y}" width="${b - a + 1.6}" height="5" class="ink"/>`;
+  let s = rect(xs[0], xs[xs.length-1], top);
+  g.forEach((e, i) => {
+    if (e.dur !== 1) return;
+    const prev16 = i > 0 && g[i-1].dur === 1, next16 = i < g.length-1 && g[i+1].dur === 1;
+    if (next16) s += rect(xs[i], xs[i+1], top + 8);
+    else if (!prev16) s += i === g.length-1 ? rect(xs[i] - 10, xs[i], top + 8) : rect(xs[i], xs[i] + 10, top + 8);
+  });
+  return s;
+}
+function notationMarkup(pat) {
+  const perRow = pat.bars === 1 ? 1 : 2, rows = Math.ceil(pat.bars / perRow);
+  const W = HEAD + perRow*BAR_W + FIN + 6, H = rows*ROW_H + 4;
+  let s = '';
+  for (let r = 0; r < rows; r++) {
+    const T = r*ROW_H + STAFF_TOP, nIn = Math.min(perRow, pat.bars - r*perRow), last = r === rows - 1;
+    const xEnd = HEAD + nIn*BAR_W + (last ? FIN : 0);
+    for (let i = 0; i < 5; i++) s += `<line x1="8" x2="${xEnd}" y1="${T+i*10}" y2="${T+i*10}" class="staff"/>`;
+    s += `<rect x="14" y="${T+10}" width="4" height="20" class="ink"/><rect x="22" y="${T+10}" width="4" height="20" class="ink"/>`;
+    if (r === 0) s += `<text x="47" y="${T+10}" class="tsig">4</text><text x="47" y="${T+30}" class="tsig">4</text>`;
+    for (let c = 0; c < nIn; c++) {
+      const b = r*perRow + c, bx = HEAD + c*BAR_W, bar = pat.measures[b];
+      const X = e => bx + (e.pos + 0.5)*U;   // notes sit in the middle of their 16th slot
+      const groups = beamGroups(bar), beamed = new Set(groups.flat());
+      // beat notches under the staff on 1 2 3 4
+      for (let k = 0; k < 4; k++) { const x = bx + (k*4 + 0.5)*U + 1; s += `<line x1="${x}" x2="${x}" y1="${T+45}" y2="${T+52}" class="beat${k ? '' : ' one'}"/>`; }
+      for (const e of bar) {
+        const x = X(e);
+        s += `<g class="ev${e.rest ? ' rest' : ''}" data-i="${e.idx}"><rect class="hl" x="${x-15}" y="${T-30}" width="31" height="104" rx="8"/>` +
+          (e.rest ? restSVG(e.dur, x + 1, T) : noteSVG(e.dur, x, T, beamed.has(e))) +
+          `<text class="cnt" x="${x+1}" y="${T+66}">${countLabel(e.pos, true)}</text></g>`;
+      }
+      for (const g of groups) s += beamSVG(g, X, T);
+      const lx = bx + BAR_W;
+      if (b < pat.bars - 1) { if (c < nIn - 1) s += `<line x1="${lx}" x2="${lx}" y1="${T}" y2="${T+40}" class="bar"/>`; }
+      else {
+        const fx = lx + FIN;
+        s += `<line x1="${fx-8}" x2="${fx-8}" y1="${T}" y2="${T+40}" class="bar"/><rect x="${fx-4}" y="${T}" width="4.5" height="40" class="ink"/>`;
+        if (S.mode === 'loop') s += `<circle cx="${fx-14}" cy="${T+15}" r="2.4" class="ink"/><circle cx="${fx-14}" cy="${T+25}" r="2.4" class="ink"/>`;
+      }
+    }
+    // barline at the end of a full row that isn't the last
+    if (!last) s += `<line x1="${xEnd}" x2="${xEnd}" y1="${T}" y2="${T+40}" class="bar"/>`;
+  }
+  return {s, W, H, perRow};
+}
+// Two fixed lines, read like a page: you play one while the other shows what's next.
+// When a pass ends the cursor drops to the line you've already been reading, and the
+// finished line refills with the rhythm after it, so nothing changes where your eyes are.
+const slots = ['#sheetA', '#sheetB'].map(id => ({wrap:$(id), svg:$(id + ' svg'), pat:null}));
+let act = 0;
+function fillSlot(slot, pat) {
+  slot.pat = pat;
+  let {s, W, H, perRow} = notationMarkup(pat);
+  s += `<rect class="ph" x="0" y="0" width="3" height="80" rx="1.5" visibility="hidden"/>`;
+  slot.svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  slot.svg.style.maxWidth = Math.round(W * 1.25) + 'px';
+  slot.svg.innerHTML = s;
+  slot.svg.classList.toggle('nocounts', !S.counts);
+  slot.evEls = [];
+  slot.svg.querySelectorAll('.ev').forEach(el => slot.evEls[+el.dataset.i] = el);
+  slot.ph = slot.svg.querySelector('.ph');
+  slot.lay = {perRow};
+  slot.svg.classList.remove('fill'); slot.svg.getBoundingClientRect(); slot.svg.classList.add('fill');
+}
+function useSlot(i) {
+  act = i;
+  const a = slots[i];
+  evEls = a.evEls; ph = a.ph; lay = a.lay; shown.pat = a.pat; shown.cur = -1;
+  slots.forEach((sl, k) => sl.wrap.classList.toggle('upnext', k !== i));
+  a.wrap.classList.remove('hide');
+}
+function renderNotation(pat) { fillSlot(slots[act], pat); useSlot(act); }
+function renderPreview(pat) {
+  const o = slots[1 - act];
+  pat = S.mode === 'new' ? pat : null;
+  o.wrap.classList.toggle('hide', !pat);
+  if (!pat) o.pat = null;
+  else if (pat !== o.pat) fillSlot(o, pat);
+}
+const GRADES = ['perfect','good','ok','miss','resthit'];
+function setEvClass(idx, g) { const el = evEls[idx]; if (!el) return; el.classList.remove(...GRADES); if (g) el.classList.add(g); }
+function setCur(idx) {
+  if (idx === shown.cur) return;
+  if (evEls[shown.cur]) evEls[shown.cur].classList.remove('cur');
+  if (evEls[idx]) evEls[idx].classList.add('cur');
+  shown.cur = idx;
+}
+function movePlayhead(pat, t16) {
+  if (t16 == null || t16 < 0) { ph.setAttribute('visibility', 'hidden'); setCur(-1); return; }
+  t16 = Math.min(t16, pat.bars*16 - 0.001);
+  const bar = Math.floor(t16/16), row = Math.floor(bar/lay.perRow), col = bar % lay.perRow;
+  const x = HEAD + col*BAR_W + (t16 - bar*16 + 0.5)*U, T = row*ROW_H + STAFF_TOP;
+  ph.setAttribute('x', (x - 1.5).toFixed(2)); ph.setAttribute('y', T - 28);
+  ph.setAttribute('visibility', 'visible');
+  const ev = pat.events.find(e => t16 >= e.t16 && t16 < e.t16 + e.dur);
+  setCur(ev ? ev.idx : -1);
+}
+
+// ---------- audio + smooth clock ----------
+let ctx = null, master = null, noiseBuf = null, clockOff = null;
+function ensureAudio() {
+  if (!ctx) {
+    ctx = new (window.AudioContext || window.webkitAudioContext)({latencyHint:'interactive'});
+    master = ctx.createGain(); master.connect(ctx.destination);
+    noiseBuf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.3), ctx.sampleRate);
+    const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random()*2 - 1;
+  }
+  if (ctx.state !== 'running') ctx.resume();
+  master.gain.value = S.volume;
+}
+// ctx.currentTime only advances in audio-buffer-sized jumps, which makes animation stutter.
+// Instead map the smooth performance.now() clock onto "what the speakers are playing right now",
+// and filter the mapping so it never jitters.
+function syncClock() {
+  if (!ctx) return;
+  let off;
+  const ts = ctx.getOutputTimestamp ? ctx.getOutputTimestamp() : null;
+  if (ts && ts.performanceTime > 0 && ts.contextTime > 0) off = ts.contextTime - ts.performanceTime/1000;
+  else off = ctx.currentTime - ((ctx.outputLatency || 0) + (ctx.baseLatency || 0)) - performance.now()/1000;
+  if (clockOff === null || Math.abs(off - clockOff) > 0.05) clockOff = off;
+  else clockOff += (off - clockOff) * 0.02;
+}
+const audioNow = () => performance.now()/1000 + clockOff;
+function click(dest, t, accent) {
+  const o = ctx.createOscillator(), g = ctx.createGain();
+  o.frequency.value = accent ? 1760 : 1100;
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(accent ? 0.7 : 0.4, t + 0.002);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.06);
+  o.connect(g).connect(dest); o.start(t); o.stop(t + 0.08);
+}
+function snare(dest, t, v) {
+  const n = ctx.createBufferSource(), hp = ctx.createBiquadFilter(), g = ctx.createGain();
+  n.buffer = noiseBuf; hp.type = 'highpass'; hp.frequency.value = 1200;
+  g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
+  n.connect(hp).connect(g).connect(dest); n.start(t); n.stop(t + 0.2);
+  const o = ctx.createOscillator(), og = ctx.createGain();
+  o.type = 'triangle'; o.frequency.setValueAtTime(220, t); o.frequency.exponentialRampToValueAtTime(140, t + 0.08);
+  og.gain.setValueAtTime(v*0.8, t); og.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+  o.connect(og).connect(dest); o.start(t); o.stop(t + 0.12);
+}
+
+// ---------- engine ----------
+// A run is a chain of back-to-back segments: 'count' (one bar of clicks) and 'play' (one pass).
+let pattern = null, run = null;
+let queued = null;   // New-rhythm mode: the pattern that plays after `pattern`
+const ensureQueued = () => (queued = queued || newPattern());
+const history = [], session = {w:0, n:0};
+const segEnd = s => s.start + s.len;
+const winFor = seg => run && run.cal ? 0.3 : Math.min(TIMING[S.timing][2], seg.s16 * 0.95);
+
+function mkSeg(type, start, pat) {
+  const s16 = 60 / (run.cal ? 90 : S.bpm) / 4;
+  const len = (type === 'count' ? 16 : pat.bars*16) * s16;
+  const seg = {type, start, pat, s16, len, j:{}, done:false,
+    stats:{perfect:0, good:0, ok:0, miss:0, extra:0, rest:0, offs:[]}};
+  const beat = s16*4, nb = Math.round(len/beat);
+  for (let b = 0; b < nb; b++) if (type === 'count' || S.metronome || run.cal) click(run.bus, start + b*beat, b % 4 === 0);
+  if (type === 'play') {
+    seg.passNo = ++run.passNo;
+    for (const ev of pat.events) if (!ev.rest) {
+      const t = start + ev.t16*s16;
+      if (run.listen) snare(run.bus, t, 0.8); else run.notes.push({t, ev, seg, j:null});
+    }
+  }
+  return seg;
+}
+function follower(last) {
+  const end = segEnd(last);
+  if (last.type === 'count') { const seg = mkSeg('play', end, last.pat); seg.nextPat = last.nextPat; return seg; }
+  if (run.listen) return null;
+  if (run.cal) return run.passNo < 2 ? mkSeg('play', end, last.pat) : null;
+  // No count-in between passes: a new rhythm starts right on the next downbeat.
+  if (S.mode !== 'new') return mkSeg('play', end, pattern);
+  pattern = queued || newPattern();
+  queued = newPattern();
+  const seg = mkSeg('play', end, pattern);
+  seg.nextPat = queued;
+  return seg;
+}
+function scheduler() {
+  if (!run || run.noMore) return;
+  let last = run.segments[run.segments.length - 1];
+  while (last.start < ctx.currentTime + 0.8) {
+    const nx = follower(last);
+    if (!nx) { run.noMore = true; break; }
+    run.segments.push(nx); last = nx;
+  }
+  const cut = ctx.currentTime - 10;
+  while (run.segments.length > 2 && segEnd(run.segments[0]) < cut && (run.segments[0].type === 'count' || run.segments[0].done)) run.segments.shift();
+}
+function start(opts = {}) {
+  stop();
+  ensureAudio();
+  const bus = ctx.createGain(); bus.connect(master);
+  run = {listen:!!opts.listen, cal:opts.cal ? {diffs:[]} : null, bus, segments:[], notes:[], passNo:0, noMore:false};
+  const count = mkSeg('count', ctx.currentTime + 0.2, run.cal ? calPattern() : pattern);
+  if (S.mode === 'new' && !run.cal && !run.listen) count.nextPat = ensureQueued();
+  run.segments.push(count);
+  run.timer = setInterval(scheduler, 25); scheduler();
+  updateButtons();
+  kick();
+}
+function stop() {
+  if (!run) return;
+  clearInterval(run.timer);
+  try { run.bus.disconnect(); } catch (e) {}
+  // keep what's on screen: the next Start picks up from the lines you can see
+  const seg = shown.seg;
+  if (S.mode === 'new' && seg && seg.nextPat) { pattern = seg.pat; queued = seg.nextPat; }
+  run = null; shown.seg = null;
+  $('#countin').classList.remove('show');
+  if (shown.pat !== pattern) renderNotation(pattern); else movePlayhead(pattern, null);
+  renderPreview(S.mode === 'new' ? ensureQueued() : null);
+  updateButtons();
+  kick();
+}
+function enterSeg(seg) {
+  shown.seg = seg;
+  if (seg.pat !== shown.pat) {
+    if (slots[1 - act].pat === seg.pat) { movePlayhead(shown.pat, null); useSlot(1 - act); }
+    else renderNotation(seg.pat);
+  }
+  renderPreview(seg.nextPat);
+  evEls.forEach(el => el && el.classList.remove(...GRADES));
+  for (const k in seg.j) setEvClass(+k, seg.j[k]);
+}
+let lastCount = -1;
+function tick(now) {
+  for (const n of run.notes) if (!n.j && now > n.t + winFor(n.seg)) grade(n, 'miss', 0);
+  run.notes = run.notes.filter(n => !n.j || now - n.t < 2);
+
+  let seg = run.segments[0];
+  for (const s of run.segments) if (s.start <= now) seg = s;
+  if (seg !== shown.seg) enterSeg(seg);
+  const ci = $('#countin');
+  if (seg.type === 'play') {
+    ci.classList.remove('show'); lastCount = -1;
+    movePlayhead(seg.pat, (now - seg.start) / seg.s16);
+  } else {
+    movePlayhead(seg.pat, null);
+    const beat = Math.floor((now - seg.start) / (seg.s16*4));
+    if (beat >= 0 && beat !== lastCount) {
+      lastCount = beat;
+      const label = run.cal ? 'Tap every click' : 'Count-in';
+      ci.innerHTML = `${label} · <b class="tick">${beat + 1}</b>`;
+      ci.classList.add('show');
+    }
+  }
+  for (const s of run.segments) if (s.type === 'play' && !s.done && now > segEnd(s) + 0.25) {
+    s.done = true;
+    if (!run.listen && !run.cal) finishPass(s);
+  }
+  if (run.noMore) {
+    const last = run.segments[run.segments.length - 1];
+    if (now > segEnd(last) + 0.3) { const cal = run.cal; stop(); if (cal) finishCal(cal); }
+  }
+}
+
+// ---------- judging ----------
+const fx = [];   // lane effects: hit bursts + floating labels
+function grade(n, g, diff) {
+  n.j = g; n.seg.j[n.ev.idx] = g; n.seg.stats[g]++;
+  if (g !== 'miss') n.seg.stats.offs.push(diff);
+  if (shown.seg === n.seg) setEvClass(n.ev.idx, g);
+  const ms = Math.round(Math.abs(diff) * 1000);
+  const text = g === 'perfect' ? 'Perfect' : g === 'miss' ? 'Miss' : `${diff < 0 ? 'Early' : 'Late'} ${ms}ms`;
+  addFx(g, text, g !== 'miss');
+}
+function addFx(colorKey, text, burst) {
+  // only one label at a time, so quick hits never stack unreadably
+  for (const f of fx) if (f.text) f.text = null;
+  fx.push({t0:performance.now(), c:colorKey, text, burst}); kick(); }
+function onHit(e) {
+  ensureAudio();
+  if (S.hitSound) snare(master, ctx.currentTime, 0.7);
+  fx.push({t0:performance.now(), c:'accent', burst:true, small:true}); kick();
+  if (!run || run.listen) return;
+  syncClock();
+  const th = e.timeStamp/1000 + clockOff - (run.cal ? 0 : S.offsetMs/1000);
+  let best = null, bd = Infinity;
+  for (const n of run.notes) { if (n.j) continue; const d = Math.abs(n.t - th); if (d < bd) { bd = d; best = n; } }
+  if (best && bd <= winFor(best.seg)) {
+    const diff = th - best.t, a = Math.abs(diff);
+    if (run.cal) run.cal.diffs.push(diff);
+    const [pw, gw] = TIMING[S.timing];
+    grade(best, a <= pw ? 'perfect' : a <= gw ? 'good' : 'ok', diff);
+    return;
+  }
+  const seg = run.segments.find(s => s.type === 'play' && th >= s.start && th < segEnd(s));
+  if (!seg) { toast('Wait for the count-in'); return; }
+  const t16 = (th - seg.start) / seg.s16;
+  const ev = seg.pat.events.find(ev => t16 >= ev.t16 && t16 < ev.t16 + ev.dur);
+  if (ev && ev.rest) {
+    seg.stats.rest++; seg.j[ev.idx] = 'resthit';
+    if (shown.seg === seg) setEvClass(ev.idx, 'resthit');
+    addFx('miss', 'Rest!', false);
+  } else { seg.stats.extra++; addFx('miss', 'Extra', false); }
+}
+function finishPass(s) {
+  const st = s.stats, n = st.perfect + st.good + st.ok + st.miss, errs = st.extra + st.rest;
+  const w = st.perfect + 0.75*st.good + 0.4*st.ok;
+  const acc = n + errs ? w / (n + errs) : 0;
+  const mean = st.offs.length ? st.offs.reduce((a, b) => a + b, 0) / st.offs.length * 1000 : null;
+  history.unshift({pass:s.passNo, acc, st, mean});
+  session.w += w; session.n += n + errs;
+  renderStats();
+  if (S.level != null && S.level < LEVELS.length - 1 && history.length >= 3 && history.slice(0, 3).every(x => x.acc >= 0.9 && !x.nudged)) {
+    history[0].nudged = history[1].nudged = history[2].nudged = true;
+    toast(`Nailing it! Ready for Level ${S.level + 2}? Press ]`);
+  }
+}
+function finishCal(cal) {
+  const d = cal.diffs.slice().sort((a, b) => a - b);
+  if (d.length < 4) { toast('Not enough taps. Try calibrating again'); return; }
+  S.offsetMs = Math.round(d[Math.floor(d.length/2)] * 1000); save();
+  $('#offset').value = S.offsetMs;
+  toast(`Latency offset set to ${S.offsetMs} ms`);
+}
+function renderStats() {
+  const h = history[0]; if (!h) return;
+  const pct = Math.round(h.acc * 100), acc = $('#acc');
+  acc.textContent = pct + '%';
+  acc.style.color = `var(--${pct >= 90 ? 'perfect' : pct >= 70 ? 'good' : pct >= 50 ? 'ok' : 'miss'})`;
+  const st = h.st, parts = [`Pass ${h.pass}`];
+  for (const [v, label] of [[st.perfect, 'perfect'], [st.good, 'good'], [st.ok, 'off'], [st.miss, 'missed'], [st.rest, 'on rests'], [st.extra, 'extra']])
+    if (v) parts.push(`<b>${v}</b> ${label}`);
+  const m = h.mean;
+  if (m != null) parts.push(Math.abs(m) < 10 ? 'in the pocket' : m < 0 ? `rushing ${Math.round(-m)}ms` : `dragging ${Math.round(m)}ms`);
+  $('#statText').innerHTML = parts.join(' · ');
+  const hist = $('#hist');
+  hist.innerHTML = history.slice(0, 40).reverse().map(x => `<span title="Pass ${x.pass}: ${Math.round(x.acc*100)}%" style="height:${Math.max(3, x.acc*26)}px"></span>`).join('');
+  hist.title = `Session: ${Math.round(session.w / session.n * 100)}% over ${history.length} passes`;
+}
+let toastTimer = 0;
+function toast(msg) {
+  const el = $('#toast'); el.textContent = msg; el.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 2200);
+}
+
+// ---------- hit lane + animation loop ----------
+let col = {};
+function readColors() {
+  const cs = getComputedStyle(document.documentElement);
+  for (const k of ['ink','muted','line','accent','perfect','good','ok','miss','rest','lane']) col[k] = cs.getPropertyValue('--' + k).trim();
+  col.resthit = col.miss;
+}
+function drawLane(now) {
+  if (!S.lane) return;
+  const dpr = window.devicePixelRatio || 1, W = lane.clientWidth, H = lane.clientHeight;
+  if (!W) return;
+  if (lane.width !== Math.round(W*dpr) || lane.height !== Math.round(H*dpr)) { lane.width = Math.round(W*dpr); lane.height = Math.round(H*dpr); }
+  const g = lg; g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.fillStyle = col.lane; g.fillRect(0, 0, W, H);
+  let segs;
+  if (run) segs = run.segments;
+  else { const s16 = 60/S.bpm/4; segs = [{type:'play', start:0, pat:pattern, s16, len:pattern.bars*16*s16, j:{}}]; now = 0; }
+  const mid = H/2 - 7, labelY = H - 9;
+  g.textAlign = 'center';
+  // faint centre track
+  g.fillStyle = col.line; g.fillRect(0, mid - 1, W, 2);
+  let pulse = 0;
+  for (const s of segs) {
+    const pps = PX16 / s.s16, X = t => HIT_X + (t - now)*pps;
+    if (X(segEnd(s)) < -20 || X(s.start) > W) continue;
+    const beat = s.s16*4, nb = Math.round(s.len/beat);
+    if (run && now >= s.start && now < segEnd(s)) pulse = Math.exp(-((now - s.start) % beat) / beat * 6);
+    for (let b = 0; b <= nb; b++) {
+      const x = X(s.start + b*beat); if (x < -2 || x > W + 2) continue;
+      const bar = b % 4 === 0;
+      g.fillStyle = col.line; g.fillRect(x - (bar ? 1 : 0.5), bar ? 8 : mid - 16, bar ? 2 : 1, bar ? H - 30 : 32);
+    }
+    if (s.type === 'count') {
+      g.fillStyle = col.muted; g.font = '700 15px system-ui,sans-serif';
+      for (let b = 0; b < nb; b++) { const x = X(s.start + b*beat); if (x > -10 && x < W + 10) g.fillText(b + 1, x, mid + 5); }
+      continue;
+    }
+    for (const ev of s.pat.events) {
+      const x = X(s.start + ev.t16*s.s16), w = ev.dur*PX16;
+      if (x + w < -12 || x > W + 12) continue;
+      const j = s.j[ev.idx];
+      if (ev.rest) {
+        g.strokeStyle = j ? col.miss : col.rest; g.lineWidth = 1.5; g.setLineDash([3, 4]);
+        g.beginPath(); g.roundRect(x - 7, mid - 7, w - 4, 14, 7); g.stroke(); g.setLineDash([]);
+      } else {
+        const c = j ? col[j] : col.accent;
+        g.fillStyle = c; g.globalAlpha = 0.18; g.beginPath(); g.roundRect(x, mid - 2.5, Math.max(0, w - 12), 5, 2.5); g.fill();
+        // markers swell slightly as they reach the hit line
+        const near = Math.max(0, 1 - Math.abs(x - HIT_X) / 70), r = 8.5 + 3*near;
+        g.globalAlpha = j === 'miss' ? 0.55 : 1;
+        g.beginPath(); g.arc(x, mid, r, 0, Math.PI*2);
+        if (j === 'miss') { g.strokeStyle = c; g.lineWidth = 2; g.stroke(); } else g.fill();
+        g.globalAlpha = 1;
+      }
+      if (S.counts) {
+        g.fillStyle = col.muted; g.font = '600 11.5px system-ui,sans-serif'; g.globalAlpha = ev.rest ? 0.45 : 0.9;
+        g.fillText(countLabel(ev.pos), x, labelY); g.globalAlpha = 1;
+      }
+    }
+  }
+  // fade out everything that has already passed the hit line
+  const fade = g.createLinearGradient(0, 0, HIT_X - 14, 0);
+  fade.addColorStop(0, col.lane); fade.addColorStop(1, col.lane + '00');
+  if (/^#[0-9a-f]{6}$/i.test(col.lane)) { g.fillStyle = fade; g.fillRect(0, 0, HIT_X - 14, H); }
+  // hit line, glowing on each beat
+  g.fillStyle = col.accent; g.globalAlpha = 0.1 + pulse*0.25;
+  g.beginPath(); g.arc(HIT_X, mid, 16 + pulse*4, 0, Math.PI*2); g.fill();
+  g.globalAlpha = 0.9; g.fillStyle = col.ink; g.fillRect(HIT_X - 1, 6, 2, H - 26); g.globalAlpha = 1;
+  // effects
+  const t = performance.now();
+  for (let i = fx.length - 1; i >= 0; i--) {
+    const f = fx[i], age = t - f.t0;
+    if (age > 700) { fx.splice(i, 1); continue; }
+    const c = col[f.c] || col.accent;
+    if (f.burst && age < 320) {
+      const p = age / 320;
+      g.strokeStyle = c; g.lineWidth = (f.small ? 2 : 3) * (1 - p); g.globalAlpha = 1 - p;
+      g.beginPath(); g.arc(HIT_X, mid, (f.small ? 10 : 12) + p*(f.small ? 12 : 20), 0, Math.PI*2); g.stroke();
+    }
+    if (f.text) {
+      const p = age / 700;
+      g.globalAlpha = p < 0.7 ? 1 : 1 - (p - 0.7)/0.3; g.fillStyle = c; g.font = '700 13px system-ui,sans-serif';
+      g.textAlign = 'left'; g.fillText(f.text, HIT_X + 20, mid - 16 - p*10); g.textAlign = 'center';
+    }
+    g.globalAlpha = 1;
+  }
+}
+let looping = false;
+function kick() { if (!looping) { looping = true; requestAnimationFrame(loop); } }
+function loop() {
+  syncClock();
+  const now = run ? audioNow() : 0;
+  if (run) tick(now);
+  drawLane(run ? now : 0);
+  if (run || fx.length) requestAnimationFrame(loop); else looping = false;
+}
+
+// ---------- UI wiring ----------
+const ICON = {
+  play:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l12.5-7.5z"/></svg>',
+  stop:'<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>',
+  ear:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M11 5L6 9H3v6h3l5 4zM15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>',
+};
+function updateButtons() {
+  const playing = run && !run.listen && !run.cal, listening = run && run.listen;
+  $('#startBtn').innerHTML = playing ? ICON.stop + 'Stop' : ICON.play + 'Start';
+  $('#listenBtn').innerHTML = listening ? ICON.stop + 'Stop' : ICON.ear + 'Listen';
+  $('#calBtn').textContent = run && run.cal ? 'Stop' : 'Calibrate';
+}
+function refreshIdle() {
+  if (run) { renderPreview(shown.seg && shown.seg.nextPat); return; }
+  renderNotation(pattern);
+  renderPreview(S.mode === 'new' ? ensureQueued() : null);
+  kick();
+}
+function freshPattern(quiet) {
+  if (run && S.mode === 'new') {
+    // swap out the rhythm waiting in "Up next"
+    queued = newPattern();
+    const last = run.segments[run.segments.length - 1];
+    if (last.type === 'play') last.nextPat = queued;
+    if (shown.seg === last) renderPreview(queued);
+    return;
+  }
+  pattern = newPattern(); queued = null;
+  if (!run) refreshIdle(); else if (!quiet) toast('New rhythm after this pass');
+}
+function setBpm(v, quiet) {
+  S.bpm = Math.max(40, Math.min(220, Math.round(+v || S.bpm))); save();
+  $('#bpmNum').value = S.bpm;
+  if (!run) kick(); else if (!quiet) toast(`${S.bpm} BPM from the next pass`);
+}
+function syncControls() {
+  $('#bpmNum').value = S.bpm;
+  const mark = (sel, fn) => document.querySelectorAll(sel + ' button').forEach(b => b.classList.toggle('on', fn(b.dataset.v)));
+  mark('#barsSeg', v => +v === S.bars);
+  mark('#modeSeg', v => v === S.mode);
+  mark('#timingSeg', v => v === S.timing);
+  mark('#noteChips', v => S.notes.includes(+v));
+  mark('#restChips', v => S.rests.includes(+v));
+  $('#restChance').value = S.restChance; $('#restRead').textContent = Math.round(S.restChance*100) + '%';
+  $('#metronome').checked = S.metronome; $('#laneT').checked = S.lane; $('#counts').checked = S.counts; $('#hitSound').checked = S.hitSound;
+  $('#volume').value = S.volume; $('#offset').value = S.offsetMs;
+  lane.classList.toggle('off', !S.lane);
+  $('#countBtn').classList.toggle('on', S.counts);
+  $('#level').value = S.level == null ? 'custom' : String(S.level);
+}
+function setLevel(i) {
+  i = Math.max(0, Math.min(LEVELS.length - 1, i));
+  const L = LEVELS[i];
+  Object.assign(S, {level:i, notes:[...L.notes], rests:[...L.rests], restChance:L.restChance, timing:L.timing});
+  save(); syncControls(); setBpm(L.bpm, true); freshPattern(true);
+  toast(`Level ${i + 1} · ${L.name}: ${L.desc}, ${L.bpm} BPM`);
+}
+// any hand-tuning of the rhythm settings turns the level into "Custom"
+const customised = () => { S.level = null; save(); syncControls(); };
+$('#level').innerHTML = LEVELS.map((L, i) => `<option value="${i}">Level ${i + 1} · ${L.name}</option>`).join('') + '<option value="custom" hidden>Custom</option>';
+$('#level').addEventListener('change', e => { if (e.target.value !== 'custom') setLevel(+e.target.value); });
+$('#timingSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; S.timing = b.dataset.v; customised(); });
+for (const [id, key] of [['noteChips', 'notes'], ['restChips', 'rests']]) {
+  $('#' + id).innerHTML = [8,4,2,1].map(d => `<button data-v="${d}">${NAMES[d]}</button>`).join('');
+  $('#' + id).addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    const v = +b.dataset.v, set = new Set(S[key]);
+    if (set.has(v)) { if (key === 'notes' && set.size === 1) return toast('Keep at least one note value'); set.delete(v); } else set.add(v);
+    S[key] = [...set]; customised(); freshPattern();
+  });
+}
+$('#barsSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; S.bars = +b.dataset.v; save(); syncControls(); freshPattern(); });
+$('#modeSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; S.mode = b.dataset.v; save(); syncControls(); refreshIdle(); });
+$('#bpmNum').addEventListener('change', e => setBpm(e.target.value));
+$('#bpmDown').addEventListener('click', () => setBpm(S.bpm - 1));
+$('#bpmUp').addEventListener('click', () => setBpm(S.bpm + 1));
+$('#restChance').addEventListener('input', e => { S.restChance = +e.target.value; save(); syncControls(); });
+$('#restChance').addEventListener('change', () => { customised(); freshPattern(); });
+$('#volume').addEventListener('input', e => { S.volume = +e.target.value; save(); if (master) master.gain.value = S.volume; });
+$('#offset').addEventListener('change', e => { S.offsetMs = Math.round(+e.target.value || 0); save(); });
+function setCounts(on) {
+  S.counts = on; save(); syncControls();
+  slots.forEach(sl => sl.svg.classList.toggle('nocounts', !S.counts));   // beat notches stay visible
+  kick();
+}
+for (const [id, key] of [['metronome', 'metronome'], ['laneT', 'lane'], ['counts', 'counts'], ['hitSound', 'hitSound']])
+  $('#' + id).addEventListener('change', e => { if (key === 'counts') return setCounts(e.target.checked); S[key] = e.target.checked; save(); syncControls(); kick(); });
+$('#countBtn').addEventListener('click', () => setCounts(!S.counts));
+
+const toggleStart = () => { if (run && !run.listen && !run.cal) stop(); else start(); };
+const toggleListen = () => { if (run && run.listen) stop(); else start({listen:true}); };
+$('#startBtn').addEventListener('click', toggleStart);
+$('#listenBtn').addEventListener('click', toggleListen);
+$('#newBtn').addEventListener('click', () => freshPattern());
+$('#calBtn').addEventListener('click', () => { if (run && run.cal) stop(); else start({cal:true}); });
+function setDrawer(open) {
+  $('#drawer').classList.toggle('open', open);
+  $('#setBtn').classList.toggle('open', open);
+  $('#setBtn').setAttribute('aria-expanded', open);
+}
+$('#setBtn').addEventListener('click', () => setDrawer(!$('#drawer').classList.contains('open')));
+// Drop focus after using a control so Space/F/J never toggle a checkbox or button by accident.
+document.addEventListener('click', e => { const t = e.target.closest('button,input[type=checkbox]'); if (t) t.blur(); });
+document.addEventListener('change', e => { if (e.target.type !== 'number') e.target.blur(); });
+
+const HIT_KEYS = new Set(['Space', 'KeyF', 'KeyJ', 'KeyD', 'KeyK']);
+window.addEventListener('keydown', e => {
+  if (e.target.type === 'number') { if (e.key === 'Enter') e.target.blur(); return; }
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (HIT_KEYS.has(e.code)) { e.preventDefault(); if (!e.repeat) onHit(e); return; }
+  if (e.repeat) return;
+  switch (e.code) {
+    case 'Enter': e.preventDefault(); toggleStart(); break;
+    case 'Escape': if ($('#drawer').classList.contains('open')) setDrawer(false); else stop(); break;
+    case 'KeyL': toggleListen(); break;
+    case 'KeyN': freshPattern(); break;
+    case 'KeyC': setCounts(!S.counts); break;
+    case 'BracketLeft': setLevel((S.level ?? 0) - 1); break;
+    case 'BracketRight': setLevel((S.level ?? -1) + 1); break;
+    case 'ArrowUp': e.preventDefault(); setBpm(S.bpm + 5); break;
+    case 'ArrowDown': e.preventDefault(); setBpm(S.bpm - 5); break;
+  }
+});
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { readColors(); kick(); });
+window.addEventListener('resize', kick);
+
+readColors();
+pattern = newPattern();
+syncControls();
+updateButtons();
+refreshIdle();
+</script>
+</body>
+</html>
