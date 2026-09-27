@@ -39,11 +39,16 @@
     <p class="muted achart" id="aChartInfo"></p>
 
     <details class="more aopts">
-      <summary><span>Options</span><span class="val">scroll, speed, volume, timing</span></summary>
+      <summary><span>Options</span><span class="val">keys, scroll, speed, volume, timing</span></summary>
       <div class="arow"><span class="lbl">Scroll</span><div class="seg" id="aScroll"><button data-v="down">Down</button><button data-v="up">Up</button></div></div>
       <div class="arow"><span class="lbl">Speed <b id="aSpeedRead"></b></span><input type="range" id="aSpeed" min="1" max="4" step="0.1" aria-label="Scroll speed"></div>
       <div class="arow"><span class="lbl">Music volume <b id="aVolRead"></b></span><input type="range" id="aVol" class="aVol" min="0" max="1" step="0.05" aria-label="Music volume"></div>
       <div class="arow"><span class="lbl">Timing offset</span><span class="offctl"><button data-off="-5" aria-label="5 ms earlier">−5</button><b id="aOffRead"></b><button data-off="5" aria-label="5 ms later">+5</button></span></div>
+      <div class="arow keysrow"><span class="lbl">Keys <small class="muted" id="aKeysHint"></small></span>
+        <span class="keybinds" id="aKeys">
+          <button data-lane="0" aria-label="Key for the left lane"><i style="color:#b69cff">←</i><b></b></button><button data-lane="1" aria-label="Key for the down lane"><i style="color:#5cc8f5">↓</i><b></b></button><button data-lane="2" aria-label="Key for the up lane"><i style="color:#7fdc8a">↑</i><b></b></button><button data-lane="3" aria-label="Key for the right lane"><i style="color:#ff8a8a">→</i><b></b></button>
+          <button id="aKeysReset" class="ghost" title="Back to D F J K">Reset</button>
+        </span></div>
       <label class="toggle">Hit sounds <input type="checkbox" id="aHitSnd"></label>
       <label class="toggle">No fail <input type="checkbox" id="aNoFail"></label>
       <label class="toggle" title="Bigger sound buffers. Use this if songs crackle or sound like static (common on Linux). Reloads the page.">Smooth audio (fixes crackling) <input type="checkbox" id="aSmooth"></label>
@@ -51,7 +56,7 @@
 
     <p class="abest"><span id="aBest"></span> <button id="aBoard" class="linkish">Leaderboard</button></p>
     <button id="aPlay" class="primary big" disabled>Play</button>
-    <p class="keys"><kbd>D</kbd> <kbd>F</kbd> <kbd>J</kbd> <kbd>K</kbd> or arrows · <kbd>Esc</kbd> pause · <kbd>Space</kbd> skip intro</p>
+    <p class="keys"><span id="aKeysMenu"></span> or arrows · <kbd>Esc</kbd> pause · <kbd>Space</kbd> skip intro</p>
   </div>
 </div>
 

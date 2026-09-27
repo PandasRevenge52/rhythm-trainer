@@ -10,7 +10,15 @@
 //   ('drums+vocals'), and all three together is 'mix' so older scores still line up
 S.arcade = {...DEFAULTS.arcade, ...(S.arcade || {})};
 const A$ = S.arcade;
-const LANES = 4, KEYS = {KeyD:0, KeyF:1, KeyJ:2, KeyK:3, ArrowLeft:0, ArrowDown:1, ArrowUp:2, ArrowRight:3};
+const LANES = 4;
+// lane keys: your own four (D F J K unless you change them in Options), and the arrow keys always work too
+const DEFAULT_KEYS = DEFAULTS.arcade.keys, DEFAULT_KEY_NAMES = DEFAULTS.arcade.keyNames;
+if (!Array.isArray(A$.keys) || A$.keys.length !== 4 || !Array.isArray(A$.keyNames)) { A$.keys = DEFAULT_KEYS; A$.keyNames = DEFAULT_KEY_NAMES; }
+A$.keys = [...A$.keys]; A$.keyNames = [...A$.keyNames];   // own copies, so rebinding never changes the defaults
+let KEYS = {};
+const buildKeys = () => { KEYS = {ArrowLeft:0, ArrowDown:1, ArrowUp:2, ArrowRight:3}; A$.keys.forEach((c, i) => KEYS[c] = i); };
+buildKeys();
+const RESERVED = ['Escape', 'Enter', 'NumpadEnter', 'Space', 'Tab'];   // pause, start and skip keep their keys
 const DIRS = [-90, 180, 0, 90];   // arrow rotation per lane: ← ↓ ↑ →
 const LANE_COL = ['#b69cff', '#5cc8f5', '#7fdc8a', '#ff8a8a'];
 // timing windows in seconds, points, health change (out of 100) and accuracy weight
@@ -735,7 +743,34 @@ function frame() {
 }
 
 // ---------- keys ----------
+// rebinding: click a lane's key in Options, then press the key you want (Esc cancels)
+let binding = null;
+const keyName = e => e.key && e.key.length === 1 && e.key !== ' ' ? e.key.toUpperCase() : e.code.replace(/^Key|^Digit/, '').replace(/^Numpad/, 'Num ').replace(/(Left|Right)$/, ' $1');
+function renderKeys() {
+  document.querySelectorAll('#aKeys button[data-lane]').forEach(b => {
+    const i = +b.dataset.lane;
+    b.classList.toggle('on', binding === i);
+    b.querySelector('b').textContent = binding === i ? '…' : A$.keyNames[i];
+  });
+  $('#aKeysHint').textContent = binding != null ? 'Press a key for this lane (Esc to cancel)' : '';
+  $('#aKeysMenu').innerHTML = A$.keyNames.map(k => `<kbd>${esc(k)}</kbd>`).join(' ');
+}
+$('#aKeys').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.id === 'aKeysReset') { A$.keys = [...DEFAULT_KEYS]; A$.keyNames = [...DEFAULT_KEY_NAMES]; binding = null; save(); buildKeys(); renderKeys(); return; }
+  binding = binding === +b.dataset.lane ? null : +b.dataset.lane; renderKeys();
+});
 addEventListener('keydown', e => {
+  if (binding != null) {
+    e.preventDefault(); e.stopPropagation();
+    if (e.code === 'Escape') { binding = null; renderKeys(); return; }
+    if (RESERVED.includes(e.code)) { $('#aKeysHint').textContent = `${keyName(e)} is taken (pause / start / skip). Pick another key.`; return; }
+    // a key already on another lane swaps over, so no two lanes share a key
+    const other = A$.keys.indexOf(e.code);
+    if (other >= 0 && other !== binding) { A$.keys[other] = A$.keys[binding]; A$.keyNames[other] = A$.keyNames[binding]; }
+    A$.keys[binding] = e.code; A$.keyNames[binding] = keyName(e);
+    binding = null; save(); buildKeys(); renderKeys(); return;
+  }
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (state === 'play' && e.code in KEYS) { e.preventDefault(); if (!e.repeat) onLane(KEYS[e.code], e.timeStamp); return; }
   if (e.repeat) return;
@@ -765,5 +800,6 @@ cv.addEventListener('pointerdown', e => {
 });
 
 renderMenu(); draw();
+renderKeys();
 checkStats(true);   // quietly award anything already earned (e.g. new achievements for old progress)
 restoreSong();

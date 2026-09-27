@@ -66,3 +66,13 @@ table.lb{width:100%;border-collapse:collapse;margin-top:10px;font-size:14px}
 .homebtn:hover{border-color:#4a3f36}
 body.playing .homebtn{opacity:.3}
 body.playing .homebtn:hover{opacity:1}
+
+/* keybinds */
+.keysrow{flex-wrap:wrap}
+.keysrow .lbl small{display:block;font-weight:400;font-size:12.5px;margin-top:2px}
+.keybinds{display:inline-flex;gap:6px;flex-wrap:wrap}
+.keybinds button{flex-direction:column;gap:1px;min-width:46px;padding:5px 8px;justify-content:center;line-height:1.1}
+.keybinds button i{font-style:normal;font-size:17px;font-weight:700;line-height:1}
+.keybinds button b{font-size:15px;min-width:1ch}
+.keybinds button.on{border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 35%,transparent)}
+.keybinds #aKeysReset{flex-direction:row;font-size:13px}
