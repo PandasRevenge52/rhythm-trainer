@@ -104,6 +104,11 @@ function countVoiceMarkup(pat, bar, X, T, voice) {
   }
   return s;
 }
+// a count syllable, with a small dash under every "&" so the off-beats stand out
+function cntSVG(e, x, y) {
+  const lab = countLabel(e, true);
+  return `<text class="cnt" x="${x}" y="${y}">${lab}</text>` + (lab === '&amp;' ? `<line class="ampdash" x1="${x - 3.5}" x2="${x + 3.5}" y1="${y + 4}" y2="${y + 4}"/>` : '');
+}
 function voiceMarkup(pat, bar, X, T, voice) {
   if (countView()) return countVoiceMarkup(pat, bar, X, T, voice);
   const V = voiceGeo(pat, voice, T), groups = beamGroups(bar), beamed = new Set(groups.flat());
@@ -113,7 +118,7 @@ function voiceMarkup(pat, bar, X, T, voice) {
     const x = X(e);
     s += `<g class="ev${e.rest ? ' rest' : ''}" data-i="${e.idx}"><rect class="hl" x="${x-15}" y="${hlTop}" width="31" height="${hlH}" rx="8"/>` +
       (e.rest ? restSVG(e.dur, x + 1, T + V.restDy) : noteSVG(e, x, V, beamed.has(e))) +
-      (pat.twoHand ? '' : `<text class="cnt" x="${x+1}" y="${T+66}">${countLabel(e, true)}</text>`) + `</g>`;
+      (pat.twoHand ? '' : cntSVG(e, x + 1, T + 66)) + `</g>`;
   }
   for (const g of groups) s += beamSVG(g, X, V);
   s += tupletSVG(bar, X, V, beamed);
@@ -155,7 +160,7 @@ function notationMarkup(pat) {
         if (!countView())
         // one row of counts for both hands, under every onset
         for (const e of countEvents(pat.measures[b], pat.lh[b]))
-          s += `<text class="cnt" x="${X(e) + 1}" y="${T + countY}">${countLabel(e, true)}</text>`;
+          s += cntSVG(e, X(e) + 1, T + countY);
       }
       s += `</g>`;
       const lx = bx + BW;

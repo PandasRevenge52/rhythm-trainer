@@ -17,12 +17,14 @@ async function decodeSong(blob, meta) {
     if (token !== song.token) return;
     const name = (meta && meta.name) || blob.name || 'Song';
     // drum analysis takes a few seconds, so it's cached per song
-    const drums = await songDrums(buf, name, f => { if (token === song.token) setSongInfo(`Finding the drums… ${Math.round(f * 100)}%`); });
+    // a high-quality chart from tools/make-charts if there is one, otherwise analyse in the browser
+    const hq = await loadHQChart(name.replace(/\.[a-z0-9]{2,4}$/i, ''));
+    const drums = hq ? chartToDrums(hq) : await songDrums(buf, name, f => { if (token === song.token) setSongInfo(`Finding the drums… ${Math.round(f * 100)}%`); });
     if (token !== song.token) return;
-    const curve = drums.curve;
     let bpm, first, detected, startAt = 0;
     if (meta && meta.bpm) ({bpm, first, detected} = meta), startAt = Math.min(meta.startAt || 0, Math.max(0, buf.duration - 10));
-    else { ({bpm, first} = analyzeTempo(curve)); detected = bpm; }
+    else if (hq) { bpm = hq.bpm; first = hq.first; detected = bpm; }
+    else { ({bpm, first} = analyzeTempo(drums.curve)); detected = bpm; }
     if (token !== song.token) return;
     Object.assign(song, {buf, name:name.replace(/\.[a-z0-9]{2,4}$/i, ''), bpm, first, detected, startAt, drums, chart:null, chartKey:''});
     renderSong(); saveSongMeta();
@@ -53,7 +55,7 @@ function restoreSong() {
 function setSongInfo(t) { $('#songInfo').textContent = t; }
 function renderSong() {
   $('#songName').textContent = song.buf ? song.name : 'No song loaded';
-  setSongInfo(song.buf ? `${fmtTime(song.buf.duration)}` + (song.detected ? ` · detected ${song.detected} BPM` : '') : 'or drop an audio file on the page');
+  setSongInfo(song.buf ? (song.drums && song.drums.hq ? '★ High-quality chart · ' : '') + `${fmtTime(song.buf.duration)}` + (song.detected ? ` · ${song.detected} BPM` : '') : 'or drop an audio file on the page');
   $('#sBpm').value = song.bpm;
   $('#sFirst').textContent = Math.round(song.first * 1000) + ' ms';
   const st = $('#sStart'); st.max = song.buf ? Math.max(0, Math.floor(song.buf.duration - 10)) : 0; st.value = song.startAt;

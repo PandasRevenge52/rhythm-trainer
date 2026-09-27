@@ -58,3 +58,11 @@ table.lb{width:100%;border-collapse:collapse;margin-top:10px;font-size:14px}
 .rrank label{display:flex;align-items:center;gap:8px;color:var(--muted)}
 .rrank input{background:var(--chip);border:1px solid var(--line);border-radius:8px;padding:6px 10px;width:150px}
 .preason{margin:0 0 6px;text-align:center;color:var(--muted);font-size:14px;line-height:1.45}
+
+/* always-there way home */
+.homebtn{position:fixed;top:14px;left:14px;z-index:20;display:inline-flex;align-items:center;gap:7px;padding:8px 13px;border-radius:10px;
+  background:var(--panel);border:1px solid var(--line);color:var(--ink);text-decoration:none;font-weight:600;font-size:14px;transition:opacity .2s}
+.homebtn svg{width:17px;height:17px}
+.homebtn:hover{border-color:#4a3f36}
+body.playing .homebtn{opacity:.3}
+body.playing .homebtn:hover{opacity:1}

@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Make high-quality charts from your songs. Run tools/setup.sh once first.
+ENV="${RT_TOOLS_ENV:-$HOME/.local/share/rhythm-trainer-tools/venv}"
+[ -x "$ENV/bin/python" ] || { echo "Run $(dirname "$0")/setup.sh first (one-time setup)."; exit 1; }
+exec "$ENV/bin/python" "$(dirname "$0")/make_charts.py" "$@"

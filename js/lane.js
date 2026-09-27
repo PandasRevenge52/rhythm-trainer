@@ -65,7 +65,10 @@ function drawLane(now) {
       }
       if (S.counts && s.view !== 'count' && (ev.voice === 0 || !s.pat.events.some(o => o.voice === 0 && !o.rest && Math.abs(o.t16 - ev.t16) < 0.7))) {
         g.fillStyle = col.muted; g.font = '600 11.5px system-ui,sans-serif'; g.globalAlpha = ev.rest ? 0.45 : 0.9;
-        if (!(two && ev.rest)) g.fillText(countLabel(ev), x, labelY);
+        if (!(two && ev.rest)) {
+          const lab = countLabel(ev); g.fillText(lab, x, labelY);
+          if (lab === '&') g.fillRect(x - 3.5, labelY + (g.textBaseline === 'middle' ? 8 : 4), 7, 1.5);   // small dash under every "&"
+        }
         g.globalAlpha = 1;
       }
     }

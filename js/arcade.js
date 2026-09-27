@@ -5,10 +5,11 @@
 //   Drums  - kicks on D/F, snares on J/K, hi-hats in the middle on Hard and up
 //   Vocals - the sung melody: arrows move right as the pitch goes up and left as it comes down,
 //            held notes become holds
-//   Mix    - the vocal line, with the strongest drum hits filling the gaps
+//   Guitar - the guitar / keys part (high-quality charts only), arrows following the riff's pitch
+//   Any mix of those three: the chart type is stored as its parts joined with '+'
+//   ('drums+vocals'), and all three together is 'mix' so older scores still line up
 S.arcade = {...DEFAULTS.arcade, ...(S.arcade || {})};
 const A$ = S.arcade;
-if (!A$.src) A$.src = 'drums';
 const LANES = 4, KEYS = {KeyD:0, KeyF:1, KeyJ:2, KeyK:3, ArrowLeft:0, ArrowDown:1, ArrowUp:2, ArrowRight:3};
 const DIRS = [-90, 180, 0, 90];   // arrow rotation per lane: ← ↓ ↑ →
 const LANE_COL = ['#b69cff', '#5cc8f5', '#7fdc8a', '#ff8a8a'];
@@ -21,15 +22,26 @@ const JUDGE = [
 ];
 const MISS_HP = -5, HOLD_HP = 1.5, HOLD_BREAK_HP = -2;
 const ADIFF = {
-  // hatW: how much hi-hats count; minS: weakest hit allowed; voxKeep: share of sung notes kept;
-  // chords: two-note chords on strong phrase starts; backbeat: drum accents where the singer rests
-  easy:   {name:'Easy',   grid:2, nps:1.7, holdMin:0.5,  hats:false, hatW:0,   minS:0.3,  voxKeep:0.65, chords:false, backbeat:false},
-  normal: {name:'Normal', grid:1, nps:2.8, holdMin:0.4,  hats:false, hatW:0,   minS:0.2,  voxKeep:1,    chords:false, backbeat:false},
-  hard:   {name:'Hard',   grid:1, nps:4.2, holdMin:0.32, hats:true,  hatW:0.6, minS:0.15, voxKeep:1,    chords:true,  backbeat:false},
-  expert: {name:'Expert', grid:1, nps:6.5, holdMin:0.25, hats:true,  hatW:1,   minS:0.08, voxKeep:1,    chords:true,  backbeat:true},
+  // frac: the share of everything playable in this song a level uses, so levels always step up
+  // even on sparse songs (Insane uses all of it). nps: the notes per second each difficulty aims for, the same for every chart type, so Hard on
+  // Drums feels like Hard on Vocals. peak: the most it allows in any 2 seconds. Higher levels are
+  // built from the same strongest notes plus more, so each one is the level below and then some.
+  // hatW: how much hi-hats count; voxMin: how convincingly sung a note must be; chords: two-key
+  // chords on strong accents; doubles: chords on the biggest hits (Insane)
+  easy:   {name:'Easy',   grid:2, frac:0.36, nps:1.2, peak:2.5, holdMin:0.5,  hatW:0,   voxMin:0.5,  chords:false, doubles:false},
+  normal: {name:'Normal', grid:1, frac:0.52, nps:1.9, peak:3.5, holdMin:0.4,  hatW:0,   voxMin:0.42, chords:false, doubles:false},
+  hard:   {name:'Hard',   grid:1, frac:0.67, nps:2.7, peak:5,   holdMin:0.32, hatW:0.6, voxMin:0.38, chords:true,  doubles:false},
+  expert: {name:'Expert', grid:1, frac:0.83, nps:3.6, peak:6.5, holdMin:0.25, hatW:0.9, voxMin:0.33, chords:true,  doubles:false},
+  insane: {name:'Insane', grid:1, frac:1,    nps:4.8, peak:8.5, holdMin:0.2,  hatW:1,   voxMin:0.28, chords:true,  doubles:true},
 };
 if (!ADIFF[A$.diff]) A$.diff = 'normal';
-const SRC_NAMES = {drums:'Drums', vocals:'Vocals', mix:'Mix'};
+const PARTS = ['drums', 'vocals', 'guitar'], PART_NAMES = {drums:'Drums', vocals:'Vocals', guitar:'Guitar'};
+const srcParts = src => new Set(src === 'mix' ? PARTS : String(src).split('+').filter(x => PARTS.includes(x)));
+const srcKey = parts => { const on = PARTS.filter(x => parts.has(x)); return on.length === 3 ? 'mix' : on.length ? on.join('+') : 'drums'; };
+const srcName = src => src === 'mix' ? 'Mix' : [...srcParts(src)].map(x => PART_NAMES[x]).join(' + ');
+// every chart type the leaderboard can hold: each part on its own, each pair and all three
+const ALL_SRCS = [...PARTS, 'drums+vocals', 'drums+guitar', 'vocals+guitar', 'mix'];
+A$.src = srcKey(srcParts(A$.src || 'drums'));
 
 const cv = $('#field'), g = cv.getContext('2d');
 const tr = {buf:null, name:'', bpm:120, first:0, drums:null, loading:false};
@@ -43,15 +55,20 @@ async function loadSong(blob, meta) {
     ensureAudio();
     const buf = await ctx.decodeAudioData(await blob.arrayBuffer());
     const name = ((meta && meta.name) || blob.name || 'Song').replace(/\.[a-z0-9]{2,4}$/i, '');
-    const drums = await songDrums(buf, name, f => info(`Listening to the song… ${Math.round(f * 100)}%`));
-    let bpm, first;
-    if (meta && meta.bpm && meta.name === name) ({bpm, first} = meta);
-    else {
-      ({bpm, first} = analyzeTempo(drums.curve));
-      // tell the trainer about it too, so both use the same song and grid
-      idb.set('songMeta', {name, bpm, first, startAt:0, detected:bpm}).catch(() => {});
+    // a high-quality chart from tools/make-charts, if there is one for this song
+    const hq = await loadHQChart(name);
+    let drums, bpm, first, beats;
+    if (hq) {
+      drums = chartToDrums(hq); bpm = hq.bpm; first = hq.first; beats = hq.beats;
+    } else {
+      drums = await songDrums(buf, name, f => info(`Listening to the song… ${Math.round(f * 100)}%`));
+      if (meta && meta.bpm && meta.name === name) ({bpm, first} = meta);
+      else ({bpm, first} = analyzeTempo(drums.curve));
+      beats = trackBeats(drums.curve, bpm, 80);
     }
-    Object.assign(tr, {buf, name, bpm, first, drums});
+    // tell the trainer about it too, so both use the same song and grid
+    if (!(meta && meta.bpm && meta.name === name)) idb.set('songMeta', {name, bpm, first, startAt:0, detected:bpm}).catch(() => {});
+    Object.assign(tr, {buf, name, bpm, first, drums, beats});
     renderMenu();
   } catch (e) { info("Couldn't read that file. Try an MP3, WAV or OGG"); }
   finally { tr.loading = false; }
@@ -72,62 +89,102 @@ async function pickFile(file) {
 // ---------- charts ----------
 function buildChart(diff = A$.diff, src = A$.src) {
   if (!tr.drums) return [];
-  const cfg = ADIFF[diff], p = 60 / tr.bpm, step = p / 4 * cfg.grid, tol = Math.min(0.05, step * 0.45);
-  const useDrums = src !== 'vocals', useVox = src !== 'drums' && tr.drums.vocal;
+  const cfg = ADIFF[diff], p = 60 / tr.bpm;
+  // Notes snap to 16ths (8ths on Easy) between the song's tracked beats, which follow the band as
+  // the tempo drifts, instead of a fixed grid that slowly slides off the music.
+  const B = tr.beats && tr.beats.length > 2 ? tr.beats : null;
+  const snap = t => {
+    if (!B) { const step = p / 4 * cfg.grid, q = Math.round((t - tr.first) / step); return {idx:q * cfg.grid, t:tr.first + q * step, err:Math.abs(t - (tr.first + q * step)), pb:p}; }
+    let lo = 0, hi = B.length - 2;
+    if (t <= B[0]) lo = 0; else if (t >= B[hi]) lo = hi; else while (hi - lo > 1) { const m = (lo + hi) >> 1; if (B[m] <= t) lo = m; else hi = m; }
+    const pb = B[lo + 1] - B[lo]; let q = Math.round((t - B[lo]) / pb * 4 / cfg.grid) * cfg.grid, bi = lo;
+    if (q >= 4 && bi + 1 < B.length - 1) { bi++; q -= 4; }
+    const pb2 = B[bi + 1] - B[bi], ts = B[bi] + q / 4 * pb2;
+    return {idx:bi * 4 + q, t:ts, err:Math.abs(t - ts), pb:pb2};
+  };
+  const parts = srcParts(src), soloVox = parts.size === 1 && parts.has('vocals');
+  const useDrums = parts.has('drums'), useVox = parts.has('vocals') && tr.drums.vocal, useInst = parts.has('guitar') && tr.drums.inst;
   const cands = [];
   if (useDrums) {
     const slots = new Map();
     const add = (name, list, w) => { for (const [t, s] of list) {
-      const q = Math.round((t - tr.first) / step);
-      if (q < 0 || Math.abs(t - (tr.first + q * step)) > tol) continue;
-      const o = slots.get(q) || {k:0, s:0, h:0};
-      o[name] = Math.max(o[name], s * w); slots.set(q, o);
+      const sn = snap(t);
+      if (sn.idx < 0 || sn.err > Math.min(0.05, sn.pb / 4 * cfg.grid * 0.45)) continue;
+      const o = slots.get(sn.idx) || {k:0, s:0, h:0, t:sn.t};
+      o[name] = Math.max(o[name], s * w); slots.set(sn.idx, o);
     } };
     add('k', tr.drums.kick, 1); add('s', tr.drums.snare, 1);
-    if (cfg.hats) add('h', tr.drums.hat, cfg.hatW);
-    const dw = src === 'mix' ? 0.7 : 1;   // in a mix the voice leads
-    for (const [q, o] of slots) {
+    if (tr.drums.tom) add('s', tr.drums.tom, 0.85);   // tom fills go on the snare side
+    if (cfg.hatW) add('h', tr.drums.hat, cfg.hatW);
+    const dw = useVox ? 0.7 : 1;   // with vocals in, the voice leads
+    for (const [idx, o] of slots) {
       // kick vs snare: the stronger one (both if about equal); hi-hats only where neither plays
-      const ks = Math.max(o.k, o.s), idx = q * cfg.grid, t = tr.first + idx * p / 4;
+      const ks = Math.max(o.k, o.s), t = o.t;
       if (o.k && o.k >= 0.92 * ks) cands.push({t, idx, s:o.k * dw, kind:'k'});
       if (o.s && o.s >= 0.92 * ks) cands.push({t, idx, s:o.s * dw, kind:'s'});
       if (o.h && ks < 0.3) cands.push({t, idx, s:o.h * dw, kind:'h'});
     }
   }
   if (useVox) {
-    // Easy keeps only the clearer sung notes
-    const vox = tr.drums.vocal.slice().sort((a, b) => b[1] - a[1]).slice(0, Math.ceil(tr.drums.vocal.length * cfg.voxKeep)).sort((a, b) => a[0] - b[0]);
+    // only notes that sound convincingly sung (a missing note is less annoying than a fake one)
+    const vox = tr.drums.vocal.filter(v => v[1] >= cfg.voxMin).sort((a, b) => a[0] - b[0]);
     let prevEnd = -9;
     for (const [t, s, pitch, dur] of vox) {
       // singers are looser than drummers: always snap to the nearest grid line
-      const q = Math.round((t - tr.first) / step); if (q < 0) continue;
-      const idx = q * cfg.grid;
-      cands.push({t:tr.first + idx * p / 4, idx, s:Math.min(1.5, s + 0.25), kind:'v', pitch, dur, phrase:t - prevEnd > 0.6});
+      const sn = snap(t); if (sn.idx < 0) continue;
+      cands.push({t:sn.t, idx:sn.idx, s:Math.min(1.5, s + 0.25), kind:'v', pitch, dur, phrase:t - prevEnd > 0.6});
       prevEnd = t + dur;
     }
-    // Expert: the strongest kicks and snares fill in where the singer rests
-    if (cfg.backbeat && src === 'vocals') for (const [name, list] of [['k', tr.drums.kick], ['s', tr.drums.snare]]) for (const [t, s] of list) {
+    // the strongest kicks, snares and guitar notes fill in where the singer rests; they rank below
+    // the singing, so the lower levels are mostly voice and the higher ones add more of the band
+    if (soloVox && tr.drums.inst) for (const [t, s, pitch, dur] of tr.drums.inst) {
       if (s < 0.8 || vox.some(([vt, , , vd]) => t > vt - 0.12 && t < vt + Math.max(vd, 0.12) + 0.05)) continue;
-      const q = Math.round((t - tr.first) / step); if (q < 0 || Math.abs(t - (tr.first + q * step)) > tol) continue;
-      cands.push({t:tr.first + q * cfg.grid * p / 4, idx:q * cfg.grid, s:s * 0.6, kind:name});
+      const sn = snap(t); if (sn.idx < 0) continue;
+      cands.push({t:sn.t, idx:sn.idx, s:s * 0.3, kind:'g', pitch, dur});
+    }
+    if (soloVox) for (const [name, list] of [['k', tr.drums.kick], ['s', tr.drums.snare]]) for (const [t, s] of list) {
+      if (s < 0.8 || vox.some(([vt, , , vd]) => t > vt - 0.12 && t < vt + Math.max(vd, 0.12) + 0.05)) continue;
+      const sn = snap(t); if (sn.idx < 0 || sn.err > Math.min(0.05, sn.pb / 4 * cfg.grid * 0.45)) continue;
+      cands.push({t:sn.t, idx:sn.idx, s:s * 0.35, kind:name});
+    }
+  }
+  if (useInst) {
+    // guitar / keys: like the voice, snapped to the nearest grid line; weaker with vocals so the voice leads
+    const w = useVox ? 0.75 : 1;
+    for (const [t, s, pitch, dur] of tr.drums.inst) {
+      const sn = snap(t); if (sn.idx < 0) continue;
+      cands.push({t:sn.t, idx:sn.idx, s:s * w, kind:'g', pitch, dur, phrase:false});
     }
   }
   if (!cands.length) return [];
-  // keep the strongest up to the difficulty's notes-per-second
-  const span = Math.max(4, cands.reduce((m, c) => Math.max(m, c.t), 0) - cands.reduce((m, c) => Math.min(m, c.t), 1e9));
-  const cap = Math.round(cfg.nps * span);
+  // Shape the density: aim for the difficulty's notes per second over the parts of the song that
+  // have anything to play, strongest notes first, without letting any 2 seconds get busier than
+  // the difficulty's peak.
   const seen = new Set();
-  const kept = cands.sort((a, b) => b.s - a.s).filter(c => { const key = c.idx + c.kind; if (seen.has(key)) return false; seen.add(key); return c.s >= cfg.minS; })
-    .slice(0, cap).sort((a, b) => a.t - b.t || (a.kind === 'v' ? -1 : 1));
+  const pool = cands.sort((a, b) => b.s - a.s).filter(c => { const key = c.idx + c.kind; if (seen.has(key)) return false; seen.add(key); return true; });
+  const activeWins = new Set(pool.map(c => Math.floor(c.t / 2)));
+  const active = activeWins.size * 2, poolNps = pool.length / Math.max(1, active);
+  const target = Math.round(Math.min(cfg.nps, cfg.frac * poolNps) * active), perWin = Math.round(cfg.peak * 2), inWin = new Map();
+  const kept = [];
+  for (const c of pool) {
+    if (kept.length >= target) break;
+    const w = Math.floor(c.t / 2), n = inWin.get(w) || 0;
+    if (n >= perWin) continue;
+    inWin.set(w, n + 1); kept.push(c);
+  }
+  kept.sort((a, b) => a.t - b.t || (a.kind === 'v' ? -1 : 1));
   // vocal pitches spread over the lanes by where they sit in this song's range
-  const vp = kept.filter(c => c.kind === 'v').map(c => c.pitch).sort((a, b) => a - b);
-  const pLo = vp[Math.floor(vp.length * 0.15)] ?? 60, pHi = vp[Math.floor(vp.length * 0.85)] ?? 72;
+  const range = kind => { const v = kept.filter(c => c.kind === kind).map(c => c.pitch).sort((a, b) => a - b); return [v[Math.floor(v.length * 0.15)] ?? 60, v[Math.floor(v.length * 0.85)] ?? 72]; };
+  const ranges = {v:range('v'), g:range('g')};
   const notes = [], laneFreeAt = [0, 0, 0, 0];
-  let prevV = null, lastK = {idx:-99, lane:1}, lastS = {idx:-99, lane:3}, lastH = {idx:-99, lane:2};
+  const prevMel = {v:null, g:null};
+  let lastK = {idx:-99, lane:1}, lastS = {idx:-99, lane:3}, lastH = {idx:-99, lane:2};
   const busy = (lane, t) => laneFreeAt[lane] > t + 1e-6 || notes.some(n => n.lane === lane && Math.abs(n.t - t) < 0.08);
   const place = (t, lane, extra = {}) => { const n = {t, lane, ...extra}; notes.push(n); laneFreeAt[lane] = Math.max(laneFreeAt[lane], t + (n.len || 0) + 0.08); return n; };
   for (const c of kept) {
-    if (c.kind === 'v') {
+    if (c.kind === 'v' || c.kind === 'g') {
+      // melodic parts (voice, guitar): arrows move right as the pitch rises, left as it falls
+      const prevV = prevMel[c.kind], [pLo, pHi] = ranges[c.kind];
       let lane;
       if (!prevV || c.t - prevV.t > 1.2) lane = Math.max(0, Math.min(3, Math.floor((c.pitch - pLo) / Math.max(1, pHi - pLo) * 4)));
       else {
@@ -141,20 +198,25 @@ function buildChart(diff = A$.diff, src = A$.src) {
       place(c.t, lane, len ? {len} : {});
       // Hard and up: a strong note that starts a phrase gets a second note alongside it
       if (cfg.chords && c.phrase && c.s >= 0.9) { const alt = [3 - lane, lane ^ 1].find(l => l !== lane && !busy(l, c.t)); if (alt != null) place(c.t, alt); }
-      prevV = {t:c.t, pitch:c.pitch, lane};
+      prevMel[c.kind] = {t:c.t, pitch:c.pitch, lane};
       continue;
     }
     // drums: kicks on D/F (D on the beat), snares on J/K (J on 2, K on 4), quick repeats alternate
     const onBeat = c.idx % 4 === 0, beatInBar = Math.floor(c.idx / 4) % 4;
+    // each drum has a pair of keys; "the other key" is always worked out within that pair, even if
+    // the last note had to move to a different lane because its own was busy
+    const other = (pair, l) => l === pair[0] ? pair[1] : pair[0];
     let lane, last;
-    if (c.kind === 'k') { last = lastK; lane = c.idx - last.idx <= 2 ? 1 - last.lane : onBeat ? 0 : 1; }
-    else if (c.kind === 's') { last = lastS; lane = c.idx - last.idx <= 2 ? 5 - last.lane : onBeat ? (beatInBar === 3 ? 3 : 2) : 5 - last.lane; }
-    else { last = lastH; lane = 3 - last.lane; }
+    if (c.kind === 'k') { last = lastK; lane = c.idx - last.idx <= 2 ? other([0, 1], last.lane) : onBeat ? 0 : 1; }
+    else if (c.kind === 's') { last = lastS; lane = c.idx - last.idx <= 2 || !onBeat ? other([2, 3], last.lane) : beatInBar === 3 ? 3 : 2; }
+    else { last = lastH; lane = other([1, 2], last.lane); }
     if (busy(lane, c.t)) { const alt = [0, 1, 2, 3].sort((a, b) => Math.abs(a - lane) - Math.abs(b - lane)).find(l => !busy(l, c.t)); if (alt == null) continue; lane = alt; }
     place(c.t, lane);
+    if (cfg.doubles && c.kind !== 'h' && c.s >= 0.9 && c.idx % 4 === 0) { const alt = c.kind === 'k' ? 1 - lane : 5 - lane; if (alt >= 0 && alt < 4 && !busy(alt, c.t)) place(c.t, alt); }
     const rec = {idx:c.idx, lane};
     if (c.kind === 'k') lastK = rec; else if (c.kind === 's') lastS = rec; else lastH = rec;
   }
+  for (let i = notes.length - 1; i >= 0; i--) if (!(notes[i].lane >= 0 && notes[i].lane < LANES)) notes.splice(i, 1);
   notes.sort((a, b) => a.t - b.t || a.lane - b.lane);
   // drum charts on Normal and up: a note followed by 2+ beats of silence holds for a beat
   if (src === 'drums' && cfg.grid === 1) for (let i = 0; i < notes.length; i++) {
@@ -171,7 +233,7 @@ function chartStats(notes) {
   const span = Math.max(1, notes[notes.length - 1].t - notes[0].t), nps = notes.length / span;
   let peak = 0;
   for (let i = 0, j = 0; i < notes.length; i++) { while (notes[i].t - notes[j].t > 2) j++; peak = Math.max(peak, (i - j + 1) / 2); }
-  return {stars:+Math.min(10, nps * 0.75 + peak * 0.3).toFixed(1), nps, peak, holds:notes.filter(n => n.len).length};
+  return {stars:+Math.min(10, Math.max(1, nps * 1.4 + peak * 0.25)).toFixed(1), nps, peak, holds:notes.filter(n => n.len).length};
 }
 
 // ---------- menu ----------
@@ -182,13 +244,14 @@ function renderMenu() {
   if (tr.buf) {
     chart = buildChart();
     const st = chartStats(chart), vox = (tr.drums.vocal || []).length;
-    info(`${fmtTime(tr.buf.duration)} · ${tr.bpm.toFixed(1)} BPM · ${vox ? vox + ' sung notes found' : 'no clear vocal found'}`);
-    $('#aChartInfo').textContent = chart.length ? `${chart.length} notes${st.holds ? ` · ${st.holds} hold${st.holds === 1 ? '' : 's'}` : ''} · busiest ${st.peak.toFixed(1)} notes/s` :
-      A$.src === 'vocals' ? "This song doesn't have a clear enough lead vocal. Try Drums or Mix." : 'Not enough to build a chart from. Try another chart type.';
+    info(`${tr.drums.hq ? '★ High-quality chart · ' : ''}${fmtTime(tr.buf.duration)} · ${tr.bpm.toFixed(1)} BPM · ${vox ? vox + ' sung notes' : 'no clear vocal found'}`);
+    const parts = srcParts(A$.src), noInst = parts.has('guitar') && !tr.drums.inst;
+    $('#aChartInfo').textContent = noInst && parts.size === 1 ? 'Guitar charts need a high-quality chart for this song (tools/make-charts).' : chart.length ? `${noInst ? 'No guitar part for this song (it needs a high-quality chart) · ' : ''}` +  `${chart.length} notes${st.holds ? ` · ${st.holds} hold${st.holds === 1 ? '' : 's'}` : ''} · busiest ${st.peak.toFixed(1)} notes/s` :
+      A$.src === 'vocals' ? "This song doesn't have a clear enough lead vocal. Add Drums or Guitar." : 'Not enough to build a chart from. Try another chart type.';
     // star rating on each difficulty button
     for (const b of document.querySelectorAll('#aDiff button')) b.querySelector('small').textContent = '★ ' + chartStats(buildChart(b.dataset.v)).stars.toFixed(1);
   } else { $('#aChartInfo').textContent = ''; document.querySelectorAll('#aDiff small').forEach(el => el.textContent = ''); }
-  mark('#aSrc', v => v === A$.src);
+  mark('#aSrc', v => srcParts(A$.src).has(v));
   mark('#aDiff', v => v === A$.diff);
   mark('#aScroll', v => (v === 'down') === A$.down);
   $('#aSpeed').value = A$.speed; $('#aSpeedRead').textContent = A$.speed.toFixed(1);
@@ -200,7 +263,9 @@ function renderMenu() {
   $('#aPlay').disabled = !tr.buf || !chart.length;
 }
 const setA = (k, v) => { A$[k] = v; save(); renderMenu(); };
-$('#aSrc').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setA('src', b.dataset.v); });
+// parts are toggles: play along to any mix of them (the last one can't be switched off)
+const togglePart = (src, v) => { const parts = srcParts(src); if (parts.has(v)) { if (parts.size > 1) parts.delete(v); } else parts.add(v); return srcKey(parts); };
+$('#aSrc').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setA('src', togglePart(A$.src, b.dataset.v)); });
 $('#aDiff').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setA('diff', b.dataset.v); });
 $('#aScroll').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setA('down', b.dataset.v === 'down'); });
 $('#aSpeed').addEventListener('input', e => setA('speed', +e.target.value));
@@ -225,7 +290,7 @@ addEventListener('drop', e => {
   const f = [...(e.dataTransfer?.files || [])].find(f => f.type.startsWith('audio') || /\.(mp3|wav|ogg|m4a|aac|flac)$/i.test(f.name));
   if (f && state === 'menu') pickFile(f);
 });
-function show(id) { for (const o of ['menu', 'pause', 'results', 'board']) $('#' + o).classList.toggle('show', o === id); }
+function show(id) { for (const o of ['menu', 'pause', 'results', 'board']) $('#' + o).classList.toggle('show', o === id); document.body.classList.toggle('playing', !id); }
 
 // ---------- a run ----------
 function startAudio(fromPos, lead) {
@@ -237,27 +302,33 @@ function startAudio(fromPos, lead) {
   return {bus, music, src, when};
 }
 function play(fromPos = 0, keep = null) {
-  ensureAudio(); syncClock();
+  ensureAudio();
+  if (ctx.state !== 'running') { ctx.resume().then(() => play(fromPos, keep), () => play(fromPos, keep)); return; }
+  syncClock();
   if (!keep) chart = buildChart();
-  const p = 60 / tr.bpm, lead = 4 * p;   // a 4-beat count-in before the music
+  // a 4-beat count-in before the music, at the tempo where you start
+  const bi = Math.max(0, tr.beats.findIndex(b => b >= fromPos - 1e-3));
+  const p = (tr.beats[bi + 1] ?? tr.beats[bi] + 60 / tr.bpm) - tr.beats[bi] || 60 / tr.bpm, lead = 4 * p;
   const au = startAudio(fromPos, lead);
-  // count-in ticks lined up with the song's beat grid
-  const firstBeat = tr.first + Math.ceil((fromPos - tr.first) / p - 1e-6) * p;
+  const firstBeat = tr.beats[bi] ?? fromPos;
   for (let i = 1; i <= 4; i++) click(au.bus, au.when + (firstBeat - fromPos) - i * p, i === 4);
   G = keep ? Object.assign(keep, au, {pos0:fromPos}) : {...au, pos0:fromPos, score:0, combo:0, maxCombo:0, health:50,
     counts:{Sick:0, Good:0, Bad:0, Shit:0, Miss:0}, accSum:0, judged:0, pop:null, press:[0, 0, 0, 0], down:[false, false, false, false],
     splash:[], errs:[], offs:[], failed:false, minHealth:100};
   G.countFrom = au.when + (firstBeat - fromPos) - 4 * p; G.beat = p;
   G.firstNote = chart.length ? chart[0].t : 0;
-  stall = {song:-9, wall:performance.now()};
+  stall = {song:-9, wall:performance.now()}; G.startedAt = performance.now();
   state = 'play'; show(null);
   requestAnimationFrame(frame);
 }
-const songNow = () => audioNow() - G.when + G.pos0;
+// where the song is: the smooth clock, unless it has wandered more than a second from the raw audio
+// clock (the output timestamp can glitch when the sound device changes), then the raw one
+const songNow = () => { const raw = ctx.currentTime - G.when + G.pos0, t = audioNow() - G.when + G.pos0; return Math.abs(t - raw) > 1 ? raw : t; };
 function stopAudio() { if (G) { try { G.src.stop(); } catch (e) {} try { G.bus.disconnect(); } catch (e) {} } }
 function pause(reason = '') {
   if (state !== 'play') return;
   G.pausedAt = Math.max(0, songNow());
+  G.playedBefore = (G.playedBefore || 0) + Math.max(0, G.pausedAt - G.pos0);   // for the time-played stat
   stopAudio(); state = 'paused';
   $('#pReason').textContent = reason; $('#pReason').hidden = !reason;
   show('pause');
@@ -273,21 +344,22 @@ const canSkip = () => state === 'play' && G.firstNote - songNow() > 4;
 function skipIntro() {
   if (!canSkip()) return;
   const to = G.firstNote - 2 * G.beat;
+  G.playedBefore = (G.playedBefore || 0) + Math.max(0, songNow() - G.pos0);
   stopAudio(); syncClock();
   Object.assign(G, startAudio(to, 0), {pos0:to});
   G.countFrom = -1e9;
 }
 // ---------- achievements (the trainer shows the same list in its profile) ----------
-function grant(id) {
+function grant(id, silent) {
   const a = ACH.find(x => x.id === id);
   if (!a || P.ach[id]) return;
   P.ach[id] = Date.now(); P.xp += a.xp; saveP();
-  achPopup(a);
+  if (!silent) achPopup(a);
 }
-function checkStats() { for (const a of ACH) if (a.get && !P.ach[a.id] && a.get() >= a.goal) grant(a.id); }
+function checkStats(silent) { for (const a of ACH) if (a.get && !P.ach[a.id] && a.get() >= a.goal) grant(a.id, silent); }
 
 // ---------- leaderboard: top 10 per song file, chart type and difficulty ----------
-let lastEntry = null;
+let lastEntry = null, sessionClears = 0;
 const boardFor = (song, src, diff) => ((P.leaderboard || {})[song] || []).filter(e => e.src === src && e.diff === diff).sort((a, b) => b.score - a.score);
 function addScore(e) {
   P.leaderboard = P.leaderboard || {};
@@ -295,7 +367,7 @@ function addScore(e) {
   list.push(e);
   // keep the best 10 for each chart type + difficulty
   const keep = new Set();
-  for (const src of Object.keys(SRC_NAMES)) for (const diff of Object.keys(ADIFF)) boardFor(tr.name, src, diff).slice(0, 10).forEach(x => keep.add(x));
+  for (const src of ALL_SRCS) for (const diff of Object.keys(ADIFF)) boardFor(tr.name, src, diff).slice(0, 10).forEach(x => keep.add(x));
   P.leaderboard[tr.name] = list.filter(x => keep.has(x));
   saveP();
   return keep.has(e) ? e : null;
@@ -322,14 +394,14 @@ function openBoard(song = tr.name) {
 }
 const board = {song:'', src:A$.src, diff:A$.diff};
 function renderBoard() {
-  mark('#lbSrc', v => v === board.src); mark('#lbDiff', v => v === board.diff);
+  mark('#lbSrc', v => srcParts(board.src).has(v)); mark('#lbDiff', v => v === board.diff);
   const list = boardFor(board.song, board.src, board.diff);
-  $('#lbBody').innerHTML = !list.length ? `<p class="muted">No ${SRC_NAMES[board.src]} · ${ADIFF[board.diff].name} scores for this song yet.</p>` :
+  $('#lbBody').innerHTML = !list.length ? `<p class="muted">No ${srcName(board.src)} · ${ADIFF[board.diff].name} scores for this song yet.</p>` :
     `<table class="lb"><tr><th>#</th><th>Name</th><th class="r">Score</th><th class="r">Accuracy</th><th>Grade</th><th>Date</th></tr>${list.map((e, i) =>
       `<tr class="${e === lastEntry ? 'me' : ''}"><td>${i + 1}</td><td>${esc(e.name)}</td><td class="r">${e.score.toLocaleString()}</td><td class="r">${e.acc.toFixed(2)}%</td><td>${e.grade}${e.fc ? ' <span class="fc">FC</span>' : ''}</td><td>${new Date(e.date).toLocaleDateString()}</td></tr>`).join('')}</table>`;
 }
 $('#lbSong').addEventListener('change', e => { board.song = e.target.value; renderBoard(); });
-$('#lbSrc').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { board.src = b.dataset.v; renderBoard(); } });
+$('#lbSrc').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { board.src = togglePart(board.src, b.dataset.v); renderBoard(); } });
 $('#lbDiff').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { board.diff = b.dataset.v; renderBoard(); } });
 $('#aBoard').addEventListener('click', () => { board.src = A$.src; board.diff = A$.diff; openBoard(); });
 $('#rBoard').addEventListener('click', () => { board.src = A$.src; board.diff = A$.diff; openBoard(); });
@@ -348,11 +420,12 @@ function judge(n, jIdx, dt) {
   G.errs.push({dt, col:J.col, t:performance.now()}); if (G.errs.length > 30) G.errs.shift();
   G.offs.push(dt);
   if (jIdx === 0) G.splash.push({lane:n.lane, t:performance.now()});
+  G.sickRun = jIdx === 0 ? (G.sickRun || 0) + 1 : 0; G.maxSick = Math.max(G.maxSick || 0, G.sickRun);
   if (A$.hitSound) rim(G.bus, ctx.currentTime, 0.35);
 }
 function miss(n, text = 'Miss') {
   n.j = 'Miss'; n.done = true; n.held = false;
-  G.counts.Miss++; G.judged++; G.combo = 0;
+  G.counts.Miss++; G.judged++; G.combo = 0; G.sickRun = 0;
   G.health += MISS_HP;
   G.pop = {text, t:performance.now(), col:'#ff7a6b'};
 }
@@ -370,8 +443,8 @@ function offLane(lane) {
   const t = songNow();
   for (const n of chart) if (n.lane === lane && n.held) {
     n.held = false; n.done = true;
-    if (t < n.t + n.len - 0.1) { G.health += HOLD_BREAK_HP; G.combo = 0; G.pop = {text:'Dropped', t:performance.now(), col:'#ff9b8a'}; }
-    else { G.score += 100; G.health = Math.min(100, G.health + HOLD_HP); }
+    if (t < n.t + n.len - 0.1) { G.health += HOLD_BREAK_HP; G.combo = 0; G.dropped = true; G.pop = {text:'Dropped', t:performance.now(), col:'#ff9b8a'}; }
+    else { G.score += 100; G.health = Math.min(100, G.health + HOLD_HP); G.holdsOK = (G.holdsOK || 0) + 1; }
   }
 }
 function update() {
@@ -380,18 +453,23 @@ function update() {
     if (n.t > t + 1) break;
     if (!n.j && t > n.t + late) miss(n);
     if (n.held) {
-      if (t >= n.t + n.len) { n.held = false; n.done = true; G.score += 100; G.health = Math.min(100, G.health + HOLD_HP); }
+      if (t >= n.t + n.len) { n.held = false; n.done = true; G.score += 100; G.health = Math.min(100, G.health + HOLD_HP); G.holdsOK = (G.holdsOK || 0) + 1; }
       else G.score += 1;   // a trickle of points while holding
     }
   }
   G.minHealth = Math.min(G.minHealth ?? 100, G.health);
   if (G.health <= 0) { G.health = 0; if (!A$.noFail) { G.failed = true; finish(); return false; } }
   const last = chart.length ? chart[chart.length - 1] : null;
-  if ((last && t > last.t + (last.len || 0) + 1.5) || t > tr.buf.duration) { finish(); return false; }
+  // the end: judged on the raw audio clock, so a clock glitch can't cut the song short. After the last
+  // note the song plays out to its end (up to 8 s of outro)
+  const raw = ctx.currentTime - G.when + G.pos0, end = Math.min(tr.buf.duration, last ? last.t + (last.len || 0) + 8 : tr.buf.duration);
+  if (raw > end && t > end - 1) { finish(); return false; }
   return true;
 }
 const ratingOf = () => G.counts.Miss === 0 ? (G.counts.Bad + G.counts.Shit === 0 ? (G.counts.Good === 0 ? 'Perfect FC' : 'Good FC') : 'FC') : G.counts.Miss < 10 ? 'SDCB' : 'Clear';
+let lastFail = '';
 function finish() {
+  const played = Math.max(0, Math.min(tr.buf.duration, songNow()) - G.pos0 + (G.playedBefore || 0));
   stopAudio(); state = 'results';
   const acc = G.judged ? G.accSum / G.judged * 100 : 0;
   const grade = G.failed ? 'F' : acc >= 99 ? 'S+' : acc >= 95 ? 'S' : acc >= 90 ? 'A' : acc >= 80 ? 'B' : acc >= 70 ? 'C' : 'D';
@@ -401,13 +479,13 @@ function finish() {
   if (isBest) P.arcade[bestKey()] = {score:G.score, acc:+acc.toFixed(2), grade, fc};
   const hits = G.judged - G.counts.Miss, xp = G.failed ? 0 : Math.round(hits * acc / 100 * 0.5 * (1 + Object.keys(ADIFF).indexOf(A$.diff) * 0.25));
   P.xp += xp; P.hits += hits; saveP();
-  const mean = G.offs.length ? G.offs.reduce((a, b) => a + b, 0) / G.offs.length * 1000 : 0;
   $('#rTitle').textContent = G.failed ? 'Out of health' : fc ? 'Full combo' : 'Cleared';
-  $('#rSong').textContent = `${tr.name} · ${SRC_NAMES[A$.src]} · ${ADIFF[A$.diff].name}`;
+  $('#rSong').textContent = `${tr.name} · ${srcName(A$.src)} · ${ADIFF[A$.diff].name}`;
   $('#rGrade').innerHTML = `<b>${grade}</b><span>${acc.toFixed(2)}%<br><small>${rating}</small></span>${isBest && prev ? '<em class="badge">New best</em>' : ''}`;
   const tile = (l, v) => `<div class="tile"><b>${v}</b><span>${l}</span></div>`;
   $('#rTiles').innerHTML = tile('Score', G.score.toLocaleString()) + tile('Max combo', G.maxCombo) +
     Object.entries(G.counts).map(([k, v]) => tile(k, v)).join('') + tile('XP', '+' + xp);
+  const mean = G.offs.length ? G.offs.reduce((a, b) => a + b, 0) / G.offs.length * 1000 : 0;
   // achievements, per-song clears and the leaderboard
   if (!G.failed) {
     P.arcadeClears = (P.arcadeClears || 0) + 1; P.arcadeSongs = P.arcadeSongs || {}; P.arcadeSongs[tr.name] = 1;
@@ -416,13 +494,75 @@ function finish() {
     if (grade === 'S' || grade === 'S+') grant('arcadeS');
     if (A$.src === 'vocals') grant('arcadeVox');
     if (A$.src === 'mix') grant('arcadeMix');
+    if (srcParts(A$.src).size === 2) grant('arcadePair');
+    if (A$.src === 'guitar') grant('arcadeGuitar');
+    P.arcadeSrcs = {...P.arcadeSrcs, [A$.src]:1}; P.arcadeDiffs = {...P.arcadeDiffs, [A$.diff]:1};
+    const hardish = ['hard', 'expert', 'insane'].includes(A$.diff), top = A$.diff === 'expert' || A$.diff === 'insane';
+    if (fc) P.arcadeFCs = {...P.arcadeFCs, [bestKey()]:1};
+    if (rating === 'Perfect FC') P.arcadePFCs = {...P.arcadePFCs, [bestKey()]:1};
+    if (fc && A$.diff === 'insane') grant('arcadeInsaneFC');
+    if (top && (grade === 'S' || grade === 'S+')) grant('arcadeExpertS');
+    if (hardish && acc >= 99) grant('arcadeAcc99');
+    if (G.offs.length >= 100 && Math.abs(mean) <= 3) grant('arcadeDead');
+    if (chart.filter(n => n.len).length >= 10 && !G.dropped) grant('arcadeHolds');
+    if (G.minHealth < 10 && G.health > 60) grant('arcadeBrink');
+    if (G.score >= 250000) grant('arcadeScore250k');
+    if (G.score >= 500000) grant('arcadeScore500k');
+    if (A$.speed >= 3.5) grant('arcadeSpeed');
+    if (!A$.down) grant('arcadeUp');
+    if (tr.buf.duration > 360) grant('arcadeLong');
+    if (++sessionClears >= 10) grant('arcadeSession');
+    if (tr.drums.hq) grant('arcadeHQ');
+    // lifetime counters for the long-haul achievements
+    const parts = srcParts(A$.src), hour = new Date().getHours(), day = new Date().getDay();
+    P.arcadeFCCount = (P.arcadeFCCount || 0) + (fc ? 1 : 0);
+    P.arcadeSRanks = (P.arcadeSRanks || 0) + (grade === 'S' || grade === 'S+' ? 1 : 0);
+    P.arcadeDiffN = {...P.arcadeDiffN, [A$.diff]:((P.arcadeDiffN || {})[A$.diff] || 0) + 1};
+    P.arcadePartN = {...P.arcadePartN}; for (const k of parts) P.arcadePartN[k] = (P.arcadePartN[k] || 0) + 1;
+    P.arcadePlays = {...P.arcadePlays, [tr.name]:((P.arcadePlays || {})[tr.name] || 0) + 1};
+    P.arcadeCombos = {...P.arcadeCombos, [A$.src + '|' + A$.diff]:1};
+    P.arcadeBestScore = Math.max(P.arcadeBestScore || 0, G.score);
+    P.arcadeCleared = P.arcadeCleared || {}; P.arcadeCleared[tr.name] = {...P.arcadeCleared[tr.name], [A$.diff]:1};
+    if (Object.keys(P.arcadeCleared[tr.name]).length >= 5) grant('arcadeLadder');
+    if (A$.src === 'mix' && A$.diff === 'insane') grant('arcadeInsaneMix');
+    if (parts.size === 3 && hardish) grant('arcadeTrio');
+    if (A$.musicVol === 0) grant('arcadeMute');
+    if (A$.hitSound) grant('arcadeHitSnd');
+    if (A$.speed <= 1.5) grant('arcadeSlow');
+    if (A$.speed >= 4) grant('arcadeMaxSpeed');
+    if (fc && !A$.down) grant('arcadeUpFC');
+    if (tr.buf.duration < 120) grant('arcadeShort');
+    if (tr.buf.duration > 480) grant('arcadeEpic');
+    if (grade === 'D') grant('arcadeD');
+    if (!G.counts.Sick && G.judged >= 20) grant('arcadeNoSick');
+    if (hardish && G.minHealth >= 50) grant('arcadeCruise');
+    if (G.health < 3) grant('arcadePhoto');
+    if (lastFail === bestKey()) grant('arcadeRevenge');
+    if (A$.diff === 'insane' && ['S+', 'S', 'A'].includes(grade)) grant('arcadeInsaneA');
+    if (A$.diff === 'insane' && acc >= 95) grant('arcadeInsane95');
+    if (hour < 5) grant('arcadeNight');
+    if (hour >= 5 && hour < 8) grant('arcadeMorning');
+    if (day === 0 || day === 6) grant('arcadeWeekend');
+    if (sessionClears >= 25) grant('arcadeSession25');
     if (A$.diff === 'hard' || A$.diff === 'expert') grant('arcadeHard');
-    if (A$.diff === 'expert') grant('arcadeExpert');
+    if (A$.diff === 'expert' || A$.diff === 'insane') grant('arcadeExpert');
+    if (A$.diff === 'insane') grant('arcadeInsane');
     if (G.score >= 100000) grant('arcadeScore100k');
     if (G.minHealth < 10) grant('arcadeClutch');
     lastEntry = addScore({name:S.playerName || 'Player', score:G.score, acc:+acc.toFixed(2), grade, fc, rating, src:A$.src, diff:A$.diff, date:Date.now()});
   } else lastEntry = null;
+  lastFail = G.failed ? bestKey() : '';
+  if (G.failed) P.arcadeFails = (P.arcadeFails || 0) + 1;
+  P.arcadeSicks = (P.arcadeSicks || 0) + G.counts.Sick;
+  P.arcadeTime = (P.arcadeTime || 0) + played;
+  P.arcadeHoldsOK = (P.arcadeHoldsOK || 0) + (G.holdsOK || 0);
+  P.arcadeBestCombo = Math.max(P.arcadeBestCombo || 0, G.maxCombo);
+  P.arcadeMaxSick = Math.max(P.arcadeMaxSick || 0, G.maxSick || 0);
   if (G.maxCombo >= 200) grant('arcadeCombo200');
+  if (G.maxCombo >= 500) grant('arcadeCombo500');
+  if (G.maxCombo >= 1000) grant('arcadeCombo1000');
+  if (G.maxSick >= 100) grant('arcadeSick100');
+  P.arcadeHits = (P.arcadeHits || 0) + hits;
   checkStats(); saveP();
   renderRank();
   $('#rNote').textContent = !G.offs.length ? '' : Math.abs(mean) < 8 ? `Your timing averaged ${Math.abs(mean).toFixed(0)} ms off. That's right on it.` :
@@ -460,7 +600,8 @@ function draw() {
   const t = state === 'play' ? songNow() : G.pausedAt ?? 0;
   const lx = i => x0 + laneW * (i + 0.5), now = performance.now();
   // playfield, with a soft pulse on each bar's downbeat
-  const barPh = ((t - tr.first) / G.beat % 4 + 4) % 4, pulse = state === 'play' ? Math.exp(-barPh * 3) * 0.5 : 0;
+  let bIdx = 0; while (bIdx < tr.beats.length - 1 && tr.beats[bIdx + 1] <= t) bIdx++;
+  const barPh = (bIdx % 4) + Math.max(0, t - tr.beats[bIdx]) / G.beat, pulse = state === 'play' ? Math.exp(-barPh * 3) * 0.5 : 0;
   g.fillStyle = FIELD; g.fillRect(x0, 0, fw, H);
   g.fillStyle = `rgba(239,91,58,${0.05 + pulse * 0.1})`; g.fillRect(x0 - 2, 0, 2, H); g.fillRect(x0 + fw, 0, 2, H);
   g.fillStyle = LINE; for (let i = 1; i < LANES; i++) g.fillRect(x0 + laneW * i, 0, 1, H);
@@ -472,8 +613,8 @@ function draw() {
     g.fillStyle = gr; g.fillRect(x0 + laneW * i + 1, Math.min(recY, recY + dir * H * 0.55), laneW - 1, H * 0.55);
   }
   // beat lines scrolling with the notes
-  for (let b = Math.floor((t - tr.first) / G.beat) - 1; ; b++) {
-    const bt = tr.first + b * G.beat, y = recY + dir * (bt - t) * pps;
+  for (let b = Math.max(0, bIdx - 1); b < tr.beats.length; b++) {
+    const bt = tr.beats[b], y = recY + dir * (bt - t) * pps;
     if (A$.down ? y < -10 : y > H + 10) break;
     if (A$.down ? y > H + 10 : y < -10) continue;
     g.fillStyle = b % 4 === 0 ? '#342e29' : '#231f1b'; g.fillRect(x0, y, fw, b % 4 === 0 ? 2 : 1);
@@ -514,35 +655,50 @@ function draw() {
   const fadeH = 104, gr = A$.down ? g.createLinearGradient(0, 0, 0, fadeH) : g.createLinearGradient(0, H, 0, H - fadeH);
   gr.addColorStop(0, BG); gr.addColorStop(0.6, BG + 'e6'); gr.addColorStop(1, BG + '00');
   g.fillStyle = gr; g.fillRect(0, A$.down ? 0 : H - fadeH, W, fadeH);
-  // health, progress, score
-  const hbW = Math.min(360, W - 40), hbY = A$.down ? 22 : H - 40, hbX = (W - hbW) / 2;
+  // health bar along the edge away from the targets
+  const hbW = Math.min(360, W - 40), hbY = A$.down ? 22 : H - 32, hbX = (W - hbW) / 2;
   g.fillStyle = '#2a2521'; g.beginPath(); g.roundRect(hbX, hbY, hbW, 10, 5); g.fill();
   g.fillStyle = G.health < 25 ? '#ff7a6b' : '#ef5b3a'; g.beginPath(); g.roundRect(hbX, hbY, Math.max(4, hbW * G.health / 100), 10, 5); g.fill();
-  const prog = Math.max(0, Math.min(1, t / tr.buf.duration));
-  g.fillStyle = '#3a332d'; g.fillRect(hbX, hbY + 14, hbW, 2); g.fillStyle = MUTED; g.fillRect(hbX, hbY + 14, hbW * prog, 2);
-  g.fillStyle = MUTED; g.font = '600 14px "Figtree", system-ui, sans-serif'; g.textAlign = 'center';
-  const acc = G.judged ? (G.accSum / G.judged * 100).toFixed(2) + '%' : '–';
-  g.fillText(`${G.score.toLocaleString()}  ·  ${acc}  ·  ${G.judged ? ratingOf() : ''}`, W / 2, hbY + (A$.down ? 36 : -10));
-  // judgement tally beside the field on wide screens
-  if (W > fw + 320) {
+  const prog = Math.max(0, Math.min(1, t / tr.buf.duration)), acc = G.judged ? (G.accSum / G.judged * 100).toFixed(2) + '%' : '–';
+  const time = `${fmtTime(Math.max(0, t))} / ${fmtTime(tr.buf.duration)}`;
+  if (W > fw + 400) {
+    // Score, combo, accuracy and time in a panel beside the lanes, at the height your eyes already
+    // are while playing; the judgement tally mirrors it on the other side.
+    const px = x0 + fw + 40, py = A$.down ? H * 0.42 : H * 0.18;
+    const label = (txt, y) => { g.fillStyle = MUTED; g.font = '700 11.5px "Figtree", system-ui, sans-serif'; g.fillText(txt, px, y); };
+    g.textAlign = 'left';
+    label('SCORE', py); g.fillStyle = INK; g.font = '700 30px "Fraunces", Georgia, serif'; g.fillText(G.score.toLocaleString(), px, py + 32);
+    label('COMBO', py + 70); g.fillStyle = G.combo >= 5 ? INK : MUTED; g.font = '700 38px "Fraunces", Georgia, serif'; g.fillText(G.combo, px, py + 108);
+    const cw = g.measureText(String(G.combo)).width;
+    g.fillStyle = MUTED; g.font = '600 13px "Figtree", system-ui, sans-serif'; g.fillText(`best ${G.maxCombo}`, px + cw + 12, py + 106);
+    label('ACCURACY', py + 146); g.fillStyle = INK; g.font = '700 22px "Figtree", system-ui, sans-serif'; g.fillText(acc, px, py + 174);
+    if (G.judged) { g.fillStyle = MUTED; g.font = '600 13px "Figtree", system-ui, sans-serif'; g.fillText(ratingOf(), px, py + 194); }
+    label('SONG', py + 232); g.fillStyle = INK; g.font = '600 16px "Figtree", system-ui, sans-serif'; g.fillText(time, px, py + 256);
+    g.fillStyle = '#3a332d'; g.beginPath(); g.roundRect(px, py + 266, 150, 5, 2.5); g.fill();
+    g.fillStyle = MUTED; g.beginPath(); g.roundRect(px, py + 266, Math.max(3, 150 * prog), 5, 2.5); g.fill();
+    g.fillStyle = MUTED; g.font = '600 12.5px "Figtree", system-ui, sans-serif'; g.fillText(`${Math.round(prog * 100)}%`, px + 158, py + 272);
+    // tally
     g.textAlign = 'right'; g.font = '600 15px "Figtree", system-ui, sans-serif';
-    let yy = H / 2 - 60;
-    for (const J of [...JUDGE, {name:'Miss', col:'#ff7a6b'}]) { g.fillStyle = J.col; g.fillText(`${J.name}  ${G.counts[J.name]}`, x0 - 28, yy); yy += 24; }
+    let yy = py + 20;
+    for (const J of [...JUDGE, {name:'Miss', col:'#ff7a6b'}]) { g.fillStyle = J.col; g.fillText(`${J.name}  ${G.counts[J.name]}`, x0 - 32, yy); yy += 26; }
     g.textAlign = 'center';
+  } else {
+    // narrow screens: one compact line next to the health bar
+    g.fillStyle = INK; g.font = '600 14px "Figtree", system-ui, sans-serif'; g.textAlign = 'center';
+    g.fillText(`${G.score.toLocaleString()}  ·  ${G.combo}×  ·  ${acc}  ·  ${Math.round(prog * 100)}%`, W / 2, hbY + (A$.down ? 32 : -12));
   }
-  // judgement popup and combo
-  const midY = A$.down ? recY - 200 : recY + 200;
+  // judgement popup (the combo lives in the side panel now, not in the middle of the notes)
+  const midY = A$.down ? recY - 190 : recY + 190;
   if (G.pop) {
     const age = now - G.pop.t;
     if (age < 600) {
       g.globalAlpha = age < 450 ? 1 : 1 - (age - 450) / 150;
-      g.fillStyle = G.pop.col; g.font = `italic 700 ${Math.round(34 - Math.min(age, 80) / 16)}px "Fraunces", Georgia, serif`;
+      g.fillStyle = G.pop.col; g.font = `italic 700 ${Math.round(30 - Math.min(age, 80) / 16)}px "Fraunces", Georgia, serif`;
       g.fillText(G.pop.text, W / 2, midY);
       if (G.pop.dt != null && G.pop.text !== 'Sick') { g.font = '600 13px "Figtree", system-ui, sans-serif'; g.fillStyle = MUTED; g.fillText(`${G.pop.dt < 0 ? 'early' : 'late'} ${Math.round(Math.abs(G.pop.dt) * 1000)} ms`, W / 2, midY + 22); }
       g.globalAlpha = 1;
     }
   }
-  if (G.combo >= 5) { g.fillStyle = INK; g.font = '700 46px "Fraunces", Georgia, serif'; g.fillText(G.combo, W / 2, midY + (A$.down ? 66 : -46)); }
   // count-in and intro skip
   if (state === 'play') {
     const k = Math.floor((audioNow() - G.countFrom) / G.beat);
@@ -555,7 +711,7 @@ function draw() {
 let stall = {song:0, wall:0};
 function audioStalled() {
   const t = songNow(), w = performance.now();
-  if (ctx.state !== 'running') return true;
+  if (ctx.state !== 'running') return performance.now() - G.startedAt > 1500;
   if (Math.abs(t - stall.song) > 0.02) { stall = {song:t, wall:w}; return false; }
   return w - stall.wall > 600 && audioNow() > G.countFrom + 0.1;   // no progress for 0.6 s while it should be playing
 }
@@ -607,4 +763,5 @@ cv.addEventListener('pointerdown', e => {
 });
 
 renderMenu(); draw();
+checkStats(true);   // quietly award anything already earned (e.g. new achievements for old progress)
 restoreSong();

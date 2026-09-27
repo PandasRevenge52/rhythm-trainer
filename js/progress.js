@@ -181,7 +181,7 @@ function openProfile(tab) {
   modalCard.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => openProfile(b.dataset.tab)));
   $('#resetP').addEventListener('click', () => {
     if (!confirm('Reset all XP, levels, stats, high scores and achievements?')) return;
-    Object.assign(P, freshProfile()); saveP(); renderPlayer(); syncLevelOptions(); closeModal(); toast('Progress reset');
+    resetProfile(); renderPlayer(); syncLevelOptions(); closeModal(); toast('Progress reset');
   });
   if (profTab === 'stats') wireCharts();
   if (profTab === 'progress') { const b = $('#openPathBtn'); if (b) b.addEventListener('click', openPath); }
@@ -193,17 +193,22 @@ function progressHTML() {
       ${tile('Path', `${done} / ${LEVELS.length}`)}${tile('Stars', `${pathStars()} / ${LEVELS.length * 3}`)}${tile('Time played', Math.round(P.playSec / 60) + ' min')}${tile('Days played', P.days.length)}</div>
     <p style="margin-top:14px"><button id="openPathBtn">🗺️ Open the learning path</button></p>`;
 }
+// which achievement categories are unfolded (remembered while the page is open)
+const achOpen = new Set(['Getting started']);
+document.addEventListener('toggle', e => { const d = e.target; if (d.classList && d.classList.contains('achcat')) d.open ? achOpen.add(d.dataset.cat) : achOpen.delete(d.dataset.cat); }, true);
 function achHTML() {
   const got = ACH.filter(a => P.ach[a.id]).length;
   return `<div class="xpline" style="margin:4px 0"><div class="xpbar"><i style="width:${got / ACH.length * 100}%"></i></div><span>${Math.round(got / ACH.length * 100)}%</span></div>
     ${[...new Set(ACH.map(a => a.cat))].map(cat => {
       const list = ACH.filter(a => a.cat === cat);
-      return `<h3>${cat} · ${list.filter(a => P.ach[a.id]).length} / ${list.length}</h3><div class="ach">${list.map(a => {
+      // each category folds away; the ones you're partway through start open
+      const n = list.filter(a => P.ach[a.id]).length;
+      return `<details class="achcat"${achOpen.has(cat) ? ' open' : ''} data-cat="${cat}"><summary><b>${cat}</b><span>${n} / ${list.length}</span><i class="minibar"><i style="width:${n / list.length * 100}%"></i></i></summary><div class="ach">${list.map(a => {
         const g = P.ach[a.id], v = a.get && !g ? Math.min(a.get(), a.goal) : null;
         return `<div class="${g ? 'got' : ''}" title="${g ? 'Unlocked ' + new Date(g).toLocaleDateString() : 'Locked'}${a.xp ? ' · ' + a.xp + ' XP' : ''}">` +
           `<span>${a.icon}</span><b>${a.name}</b><small>${a.desc}</small>` +
           (v != null && a.goal > 1 ? `<div class="pb"><i style="width:${v / a.goal * 100}%"></i></div><small class="pv">${fmtGoal(a, v)}</small>` : '') + `</div>`;
-      }).join('')}</div>`;
+      }).join('')}</div></details>`;
     }).join('')}`;
 }
 

@@ -13,11 +13,11 @@
 </head>
 <body class="arcade">
 <canvas id="field" aria-label="Playfield"></canvas>
+<a class="homebtn" id="homeBtn" href="index.html" title="Back to the trainer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11 12 4l9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/></svg>Home</a>
 
 <!-- song select -->
 <div class="aov show" id="menu">
   <div class="apanel">
-    <div class="atop"><a class="back" href="index.html">← Back to the trainer</a></div>
     <h1 class="atitle">Arcade</h1>
     <p class="asub">Your song, turned into falling arrows. Pick what you want to play along to.</p>
     <div class="asong" id="songCard">
@@ -26,14 +26,14 @@
     </div>
 
     <div class="aset">
-      <span class="lbl">Play along to</span>
-      <div class="seg" id="aSrc"><button data-v="drums">Drums</button><button data-v="vocals">Vocals</button><button data-v="mix">Mix</button></div>
+      <span class="lbl">Play along to <small class="muted">pick one or more</small></span>
+      <div class="seg multi" id="aSrc"><button data-v="drums">Drums</button><button data-v="vocals">Vocals</button><button data-v="guitar">Guitar</button></div>
     </div>
     <div class="aset">
       <span class="lbl">Difficulty</span>
       <div class="seg diffs" id="aDiff">
         <button data-v="easy">Easy<small></small></button><button data-v="normal">Normal<small></small></button>
-        <button data-v="hard">Hard<small></small></button><button data-v="expert">Expert<small></small></button>
+        <button data-v="hard">Hard<small></small></button><button data-v="expert">Expert<small></small></button><button data-v="insane">Insane<small></small></button>
       </div>
     </div>
     <p class="muted achart" id="aChartInfo"></p>
@@ -85,8 +85,8 @@
     <h2 class="atitle">Leaderboard</h2>
     <p class="muted">Best scores on this computer, saved under each song's file name.</p>
     <div class="aset"><span class="lbl">Song</span><select id="lbSong" aria-label="Song"></select></div>
-    <div class="aset"><div class="seg" id="lbSrc"><button data-v="drums">Drums</button><button data-v="vocals">Vocals</button><button data-v="mix">Mix</button></div>
-      <div class="seg" id="lbDiff"><button data-v="easy">Easy</button><button data-v="normal">Normal</button><button data-v="hard">Hard</button><button data-v="expert">Expert</button></div></div>
+    <div class="aset"><div class="seg multi" id="lbSrc"><button data-v="drums">Drums</button><button data-v="vocals">Vocals</button><button data-v="guitar">Guitar</button></div>
+      <div class="seg" id="lbDiff"><button data-v="easy">Easy</button><button data-v="normal">Normal</button><button data-v="hard">Hard</button><button data-v="expert">Expert</button><button data-v="insane">Insane</button></div></div>
     <div id="lbBody"></div>
     <div class="actions"><button class="primary" id="lbBack">Back</button></div>
   </div>

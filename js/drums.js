@@ -21,7 +21,9 @@ const idb = (() => {
     const tx = db.transaction('kv', mode), q = fn(tx.objectStore('kv'));
     tx.oncomplete = () => res(q.result); tx.onerror = () => rej(tx.error);
   }));
-  return {get:k => req('readonly', s => s.get(k)), set:(k, v) => req('readwrite', s => s.put(v, k))};
+  // never let a stuck database hold up loading a song: give up after 4 seconds
+  const timed = pr => Promise.race([pr, new Promise((_, rej) => setTimeout(() => rej(new Error('storage timed out')), 4000))]);
+  return {get:k => timed(req('readonly', s => s.get(k))), set:(k, v) => timed(req('readwrite', s => s.put(v, k)))};
 })();
 // Beat tracking from the drum onset curve (first 150 s): autocorrelation for the rough tempo, then a
 // fine search over tempo + phase for the beat grid that lines up best.
@@ -52,7 +54,69 @@ function analyzeTempo(curve) {
   }
   return {bpm:Math.round(best.bpm*100)/100, first:best.phase / FPS + (curve.t0 || 0)};
 }
-const DRUMS_VERSION = 13;   // bump when the analysis changes so cached results are redone
+// Beat tracking that follows a band's tempo as it drifts (dynamic programming, after Ellis 2007):
+// every frame gets a score = its onset strength + the best score of a previous beat roughly one
+// beat period earlier, with a penalty for straying from the expected period. Tracing back from the
+// best frame near the end gives the beat times. A single fixed grid drifts off real recordings;
+// this doesn't.
+function trackBeats(curve, bpm, tightness = 100) {
+  const fps = curve.fps, on = curve.on, N = on.length;
+  if (!N) return [];
+  const period = 60 * fps / bpm;
+  // smooth the onset curve a little and normalise it
+  let mean = 0, sq = 0; for (let i = 0; i < N; i++) { mean += on[i]; sq += on[i] * on[i]; }
+  mean /= N; const sd = Math.sqrt(Math.max(1e-12, sq / N - mean * mean));
+  const w = Math.max(1, Math.round(period / 32)), loc = new Float32Array(N);
+  for (let i = 0; i < N; i++) { let a = 0, c = 0; for (let k = -w; k <= w; k++) { const j = i + k; if (j >= 0 && j < N) { const g = Math.exp(-0.5 * (k / w) ** 2); a += g * on[j]; c += g; } } loc[i] = (a / c) / sd; }
+  const score = new Float32Array(N), back = new Int32Array(N).fill(-1);
+  const lo = Math.round(period / 2), hi = Math.round(period * 2);
+  for (let t = 0; t < N; t++) {
+    let best = 0, arg = -1;
+    for (let prev = t - hi; prev <= t - lo; prev++) {
+      if (prev < 0) continue;
+      const v = score[prev] - tightness * Math.log((t - prev) / period) ** 2;
+      if (arg < 0 || v > best) { best = v; arg = prev; }
+    }
+    score[t] = loc[t] + (arg >= 0 ? Math.max(0, best) : 0);
+    back[t] = arg >= 0 && best > 0 ? arg : -1;
+  }
+  // start from the best-scoring frame in the last beat period
+  let t = N - 1, bestEnd = -Infinity;
+  for (let i = Math.max(0, N - Math.round(period)); i < N; i++) if (score[i] > bestEnd) { bestEnd = score[i]; t = i; }
+  const beats = [];
+  while (t >= 0) { beats.push(t); t = back[t]; }
+  beats.reverse();
+  const t0 = curve.t0 || 0, out = beats.map(f => f / fps + t0);
+  // extend with the local period so there are beats before the first and after the last onset
+  const pd = 60 / bpm, dur = N / fps + t0;
+  while (out.length && out[0] - pd > 0) out.unshift(out[0] - (out.length > 1 ? out[1] - out[0] : pd));
+  while (out.length && out[out.length - 1] + pd < dur + pd) out.push(out[out.length - 1] + (out.length > 1 ? out[out.length - 1] - out[out.length - 2] : pd));
+  return out;
+}
+// ---------- high-quality charts (made by tools/make-charts) ----------
+// charts/<slug>.js calls rtChartLoaded({...}). Loading it as a <script> works from the file system
+// too, where fetch() isn't allowed.
+function chartSlug(name) {   // must match slug() in tools/make_charts.py
+  return name.normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'song';
+}
+let chartLoading = Promise.resolve();
+function loadHQChart(name) {
+  const job = chartLoading.then(() => new Promise(resolve => {
+    const el = document.createElement('script');
+    let done = false;
+    const finish = v => { if (done) return; done = true; self.rtChartLoaded = null; el.remove(); resolve(v); };
+    self.rtChartLoaded = data => finish(data && data.v ? data : null);
+    el.onerror = () => finish(null);
+    el.src = `charts/${chartSlug(name)}.js?${Date.now()}`;
+    setTimeout(() => finish(null), 2500);
+    document.head.appendChild(el);
+  }));
+  chartLoading = job.catch(() => null);
+  return job;
+}
+// a high-quality chart in the same shape as the in-browser analysis
+const chartToDrums = c => ({kick:c.kick || [], snare:c.snare || [], tom:c.tom || [], hat:c.hat || [], vocal:c.vocal || [], inst:c.inst || null, curve:null, hq:true});
+const DRUMS_VERSION = 15;   // bump when the analysis changes so cached results are redone
 // The drum analysis for a song, from the cache when this song was analysed before.
 async function songDrums(buf, name, progress) {
   name = name.replace(/\.[a-z0-9]{2,4}$/i, '');   // same key whether it came from the file or saved details
@@ -129,7 +193,7 @@ async function analyzeDrums(buf, progress) {
   let Lm1 = new Float32Array(B), Lm2 = new Float32Array(B);   // log percussive spectra of the last two frames
   // vocals: centre-panned, sustained (harmonic) sound in the singing range
   const vb0 = bin(150), vb1 = bin(4000), f00 = bin(100), f01 = bin(900);
-  const vflux = new Float32Array(nFrames), ev = new Float32Array(nFrames), vpitch = new Float32Array(nFrames), vconf = new Float32Array(nFrames);
+  const vflux = new Float32Array(nFrames), ev = new Float32Array(nFrames), evAll = new Float32Array(nFrames), vpitch = new Float32Array(nFrames), vconf = new Float32Array(nFrames);
   let Vm1 = new Float32Array(B), Vm2 = new Float32Array(B);
   const V = new Float32Array(B), LV = new Float32Array(B);
   const cb0 = f00, cb1 = Math.min(B - 1, 4 * f01 + 2), CB = cb1 - cb0 + 1, cspec = new Float32Array(nFrames * CB);
@@ -165,7 +229,7 @@ async function analyzeDrums(buf, progress) {
       // vocal onset strength (same vibrato-proof flux, on the centre harmonic part) and loudness
       let vf = 0, e = 0;
       for (let k = vb0; k <= vb1; k++) {
-        LV[k] = Math.log(1 + 100 * V[k]); e += V[k];
+        LV[k] = Math.log(1 + 100 * V[k]); e += V[k]; evAll[t] += S[row + k];
         const prev = Math.max(Vm2[k - 1], Vm2[k], Vm2[k + 1]);
         if (LV[k] > prev) vf += LV[k] - prev;
       }
@@ -203,6 +267,7 @@ async function analyzeDrums(buf, progress) {
   // frame t covers samples t*hop .. t*hop+N; its onset estimate is the window centre, minus the measured lag
   const t2s = t => (t * hop + N / 2) / sr - ONSET_LAG;
   const out = {};
+  if (self.__dbgDrums) self.__dbgDrums = {flux, sLow, sMid, ehLow, ev, vconf, t2s, fps:DRUM_FPS};   // test hook
   for (const name in flux) out[name] = pickPeaks(flux[name], t2s);
   dropLeaks(out);
   // How much sustained, pitched sound starts with each hit: a plucked or sung note keeps ringing,
@@ -212,6 +277,22 @@ async function analyzeDrums(buf, progress) {
   for (const name in out) for (const o of out[name]) { const f = o[2]; o[2] = +sustain(name === 'kick' ? sLow : sMid, f).toFixed(3); }
   // Of the energy a hit adds, a drum keeps little after 150 ms; a plucked or strummed string keeps
   // most of it ringing. Measured on test mixes: snares stay under ~0.35, guitar plucks mostly above.
+  // Kicks share their range with bass guitar and deep sung syllables. A real kick is strong, has a
+  // beater click up high, and dies away fast; a bass note or syllable keeps ringing. These weights
+  // were fitted on stem-separated real recordings and checked on songs left out of the fitting
+  // (kick precision 61% -> 77%, keeping 86% of real kicks).
+  {
+    const snRef = Array.from(flux.snare).sort((a, b) => a - b)[Math.floor(nFrames * 0.98)] || 1;
+    out.kick = out.kick.filter(o => {
+      const f = Math.round((o[0] - t2s(0)) * DRUM_FPS), base = Math.min(at(sLow, f - 3), at(sLow, f - 4));
+      const peak = Math.max(at(sLow, f), at(sLow, f + 1), at(sLow, f + 2)) - base;
+      const decay8 = peak > 1e-9 ? (at(sLow, f + 8) - base) / peak : 0;
+      let click = 0; for (let j = f - 1; j <= f + 1; j++) click = Math.max(click, at(flux.snare, j) / snRef);
+      const clip = v => Math.min(3, Math.max(0, v - 0.4));
+      const z = -2.14 + 2.93 * o[1] + 2.34 * click - 1.30 * clip(o[2]) - 0.83 * clip(decay8);
+      return 1 / (1 + Math.exp(-z)) >= 0.5;
+    });
+  }
   const ring = (list, lim) => list.map(o => o[2] <= lim ? o : [o[0], o[1] * Math.max(0, 1 - 2.2 * (o[2] - lim)), o[2]]).filter(o => o[1] >= 0.45);
   out.snare = ring(out.snare, 0.45);
   out.hat = ring(out.hat, 0.8);
@@ -224,36 +305,46 @@ async function analyzeDrums(buf, progress) {
   // Vocal notes; then drop short ones sitting exactly on a drum hit (a snare's body tone or a kick's
   // boom can pass for a brief sung note, a real sung note usually lasts longer).
   const drumTimes = [...out.kick, ...out.snare].map(o => o[0]);
-  out.vocal = vocalNotes(vflux, ev, vpitch, vconf, t2s, {cspec, CB, cb0, sr, N})
+  if (self.__dbgVox) self.__dbgVox = {vflux, ev, vpitch, vconf, t2s, raw:{cspec, CB, cb0, sr, N, evAll}, drumTimes:[...out.kick, ...out.snare].map(o => o[0])};   // test hook
+  out.vocal = vocalNotes(vflux, ev, vpitch, vconf, t2s, {cspec, CB, cb0, sr, N, evAll})
     .filter(([t, , p, d]) => p >= 45 && !(d < 0.18 && drumTimes.some(u => Math.abs(u - t) < 0.03)));
   return out;
 }
 // Vocal notes from the frame features: syllable onsets (flux peaks) plus pitch changes inside a
 // held sound, each kept only if there's voice right after it. A note lasts while the voice stays
 // on and near its pitch. Each note: [time, strength, pitch (MIDI number), duration].
-function vocalNotes(vflux, ev, vp, vconf, t2s, raw) {
+// Settings for finding sung notes (tuned against transcribed vocal stems of real recordings).
+const VOX = {evThr:0.35, confThr:0.06, standOut:0.05, stepSemi:1.4, merge:4, onMin:6, rise:1.2, sameGap:4, insideSemi:0.5, steep:true};
+// How believable a found note is as singing (fitted like the kick weights; the centre-of-the-mix
+// share matters most). Used as the note's strength, so charts keep the most convincing ones.
+const VOX_W = [-1.31, -1.31, -0.14, 0.07, 0.30, 4.97, 0.52, -0.43, 0.23];
+function voxBelief(f) {
+  const x = [1, f.s, Math.min(3, f.dur), Math.min(4, f.pstd), f.conf, f.cshare, Math.log(1 + f.rise), f.voicedRatio, (f.p - 60) / 12];
+  return 1 / (1 + Math.exp(-x.reduce((a, v, i) => a + v * VOX_W[i], 0)));
+}
+function vocalNotes(vflux, ev, vp, vconf, t2s, raw, V = VOX) {
   const n = ev.length;
   if (!n) return [];
   const sorted = Array.from(ev).sort((a, b) => a - b), p90 = sorted[Math.floor(n * 0.9)] || 1;
-  const voiced = t => t >= 0 && t < n && ev[t] > 0.18 * p90 && vconf[t] > 0.12;
+  const voiced = t => t >= 0 && t < n && ev[t] > V.evThr * p90 && vconf[t] > V.confThr;
   // lightly smoothed pitch (median of 3 frames) so a wobble doesn't count as a new note
   const sp = new Float32Array(n);
   for (let t = 0; t < n; t++) { const a = vp[Math.max(0, t - 1)], b = vp[t], c = vp[Math.min(n - 1, t + 1)]; sp[t] = Math.max(Math.min(a, b), Math.min(Math.max(a, b), c)); }
   // candidates: syllable onsets (flux peaks) and pitch steps inside held sound
-  const cands = pickPeaks(vflux, t => t, 0.2).map(([f, s]) => ({f, s}));
+  const cands = pickPeaks(vflux, t => t, V.standOut).map(([f, s]) => ({f, s}));
   for (let t = 4; t < n - 6; t++) {
     if (!voiced(t - 3) || !voiced(t + 2) || !voiced(t + 5)) continue;
-    if (Math.abs(sp[t + 2] - sp[t - 3]) > 1 && Math.abs(sp[t + 5] - sp[t + 2]) < 0.8) cands.push({f:t, s:0.6});
+    if (Math.abs(sp[t + 2] - sp[t - 3]) > V.stepSemi && Math.abs(sp[t + 5] - sp[t + 2]) < 0.8) cands.push({f:t, s:0.6});
   }
   cands.sort((a, b) => a.f - b.f);
   const merged = [];
-  for (const c of cands) { const last = merged[merged.length - 1]; if (last && c.f - last.f < 8) { if (c.s > last.s) last.s = c.s; } else merged.push({...c}); }
+  for (const c of cands) { const last = merged[merged.length - 1]; if (last && c.f - last.f < V.merge) { if (c.s > last.s) last.s = c.s; } else merged.push({...c}); }
   // energy at a given pitch (fundamental + 3 harmonics) in the raw centre spectrum
   const combAt = (p, t) => { const k0 = 440 * 2 ** ((p - 69) / 12) * raw.N / raw.sr; let c = 0; for (let h = 1; h <= 4; h++) { const k = Math.round(h * k0) - raw.cb0; for (let d = -1; d <= 1; d++) if (k + d >= 0 && k + d < raw.CB) c += raw.cspec[t * raw.CB + k + d]; } return c; };
   const notes = [];
   for (const {f, s} of merged) {
     let on = 0; for (let u = f; u <= f + 7; u++) if (voiced(u)) on++;
-    if (on < 5) continue;   // a sung note is voiced for a while, not just a blip
+    if (on < V.onMin) continue;   // a sung note is voiced for a while, not just a blip
     // the pitch reading trails the sound by ~100 ms, so read it from 50–130 ms after the onset
     const ps = []; for (let u = f + 5; u <= f + 13; u++) if (voiced(u)) ps.push(sp[u]);
     if (ps.length < 3) for (let u = f + 2; u <= f + 7; u++) if (voiced(u)) ps.push(sp[u]);
@@ -265,21 +356,34 @@ function vocalNotes(vflux, ev, vp, vconf, t2s, raw) {
     const prev = notes[notes.length - 1], floorF = prev ? prev.fs + 6 : 0;
     let fs = Math.min(n - 1, f + 3);
     while (fs - 1 > Math.max(floorF, f - 25) && combAt(p0, fs - 1) > 0.3 * cmax) fs--;
+    if (V.steep) {   // the note starts where energy at its pitch rises fastest
+      let bestD = -1, at0 = fs;
+      for (let u = Math.max(floorF, fs - 6); u <= Math.min(n - 2, f + 4); u++) { const d = combAt(p0, u + 1) - combAt(p0, u - 1); if (d > bestD) { bestD = d; at0 = u; } }
+      fs = at0;
+    }
     // a real new note: energy at its own pitch jumps up (drums and ringing guitars don't do that at
     // the singer's pitch)
-    if (cmax < 2.2 * (combAt(p0, Math.max(0, fs - 3)) + 1e-9)) continue;
+    if (cmax < V.rise * (combAt(p0, Math.max(0, fs - 3)) + 1e-9)) continue;
     // its length: while it stays voiced and near its pitch (the reading settles over the first ~60 ms)
     let e = f + 1, gap = 0;
     while (e < n && e < fs + 4 * DRUM_FPS) { if (voiced(e) && (e < f + 12 || Math.abs(sp[e] - p0) < 1.5)) gap = 0; else if (++gap > 5) break; e++; }
     const end = e - gap;
     // the same held note found again
-    if (prev && (fs - prev.fs < 9 || (fs < prev.end - 3 && Math.abs(p0 - prev.p) < 1))) continue;
-    notes.push({fs, s, p:p0, end});
+    if (prev && (fs - prev.fs < V.sameGap || (fs < prev.end - 3 && Math.abs(p0 - prev.p) < V.insideSemi))) continue;
+    // features for telling a sung note from an instrument note (see VOX_W)
+    const span = []; for (let u = f + 5; u <= Math.min(end, f + 30); u++) if (voiced(u)) span.push(u);
+    const mean = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0;
+    const pm = mean(span.map(u => sp[u])), pstd = Math.sqrt(mean(span.map(u => (sp[u] - pm) ** 2)));
+    const feats = {s, dur:(end - fs) / DRUM_FPS, pstd, conf:mean(span.map(u => vconf[u])), cshare:mean(span.map(u => ev[u] / (raw.evAll[u] + 1e-9))),
+      rise:Math.min(20, cmax / (combAt(p0, Math.max(0, fs - 3)) + 1e-9)), voicedRatio:span.length / Math.max(1, Math.min(end, f + 30) - f - 4), p:p0};
+    notes.push({fs, s, p:p0, end, feats});
   }
   // a note ends where the next one starts, at the latest
   return notes.map((o, i) => {
     const end = Math.min(o.end, notes[i + 1] ? notes[i + 1].fs - 1 : o.end);
-    return [t2s(o.fs), o.s, +o.p.toFixed(2), +(Math.max(1, end - o.fs) / DRUM_FPS).toFixed(3)];
+    const row = [t2s(o.fs), +voxBelief(o.feats).toFixed(3), +o.p.toFixed(2), +(Math.max(1, end - o.fs) / DRUM_FPS).toFixed(3)];
+    if (V.feats) row.push(o.feats);
+    return row;
   });
 }
 // A drum bleeds a little into the other bands (a kick's click reaches the snare range, a snare's body
