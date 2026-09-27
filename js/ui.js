@@ -37,6 +37,15 @@ function freshPattern(quiet) {
   pattern = newPattern(); queued = null;
   if (!run) refreshIdle(); else if (!quiet) toast('New rhythm after this pass');
 }
+// Rhythm settings changed while a line is on screen. Redrawing it under you is jarring, so the line
+// stays put and the change shows up in the next new rhythm; until then the New button wears a dot.
+function settingsChanged() {
+  if (S.play === 'daily' || (run && (game || run.chartBeat0 != null))) return;
+  if (run) { if (!flowNew()) pattern = newPattern(); return; }   // repeat mode: from the next pass
+  if (!flowNew()) queued = null;   // not on screen, so it can quietly follow the new settings
+  $('#newBtn').classList.add('pending');
+  $('#newBtn').title = 'New rhythm with your changed settings (N)';
+}
 function setBpm(v, quiet) {
   S.bpm = Math.max(40, Math.min(220, Math.round(+v || S.bpm))); save();
   $('#bpmNum').value = S.bpm;
@@ -126,14 +135,14 @@ for (const [id, key] of [['noteChips', 'notes'], ['restChips', 'rests']]) {
     const b = e.target.closest('button'); if (!b) return;
     const v = +b.dataset.v, set = new Set(S[key]);
     if (set.has(v)) { if (key === 'notes' && set.size === 1) return toast('Keep at least one note value'); set.delete(v); } else set.add(v);
-    S[key] = [...set]; customised(); freshPattern();
+    S[key] = [...set]; customised(); settingsChanged();
   });
 }
 $('#extraChips').innerHTML = EXTRAS.map(x => `<button data-v="${x.id}">${x.name}</button>`).join('');
 $('#extraChips').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
   const set = new Set(S.extras); set.has(b.dataset.v) ? set.delete(b.dataset.v) : set.add(b.dataset.v);
-  S.extras = [...set]; customised(); freshPattern();
+  S.extras = [...set]; customised(); settingsChanged();
 });
 $('#gapSeg').innerHTML = Object.entries(GAPS).map(([k, g]) => `<button data-v="${k}">${g.name}</button>`).join('');
 $('#gapSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; S.gap = b.dataset.v; save(); syncControls(); if (run) toast('Takes effect from the next pass'); });
@@ -148,7 +157,7 @@ $('#bpmNum').addEventListener('change', e => setBpm(e.target.value));
 $('#bpmDown').addEventListener('click', () => setBpm(S.bpm - 1));
 $('#bpmUp').addEventListener('click', () => setBpm(S.bpm + 1));
 $('#restChance').addEventListener('input', e => { S.restChance = +e.target.value; save(); syncControls(); });
-$('#restChance').addEventListener('change', () => { customised(); freshPattern(); });
+$('#restChance').addEventListener('change', () => { customised(); settingsChanged(); });
 $('#metroVol').addEventListener('input', e => { S.metroVol = +e.target.value; save(); $('#metroRead').textContent = Math.round(S.metroVol * 100) + '%'; syncMetro(); if (cal.bus) cal.bus.gain.value = S.metroVol; });
 // a sample click when you let go, so you can hear the new level
 $('#metroVol').addEventListener('change', () => { if (run) return; ensureAudio(); const g = ctx.createGain(); g.gain.value = S.metroVol; g.connect(master); click(g, ctx.currentTime + 0.02, true); click(g, ctx.currentTime + 0.4, false); });
@@ -172,7 +181,8 @@ for (const [id, key] of TOGGLES) $('#' + id).addEventListener('change', e => {
   if (key === 'mic') return enableMic(on);
   if (key === 'smoothAudio') { S.smoothAudio = on; save(); location.reload(); return; }   // the sound system only picks its buffer size at start
   S[key] = on; save(); syncControls(); syncMetro();
-  if (key === 'sight' || key === 'poly') { if (run) stop(true); pattern = newPattern(); queued = null; refreshIdle(); }
+  if (key === 'poly') settingsChanged();
+  if (key === 'sight') { if (run) stop(true); refreshIdle(); }   // same line, just shown differently
   kick();
 });
 $('#pathBtn').addEventListener('click', openPath);

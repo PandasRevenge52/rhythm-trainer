@@ -182,7 +182,8 @@ function notationMarkup(pat) {
 const slots = ['#sheetA', '#sheetB'].map(id => ({wrap:$(id), svg:$(id + ' svg'), pat:null}));
 let act = 0;
 function fillSlot(slot, pat) {
-  slot.pat = pat;
+  slot.pat = pat; slot.marked = false;
+  if (slot === slots[act]) { $('#newBtn').classList.remove('pending'); $('#newBtn').title = 'New rhythm (N)'; }
   let {s, W, H, perRow} = notationMarkup(pat);
   s += `<rect class="ph" x="0" y="0" width="3" height="${pat.twoHand ? 110 : 80}" rx="1.5" visibility="hidden"/>`;
   slot.svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
@@ -203,7 +204,13 @@ function useSlot(i) {
   slots.forEach((sl, k) => sl.wrap.classList.toggle('upnext', k !== i));
   a.wrap.classList.remove('hide');
 }
-function renderNotation(pat) { fillSlot(slots[act], pat); useSlot(act); sightMask(null); }
+// Draws a line only when it's a different rhythm (or the last one still shows marks from playing),
+// so switching settings doesn't redraw what you're reading.
+function renderNotation(pat) {
+  const sl = slots[act];
+  if (sl.pat !== pat || sl.marked) fillSlot(sl, pat);
+  useSlot(act); sightMask(null);
+}
 function renderPreview(pat) {
   const o = slots[1 - act];
   pat = flowNew() && !sightOn() ? pat : null;
@@ -223,7 +230,7 @@ function sightMask(t16) {
   sl.barEls.forEach(el => el.classList.toggle('later', +el.dataset.b > upTo));
 }
 const GRADES = ['perfect','good','ok','miss','resthit'];
-function setEvClass(idx, g) { const el = evEls[idx]; if (!el) return; el.classList.remove(...GRADES); if (g) el.classList.add(g); }
+function setEvClass(idx, g) { const el = evEls[idx]; if (!el) return; el.classList.remove(...GRADES); if (g) { el.classList.add(g); slots[act].marked = true; } }
 function setCur(idx) {
   if (idx === shown.cur) return;
   if (evEls[shown.cur]) evEls[shown.cur].classList.remove('cur');

@@ -12,7 +12,7 @@
 html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans)}
 main{max-width:1180px;margin:0 auto;padding:18px 16px 32px}
 button,select,input{font:inherit;color:inherit}
-button{background:var(--chip);border:1px solid transparent;border-radius:10px;padding:8px 13px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:background .15s,border-color .15s,transform .08s}
+button{background:var(--chip);border:1px solid transparent;border-radius:10px;padding:8px 13px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:background .15s,border-color .15s,color .15s,box-shadow .18s,transform .08s,filter .15s}
 button:hover{border-color:var(--line)}
 button:active{transform:scale(.97)}
 button svg{width:15px;height:15px;flex:none}
@@ -135,8 +135,8 @@ body.drag .stage{outline:2px dashed var(--accent);outline-offset:4px}
 .sheet.upnext{opacity:.45}
 .sheet .tag{position:absolute;left:4px;top:0;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);opacity:0;transition:opacity .4s}
 .sheet.upnext .tag{opacity:1}
-.fill{animation:fill .6s ease-out}
-@keyframes fill{from{opacity:0}to{opacity:1}}
+.fill{animation:fill .38s cubic-bezier(.2,.7,.3,1)}
+@keyframes fill{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
 #countin{position:absolute;top:2px;right:0;font-size:13px;font-weight:600;color:var(--accent);background:var(--chip);padding:3px 10px;border-radius:99px;opacity:0;transition:opacity .2s;font-variant-numeric:tabular-nums}
 #countin.show{opacity:1}
 #countin b{display:inline-block;min-width:10px}
@@ -339,6 +339,35 @@ select,.tempo,.num{border:1px solid var(--line)}
   .side-head{border-radius:16px 16px 0 0;padding-top:18px}
   .side-head::before{content:"";position:absolute;left:50%;top:6px;width:36px;height:4px;border-radius:2px;background:var(--line);transform:translateX(-50%)}
 }
+/* ---------- small motion ---------- */
+button.primary:hover{filter:brightness(1.07)}
+.tabs button{transition:color .15s,border-color .2s}
+.modes button.on,.seg button.on,.chips button.on{animation:seton .22s ease-out}
+@keyframes seton{from{transform:scale(.96)}to{transform:none}}
+details.more>summary::after,.achcat>summary::after{transition:transform .2s ease,margin .2s ease}
+details.more[open]>:not(summary){animation:reveal .24s ease-out}
+.achcat[open] .ach>div{animation:reveal .28s ease-out both}
+.achcat[open] .ach>div:nth-child(2){animation-delay:.02s} .achcat[open] .ach>div:nth-child(3){animation-delay:.04s}
+.achcat[open] .ach>div:nth-child(4){animation-delay:.06s} .achcat[open] .ach>div:nth-child(5){animation-delay:.08s}
+.achcat[open] .ach>div:nth-child(n+6){animation-delay:.1s}
+@keyframes reveal{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+.ach>div{transition:transform .15s,border-color .15s}
+.ach>div.got:hover{transform:translateY(-2px)}
+#profBody{animation:reveal .22s ease-out}
+/* a hit note gives a little pop */
+.ev{transform-box:fill-box;transform-origin:center}
+.ev.perfect,.ev.good,.ev.ok{animation:evpop .26s ease-out}
+.ev.miss{animation:evshake .3s ease-out}
+@keyframes evpop{40%{transform:scale(1.12)}}
+@keyframes evshake{25%{transform:translateX(-2px)}60%{transform:translateX(2px)}}
+/* the New button: a dot while there are settings changes the line on screen doesn't show yet */
+#newBtn{position:relative}
+#newBtn.pending::after{content:"";position:absolute;top:5px;right:5px;width:7px;height:7px;border-radius:50%;background:var(--accent);animation:pendpop .4s cubic-bezier(.2,1.6,.4,1)}
+@keyframes pendpop{from{transform:scale(0)}}
+#newBtn svg{transition:transform .35s ease}
+#newBtn:active svg{transform:rotate(-120deg)}
+.lives i.on{transition:color .3s}
+.stage{transition:box-shadow .3s}
 @media (prefers-reduced-motion: reduce){ *,*::before,*::after{transition-duration:0s !important;animation-duration:0s !important} }
 .toggle[hidden],.row[hidden]{display:none}
 
