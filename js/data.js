@@ -3,7 +3,7 @@
 const DEFAULTS = {level:1, bpm:65, bars:2, notes:[4,2], rests:[4,2], extras:['dotted'], restChance:0.25, timing:'normal', mode:'loop',
   metronome:true, metroVol:0.8, lane:true, counts:true, hitSound:true, volume:0.7, play:'practice', songVol:0.8, calBpm:60,
   meter:'4/4', hands:1, poly:false, gap:'off', sight:false, focus:true, freePlay:false,
-  offsets:{key:0, midi:0, mic:0}, midi:false, mic:false, micSens:0.5,
+  offsets:{key:0, midi:0, mic:0}, smoothAudio:false, midi:false, mic:false, micSens:0.5,
   view:'notes', clickSound:'click', hitKit:'snare', songSource:'gen', songChart:'normal', songDrums:{kick:true, snare:true, hat:false}, songSens:0.5,
   playerName:'',
   arcade:{diff:'normal', src:'drums', speed:2.2, down:true, noFail:false, musicVol:0.8, hitSound:false}};

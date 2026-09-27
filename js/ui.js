@@ -163,13 +163,14 @@ function setCounts(on) {
 }
 // [checkbox id, setting]
 const TOGGLES = [['metronome', 'metronome'], ['laneT', 'lane'], ['counts', 'counts'], ['hitSound', 'hitSound'], ['sightT', 'sight'], ['focusT', 'focus'],
-  ['handsT', 'hands'], ['polyT', 'poly'], ['midiT', 'midi'], ['micT', 'mic'], ['freeT2', 'freePlay']];
+  ['handsT', 'hands'], ['polyT', 'poly'], ['midiT', 'midi'], ['micT', 'mic'], ['freeT2', 'freePlay'], ['smoothT', 'smoothAudio']];
 for (const [id, key] of TOGGLES) $('#' + id).addEventListener('change', e => {
   const on = e.target.checked;
   if (key === 'counts') return setCounts(on);
   if (key === 'hands') return setHands(on ? 2 : 1);
   if (key === 'midi') return enableMidi(on);
   if (key === 'mic') return enableMic(on);
+  if (key === 'smoothAudio') { S.smoothAudio = on; save(); location.reload(); return; }   // the sound system only picks its buffer size at start
   S[key] = on; save(); syncControls(); syncMetro();
   if (key === 'sight' || key === 'poly') { if (run) stop(true); pattern = newPattern(); queued = null; refreshIdle(); }
   kick();

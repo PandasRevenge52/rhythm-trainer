@@ -3,7 +3,9 @@
 let ctx = null, master = null, noiseBuf = null, clockOff = null;
 function ensureAudio() {
   if (!ctx) {
-    ctx = new (window.AudioContext || window.webkitAudioContext)({latencyHint:'interactive'});
+    // "Smooth audio" asks for bigger sound buffers: a little more delay (the clock below measures and
+    // allows for it), but no crackling or static on systems that can't keep up with tiny buffers
+    ctx = new (window.AudioContext || window.webkitAudioContext)({latencyHint:S.smoothAudio ? 'playback' : 'interactive'});
     master = ctx.createGain(); master.connect(ctx.destination);
     noiseBuf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.5), ctx.sampleRate);
     const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random()*2 - 1;

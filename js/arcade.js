@@ -255,7 +255,7 @@ function renderMenu() {
   mark('#aDiff', v => v === A$.diff);
   mark('#aScroll', v => (v === 'down') === A$.down);
   $('#aSpeed').value = A$.speed; $('#aSpeedRead').textContent = A$.speed.toFixed(1);
-  $('#aNoFail').checked = A$.noFail; $('#aHitSnd').checked = !!A$.hitSound;
+  $('#aNoFail').checked = A$.noFail; $('#aHitSnd').checked = !!A$.hitSound; $('#aSmooth').checked = !!S.smoothAudio;
   $('#aOffRead').textContent = `${S.offsets.key > 0 ? '+' : ''}${S.offsets.key} ms`;
   syncVol();
   const best = (P.arcade || {})[bestKey()];
@@ -271,6 +271,8 @@ $('#aScroll').addEventListener('click', e => { const b = e.target.closest('butto
 $('#aSpeed').addEventListener('input', e => setA('speed', +e.target.value));
 $('#aNoFail').addEventListener('change', e => setA('noFail', e.target.checked));
 $('#aHitSnd').addEventListener('change', e => setA('hitSound', e.target.checked));
+// shared with the trainer; the sound system only picks its buffer size at start, so reload
+$('#aSmooth').addEventListener('change', e => { S.smoothAudio = e.target.checked; save(); location.reload(); });
 // timing offset (shared with the trainer's keyboard offset)
 document.querySelectorAll('[data-off]').forEach(b => b.addEventListener('click', () => { S.offsets.key = Math.round(S.offsets.key + +b.dataset.off); save(); renderMenu(); }));
 // music volume: in the menu and the pause screen; changes apply straight away, even mid-song
