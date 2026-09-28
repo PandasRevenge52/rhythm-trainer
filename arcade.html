@@ -19,10 +19,10 @@
 <div class="aov show" id="menu">
   <div class="apanel">
     <h1 class="atitle">Arcade</h1>
-    <p class="asub">Your song, turned into falling arrows. Pick what you want to play along to.</p>
+    <p class="asub">Your song, turned into falling arrows. No music? Play a random song, new every time.</p>
     <div class="asong" id="songCard">
       <div><b id="aSongName">No song loaded</b><span id="aSongInfo" class="muted">Load an MP3, or it'll pick up the last song you used in the trainer</span></div>
-      <button id="aLoad">Load a song</button><input type="file" id="aFile" accept="audio/*,.mp3" hidden>
+      <span class="abtns"><button id="aRandom" title="A new song every time you play">Random song</button><button id="aLoad">Load a song</button></span><input type="file" id="aFile" accept="audio/*,.mp3" hidden>
     </div>
 
     <div class="aset">
@@ -43,7 +43,7 @@
       <div class="arow"><span class="lbl">Scroll</span><div class="seg" id="aScroll"><button data-v="down">Down</button><button data-v="up">Up</button></div></div>
       <div class="arow"><span class="lbl">Speed <b id="aSpeedRead"></b></span><input type="range" id="aSpeed" min="1" max="4" step="0.1" aria-label="Scroll speed"></div>
       <div class="arow"><span class="lbl">Music volume <b id="aVolRead"></b></span><input type="range" id="aVol" class="aVol" min="0" max="1" step="0.05" aria-label="Music volume"></div>
-      <div class="arow"><span class="lbl">Timing offset</span><span class="offctl"><button data-off="-5" aria-label="5 ms earlier">−5</button><b id="aOffRead"></b><button data-off="5" aria-label="5 ms later">+5</button></span></div>
+      <div class="arow"><span class="lbl">Timing offset</span><span class="offctl"><button data-off="-5" aria-label="5 ms earlier">−5</button><b id="aOffRead"></b><button data-off="5" aria-label="5 ms later">+5</button><button id="aCal" title="Tap along to clicks to measure it">Test…</button></span></div>
       <div class="arow keysrow"><span class="lbl">Keys <small class="muted" id="aKeysHint"></small></span>
         <span class="keybinds" id="aKeys">
           <button data-lane="0" aria-label="Key for the left lane"><i style="color:#b69cff">←</i><b></b></button><button data-lane="1" aria-label="Key for the down lane"><i style="color:#5cc8f5">↓</i><b></b></button><button data-lane="2" aria-label="Key for the up lane"><i style="color:#7fdc8a">↑</i><b></b></button><button data-lane="3" aria-label="Key for the right lane"><i style="color:#ff8a8a">→</i><b></b></button>
@@ -85,6 +85,18 @@
   </div>
 </div>
 
+<!-- timing test -->
+<div class="aov" id="cal">
+  <div class="apanel">
+    <h2 class="atitle">Timing test</h2>
+    <p class="muted">Tap a lane key, an arrow or <kbd>Space</kbd> on every click, or tap the circle. It counts you in with 4 clicks, then you tap along to 12.</p>
+    <div class="calPad" id="acPad"><div class="ring lead" id="acRing"></div><div class="calNum" id="acNum"></div></div>
+    <div class="calStrip" id="acStrip"><em style="left:0%;transform:none">−250 ms</em><em style="left:50%">on the click</em><em style="left:100%;transform:translateX(-100%)">+250 ms</em></div>
+    <p class="muted" id="acMsg"></p>
+    <div class="actions"><button class="ghost" id="acBack">Back</button><span class="spacer"></span><button id="acApply" hidden></button><button class="primary" id="acGo">Start</button></div>
+  </div>
+</div>
+
 <!-- leaderboard -->
 <div class="aov" id="board">
   <div class="apanel">
@@ -101,6 +113,7 @@
 <script src="js/data.js"></script>
 <script src="js/audio.js"></script>
 <script src="js/drums.js"></script>
+<script src="js/randomsong.js"></script>
 <script src="js/arcade.js"></script>
 </body>
 </html>

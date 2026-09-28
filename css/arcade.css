@@ -17,6 +17,7 @@ body.arcade{overflow:hidden;height:100vh}
 .asong b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:16px}
 .asong span{font-size:13px}
 .asong button{flex:none}
+.asong .abtns{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;flex:none}
 .aset{display:flex;align-items:center;justify-content:space-between;gap:14px;margin:10px 0;flex-wrap:wrap}
 .aset .lbl{font-weight:600}
 .diffs button{flex-direction:column;gap:0;min-width:76px;justify-content:center;line-height:1.2}
@@ -28,6 +29,7 @@ body.arcade{overflow:hidden;height:100vh}
 .arow input[type=range]{max-width:220px}
 .offctl{display:inline-flex;align-items:center;gap:8px}
 .offctl button{padding:5px 10px}
+#acMsg{min-height:44px;font-size:14px}
 .offctl b{min-width:58px;text-align:center;font-variant-numeric:tabular-nums}
 .abest{font-size:14px;color:var(--muted);margin:6px 0 0;min-height:20px}
 .abest b{color:var(--ink)}

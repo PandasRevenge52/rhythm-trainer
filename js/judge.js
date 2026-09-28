@@ -44,8 +44,9 @@ function addFx(colorKey, text, burst, voice) {
 function onHit(e) {
   ensureAudio();
   const src = e.src || 'key';
-  if (S.hitSound && (src === 'key' || src === 'touch')) hitSound(master, ctx.currentTime, 0.7, e.lane ?? 0);
+  // no tap sound during the latency test: it comes out of the speakers late, and you'd tap to that
   if (cal.on) { calTap(e.timeStamp, src); return; }
+  if (S.hitSound && (src === 'key' || src === 'touch')) hitSound(master, ctx.currentTime, 0.7, e.lane ?? 0);
   if (modalOpen()) return;
   fx.push({t0:performance.now(), c:'accent', burst:true, small:true, voice:e.lane}); kick();
   if (!run || run.listen) return;

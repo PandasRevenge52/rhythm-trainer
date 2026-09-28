@@ -52,7 +52,8 @@ const ALL_SRCS = [...PARTS, 'drums+vocals', 'drums+guitar', 'vocals+guitar', 'mi
 A$.src = srcKey(srcParts(A$.src || 'drums'));
 
 const cv = $('#field'), g = cv.getContext('2d');
-const tr = {buf:null, name:'', bpm:120, first:0, drums:null, loading:false};
+// random: a random song (a new one every run); fresh: it hasn't been played yet
+const tr = {buf:null, name:'', bpm:120, first:0, drums:null, loading:false, random:false, fresh:false};
 let chart = [], state = 'menu', G = null;
 
 // ---------- song loading (shared with the trainer) ----------
@@ -76,20 +77,34 @@ async function loadSong(blob, meta) {
     }
     // tell the trainer about it too, so both use the same song and grid
     if (!(meta && meta.bpm && meta.name === name)) idb.set('songMeta', {name, bpm, first, startAt:0, detected:bpm}).catch(() => {});
-    Object.assign(tr, {buf, name, bpm, first, drums, beats});
+    Object.assign(tr, {buf, name, bpm, first, drums, beats, random:false});
     renderMenu();
   } catch (e) { info("Couldn't read that file. Try an MP3, WAV or OGG"); }
   finally { tr.loading = false; }
 }
 function info(t) { $('#aSongInfo').textContent = t; }
+// No music of your own: a random song, written fresh for every run (js/randomsong.js). Asking
+// again while one is being written waits for that one.
+let writing = null;
+function loadRandom() {
+  if (writing) return writing;
+  if (tr.loading) return Promise.resolve(false);
+  tr.loading = true; $('#aPlay').disabled = true;
+  info('Writing a new song…');
+  return writing = randomSong().then(r => { Object.assign(tr, r, {random:true, fresh:true}); renderMenu(); return true; },
+    e => { console.error(e); info("Couldn't make a random song in this browser."); return false; })
+    .finally(() => { tr.loading = false; writing = null; });
+}
 async function restoreSong() {
   try {
     const [file, meta] = await Promise.all([idb.get('songFile'), idb.get('songMeta')]);
-    if (file) await loadSong(file, meta);
+    if (file && !A$.random) await loadSong(file, meta);
+    else await loadRandom();
   } catch (e) {}
 }
 async function pickFile(file) {
   if (!file) return;
+  A$.random = false; save();
   await loadSong(file, null);
   idb.set('songFile', file).catch(() => {});
 }
@@ -252,7 +267,8 @@ function renderMenu() {
   if (tr.buf) {
     chart = buildChart();
     const st = chartStats(chart), vox = (tr.drums.vocal || []).length;
-    info(`${tr.drums.hq ? '★ High-quality chart · ' : ''}${fmtTime(tr.buf.duration)} · ${tr.bpm.toFixed(1)} BPM · ${vox ? vox + ' sung notes' : 'no clear vocal found'}`);
+    info(tr.random ? `${fmtTime(tr.buf.duration)} · ${tr.bpm} BPM · a new song every time you play` :
+      `${tr.drums.hq ? '★ High-quality chart · ' : ''}${fmtTime(tr.buf.duration)} · ${tr.bpm.toFixed(1)} BPM · ${vox ? vox + ' sung notes' : 'no clear vocal found'}`);
     const parts = srcParts(A$.src), noInst = parts.has('guitar') && !tr.drums.inst;
     $('#aChartInfo').textContent = noInst && parts.size === 1 ? 'Guitar charts need a high-quality chart for this song (tools/make-charts).' : chart.length ? `${noInst ? 'No guitar part for this song (it needs a high-quality chart) · ' : ''}` +  `${chart.length} notes${st.holds ? ` · ${st.holds} hold${st.holds === 1 ? '' : 's'}` : ''} · busiest ${st.peak.toFixed(1)} notes/s` :
       A$.src === 'vocals' ? "This song doesn't have a clear enough lead vocal. Add Drums or Guitar." : 'Not enough to build a chart from. Try another chart type.';
@@ -293,6 +309,7 @@ document.querySelectorAll('.aVol').forEach(el => el.addEventListener('input', e 
   if (G && G.music) G.music.gain.value = A$.musicVol;
 }));
 $('#aLoad').addEventListener('click', () => $('#aFile').click());
+$('#aRandom').addEventListener('click', () => { A$.random = true; save(); loadRandom(); });
 $('#aFile').addEventListener('change', e => { pickFile(e.target.files[0]); e.target.value = ''; });
 addEventListener('dragover', e => { if (e.dataTransfer && [...e.dataTransfer.types].includes('Files')) e.preventDefault(); });
 addEventListener('drop', e => {
@@ -300,7 +317,7 @@ addEventListener('drop', e => {
   const f = [...(e.dataTransfer?.files || [])].find(f => f.type.startsWith('audio') || /\.(mp3|wav|ogg|m4a|aac|flac)$/i.test(f.name));
   if (f && state === 'menu') pickFile(f);
 });
-function show(id) { for (const o of ['menu', 'pause', 'results', 'board']) $('#' + o).classList.toggle('show', o === id); document.body.classList.toggle('playing', !id); }
+function show(id) { for (const o of ['menu', 'pause', 'results', 'board', 'cal']) $('#' + o).classList.toggle('show', o === id); document.body.classList.toggle('playing', !id); }
 
 // ---------- a run ----------
 function startAudio(fromPos, lead) {
@@ -312,8 +329,11 @@ function startAudio(fromPos, lead) {
   return {bus, music, src, when};
 }
 function play(fromPos = 0, keep = null) {
+  // random songs: every new run (Play, Again, Start over) gets a song nobody has played yet
+  if (!keep && tr.random && !tr.fresh) { loadRandom().then(ok => ok && play(fromPos, keep)); return; }
   ensureAudio();
   if (ctx.state !== 'running') { ctx.resume().then(() => play(fromPos, keep), () => play(fromPos, keep)); return; }
+  if (!keep) tr.fresh = false;
   syncClock();
   if (!keep) chart = buildChart();
   // a 4-beat count-in before the music, at the tempo where you start
@@ -575,6 +595,8 @@ function finish() {
   P.arcadeHits = (P.arcadeHits || 0) + hits;
   checkStats(); saveP();
   renderRank();
+  // random songs: write the next one now, while the results are up, so Again starts straight away
+  if (tr.random) setTimeout(loadRandom, 400);
   $('#rNote').textContent = !G.offs.length ? '' : Math.abs(mean) < 8 ? `Your timing averaged ${Math.abs(mean).toFixed(0)} ms off. That's right on it.` :
     `You were ${Math.abs(mean).toFixed(0)} ms ${mean < 0 ? 'early' : 'late'} on average. If that happens every time, nudge the timing offset ${mean < 0 ? 'down' : 'up'} by about that much.`;
   show('results');
@@ -742,6 +764,78 @@ function frame() {
   }
 }
 
+// ---------- timing test ----------
+// The trainer's latency test, for the keys you play the Arcade with: tap along to steady clicks and
+// the median of how late (or early) your taps land becomes the timing offset. No tap sound: it
+// comes out of the speakers late, and you'd tap to that.
+const AC = {on:false, bus:null, taps:[], lead:4, n:16, iv:1, t0:0, result:null};
+const acX = d => Math.max(0, Math.min(100, 50 + d * 1000 / 250 * 50));
+function acStop() { AC.on = false; if (AC.bus) { try { AC.bus.disconnect(); } catch (e) {} AC.bus = null; } }
+function openCal() {
+  acStop(); state = 'cal';
+  $('#acNum').innerHTML = 'Ready<small>press Start or Enter</small>'; $('#acRing').style.transform = ''; $('#acRing').style.opacity = '';
+  $('#acMsg').textContent = `Your timing offset now: ${S.offsets.key} ms`;
+  $('#acApply').hidden = true; $('#acGo').textContent = 'Start';
+  $('#acStrip').querySelectorAll('i').forEach(el => el.remove());
+  show('cal');
+}
+function closeCal() { acStop(); state = 'menu'; renderMenu(); show('menu'); }
+function acRun() {
+  ensureAudio();
+  // start only once the sound is really running, on a fresh reading of the audio clock
+  if (ctx.state !== 'running') { ctx.resume().then(acRun, () => {}); return; }
+  clockOff = null; syncClock(); acStop();
+  AC.bus = ctx.createGain(); AC.bus.gain.value = 0.9; AC.bus.connect(master);
+  AC.iv = 60 / (S.calBpm || 60); AC.t0 = ctx.currentTime + 1; AC.taps = []; AC.result = null; AC.on = true;
+  for (let i = 0; i < AC.n; i++) click(AC.bus, AC.t0 + i * AC.iv, i < AC.lead);
+  $('#acStrip').querySelectorAll('i').forEach(el => el.remove());
+  $('#acMsg').innerHTML = '&nbsp;'; $('#acApply').hidden = true; $('#acGo').textContent = 'Restart';
+  requestAnimationFrame(acFrame);
+}
+function acFrame() {
+  if (!AC.on || state !== 'cal') return;
+  syncClock();
+  const now = audioNow(), f = (now - AC.t0) / AC.iv, i = Math.floor(f);
+  const pulse = i >= 0 && i < AC.n ? Math.exp(-(f - i) * 5) : 0, ring = $('#acRing');
+  ring.style.transform = `scale(${1 + pulse * 0.4})`; ring.style.opacity = (0.2 + pulse * 0.6).toFixed(3);
+  ring.classList.toggle('lead', i < AC.lead);
+  $('#acNum').innerHTML = i < 0 ? 'Listen…' : i < AC.lead ? `${i + 1}<small>get ready</small>` : i < AC.n ? `${AC.taps.length}<small>of ${AC.n - AC.lead} taps</small>` : '…';
+  if (now > AC.t0 + (AC.n - 0.5) * AC.iv + 0.1) { acFinish(); return; }
+  requestAnimationFrame(acFrame);
+}
+// judged on the same clock as a run, so the offset carries straight over
+function acTap(ts) {
+  syncClock();
+  const th = ts / 1000 + clockOff, k = Math.round((th - AC.t0) / AC.iv);
+  if (k < AC.lead || k >= AC.n || AC.taps.some(t => t.k === k)) return;
+  const d = th - (AC.t0 + k * AC.iv);
+  if (Math.abs(d) > AC.iv * 0.45) return;
+  const dot = document.createElement('i'); dot.style.left = acX(d) + '%'; $('#acStrip').appendChild(dot);
+  AC.taps.push({k, d, dot});
+}
+function acFinish() {
+  acStop();
+  $('#acNum').innerHTML = 'Done'; $('#acGo').textContent = 'Try again';
+  const d = AC.taps.map(t => t.d);
+  if (d.length < 6) { $('#acMsg').textContent = `Only ${d.length} tap${d.length === 1 ? '' : 's'} registered. At least 6 are needed, so try again.`; return; }
+  const {m, ms, sd, keep, used} = tapOffset(d);
+  AC.taps.forEach((t, i) => t.dot.classList.toggle('out', !keep[i]));
+  const avg = document.createElement('i'); avg.className = 'avg'; avg.style.left = acX(m) + '%'; $('#acStrip').appendChild(avg);
+  AC.result = ms;
+  $('#acMsg').innerHTML = `Your taps land <b>${Math.abs(ms)} ms ${ms >= 0 ? 'after' : 'before'}</b> the click (spread ±${Math.round(sd)} ms, ${used} of ${d.length} taps used).` +
+    (sd > 35 ? " That's quite spread out, so another go may give a steadier reading." : '');
+  const b = $('#acApply'); b.hidden = false; b.textContent = `Use ${ms} ms`;
+}
+$('#aCal').addEventListener('click', e => { e.currentTarget.blur(); openCal(); });
+$('#acGo').addEventListener('click', e => { e.currentTarget.blur(); acRun(); });
+$('#acBack').addEventListener('click', closeCal);
+$('#acApply').addEventListener('click', () => {
+  S.offsets.key = AC.result; save();   // shared with the trainer's keyboard offset
+  P.cals = (P.cals || 0) + 1; saveP(); checkStats();
+  closeCal();
+});
+$('#acPad').addEventListener('pointerdown', e => { e.preventDefault(); if (AC.on) acTap(e.timeStamp); else acRun(); });
+
 // ---------- keys ----------
 // rebinding: click a lane's key in Options, then press the key you want (Esc cancels)
 let binding = null;
@@ -772,6 +866,12 @@ addEventListener('keydown', e => {
     binding = null; save(); buildKeys(); renderKeys(); return;
   }
   if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (state === 'cal') {
+    if (e.code in KEYS || e.code === 'Space') { e.preventDefault(); if (!e.repeat && AC.on) acTap(e.timeStamp); }
+    else if (e.code === 'Escape') { e.preventDefault(); closeCal(); }
+    else if ((e.code === 'Enter' || e.code === 'NumpadEnter') && !AC.on) { e.preventDefault(); acRun(); }
+    return;
+  }
   if (state === 'play' && e.code in KEYS) { e.preventDefault(); if (!e.repeat) onLane(KEYS[e.code], e.timeStamp); return; }
   if (e.repeat) return;
   if (e.code === 'Space' && state === 'play') { e.preventDefault(); skipIntro(); }
@@ -784,7 +884,7 @@ addEventListener('keydown', e => {
 });
 addEventListener('keyup', e => { if (state === 'play' && e.code in KEYS) offLane(KEYS[e.code]); });
 addEventListener('blur', () => pause('Paused because the window lost focus.'));
-document.addEventListener('visibilitychange', () => { if (document.hidden) pause('Paused while the tab was hidden.'); });
+document.addEventListener('visibilitychange', () => { if (document.hidden) { pause('Paused while the tab was hidden.'); if (state === 'cal' && AC.on) acStop(); } });
 addEventListener('resize', () => draw());
 $('#aPlay').addEventListener('click', e => { e.currentTarget.blur(); play(); });
 $('#aResume').addEventListener('click', resume);

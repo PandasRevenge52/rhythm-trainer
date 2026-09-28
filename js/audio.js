@@ -26,6 +26,14 @@ function syncClock() {
   else clockOff += (off - clockOff) * 0.02;
 }
 const audioNow = () => performance.now()/1000 + clockOff;
+// Latency test (trainer and Arcade): from how far each tap landed from its click, in seconds, the
+// offset to use. Stray taps, far from the median compared with how steady the rest are, don't count.
+function tapOffset(d) {
+  const med = median(d), mad = median(d.map(x => Math.abs(x - med))), lim = Math.max(0.03, 3 * mad);
+  const keep = d.map(x => Math.abs(x - med) <= lim), kd = d.filter((x, i) => keep[i]), m = median(kd);
+  const mean = kd.reduce((a, b) => a + b, 0) / kd.length;
+  return {m, ms:Math.round(m * 1000), sd:Math.sqrt(kd.reduce((a, b) => a + (b - mean) ** 2, 0) / kd.length) * 1000, keep, used:kd.length};
+}
 
 // ---- synthesized instruments ----
 function env(g, t, peak, decay, attack = 0.002) {
