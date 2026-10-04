@@ -37,17 +37,28 @@ const MP = {
     this.msg('Making a lobby…');
     for (let tries = 0; tries < 5; tries++) {
       const code = this.newCode();
-      try {
-        this.peer = await this.openPeer(MP_PREFIX + code);
-        Object.assign(this, {code, host:true, me:this.peer.id, phase:'lobby'});
+      let viaRelayOnly = false;
+      try { this.peer = await this.openPeer(MP_PREFIX + code); }
+      catch (e) {
+        if (e.type === 'unavailable-id') continue;
+        // the matchmaking server is down: the lobby can still run on the relay alone
+        viaRelayOnly = true;
+      }
+      {
+        Object.assign(this, {code, host:true, me:viaRelayOnly ? 'h' : this.peer.id, phase:'lobby'});
+        // the backup route, for friends whose direct connection can't get through
+        const relayUp = Relay.listen(code, c => this.onGuest(c));
+        if (viaRelayOnly && !(await relayUp)) { this.reset(); return this.fail({type:'network'}); }
         this.players = [{id:this.me, name:myName(), host:true, ready:true, have:false, pct:0, ping:0, state:'lobby', inMatch:false}];
-        this.peer.on('connection', c => this.onGuest(c));
-        this.peer.on('disconnected', () => { try { this.peer.reconnect(); } catch (e) {} });
+        if (this.peer) {
+          this.peer.on('connection', c => this.onGuest(c));
+          this.peer.on('disconnected', () => { try { this.peer.reconnect(); } catch (e) {} });
+        }
         this.showLobby(); this.sys('Lobby made. Send your friends the code.');
         grant('mpHost');
         this.menuChanged(true);
         return;
-      } catch (e) { if (e.type !== 'unavailable-id') { this.fail(e); return; } }
+      }
     }
     this.msg("Couldn't make a lobby. Try again in a moment.");
   },
@@ -65,14 +76,33 @@ const MP = {
     ensureAudio(); if (ctx.state !== 'running') ctx.resume().catch(() => {});   // this click counts as the go-ahead for sound
     this.reset();
     this.msg('Joining…');
-    try { this.peer = await this.openPeer(null); } catch (e) { return this.fail(e); }
-    this.me = this.peer.id;
+    const attempt = this.attempt = {};
+    // first the direct route; if it hasn't opened in a few seconds (or the lobby is relay-only), the relay
+    try { this.peer = await this.openPeer(null); } catch (e) { this.peer = null; }
+    if (attempt !== this.attempt) return;
+    this.me = this.peer ? this.peer.id : 'g' + Math.random().toString(36).slice(2, 12);
+    let fellBack = false;
+    const fallback = async () => {
+      if (fellBack || this.conn || attempt !== this.attempt) return; fellBack = true;
+      this.msg('Direct connection blocked, trying the backup route…');
+      const rc = await Relay.dial(code, this.me);
+      if (attempt !== this.attempt || this.conn) return;
+      if (!rc) { this.msg("Couldn't connect to that lobby. Check your internet connection and try again."); return this.leave(true); }
+      rc.start(); this.useHostConn(rc, code);
+      setTimeout(() => { if (attempt === this.attempt && !this.code) { this.msg(`No answer from lobby ${code}. Check the code, and that the host still has the lobby open.`); this.leave(true); } }, 9000);
+    };
+    if (!this.peer) return fallback();
     const c = this.peer.connect(MP_PREFIX + code, {reliable:true, serialization:'binary'});
-    const t = setTimeout(() => { if (!this.code) { this.msg('No answer from that lobby. Check the code and that the host still has it open.'); this.leave(true); } }, 12000);
-    this.peer.on('error', e => { if (e.type === 'peer-unavailable') { clearTimeout(t); this.msg(`There's no lobby with the code ${code}. Check it and try again.`); this.leave(true); } });
-    c.on('open', () => { clearTimeout(t); this.conn = c; c.send({t:'hello', name:myName(), v:MP_VERSION}); this.syncClock(); });
+    setTimeout(fallback, 6000);
+    this.peer.on('error', e => { if (e.type === 'peer-unavailable') fallback(); });
+    c.on('open', () => { if (this.conn || attempt !== this.attempt) { c.close(); return; } this.useHostConn(c, code); });
+  },
+  useHostConn(c, code) {
+    c.on('open', () => {});
+    this.conn = c; this.relayed = !!c.relayed;
     c.on('data', d => this.fromHost(d, code));
-    c.on('close', () => this.hostGone());
+    c.on('close', () => { if (this.conn === c) this.hostGone(); });
+    c.send({t:'hello', name:myName(), v:MP_VERSION}); this.syncClock();
   },
   fail(e) {
     const why = {'browser-incompatible':"This browser can't do multiplayer.", 'peer-unavailable':'No lobby with that code.'}[e && e.type];
@@ -82,6 +112,7 @@ const MP = {
   peerError(e) { if (e.type === 'network' || e.type === 'server-error') this.sys('Lost touch with the matchmaking server; friends already here are still connected.'); },
   reset() {
     try { this.peer && this.peer.destroy(); } catch (e) {}
+    Relay.stop(); this.attempt = null;
     Object.assign(this, {code:null, host:false, peer:null, conn:null, me:null, players:[], song:null, phase:'lobby', inGame:false, offset:0, bestRtt:Infinity});
     this.conns = new Map(); this.live = new Map(); this.results = new Map();
     clearInterval(this.pingT); clearInterval(this.liveT); this.incoming = null;
@@ -136,7 +167,7 @@ const MP = {
         if (d.v !== MP_VERSION) { c.send({t:'nope', why:"You and the host have different versions of the game. Both refresh the page and try again."}); return; }
         if (p || !this.conns.has(id)) return;
         const name = uniqueName(String(d.name || 'Player').slice(0, 16), this.players);
-        this.players.push({id, name, host:false, ready:false, have:false, pct:0, ping:0, state:'lobby', inMatch:false});
+        this.players.push({id, name, host:false, ready:false, have:false, pct:0, ping:0, state:'lobby', inMatch:false, relay:!!c.relayed});
         c.send({t:'welcome', id, code:this.code, phase:this.phase});
         if (this.song) c.send({t:'song', song:this.song});
         this.sys(`${name} joined.`); this.pushRoster();
@@ -144,7 +175,7 @@ const MP = {
       }
       case 'ping': c.send({t:'pong', a:d.a, h:nowE()}); break;
       case 'myping': if (p) { p.ping = d.ms; this.pushRoster(true); } break;
-      case 'need': if (this.song && d.key === this.song.key) this.sendFile(c, this.song.key); break;
+      case 'need': if (this.song && d.key === this.song.key) this.sendFile(c, this.song.key, d.missing); break;
       case 'prog': if (p) { p.pct = d.pct; this.pushRoster(true); } break;
       case 'have': if (p && this.song && d.key === this.song.key) { p.have = true; p.pct = 100; this.pushRoster(); } break;
       case 'ready': if (p) { p.ready = !!d.on; this.pushRoster(); } break;
@@ -184,13 +215,14 @@ const MP = {
     this.broadcast({t:'song', song});
     this.pushRoster();
   },
-  async sendFile(c, key) {
+  // only: just these chunks again (some went missing on the relay)
+  async sendFile(c, key, only) {
     if (!tr.file) return;
-    const buf = await tr.file.arrayBuffer(), CH = 16000, n = Math.ceil(buf.byteLength / CH);
-    for (let i = 0; i < n; i++) {
+    const buf = await tr.file.arrayBuffer(), CH = c.relayed ? 96000 : 16000, n = Math.ceil(buf.byteLength / CH), limit = c.relayed ? 6e5 : 2e6;
+    for (const i of only || Array.from({length:n}, (_, i) => i)) {
       if (!c.open || !this.song || this.song.key !== key) return;
       // don't pile megabytes into the connection: wait while it's still sending
-      while (c.open && ((c.dataChannel && c.dataChannel.bufferedAmount) || 0) + (c.bufferSize || 0) * CH > 2e6) await sleep(15);
+      while (c.open && ((c.dataChannel && c.dataChannel.bufferedAmount) || 0) + (c.bufferSize || 0) * CH > limit) await sleep(15);
       c.send({t:'chunk', key, i, n, d:buf.slice(i * CH, (i + 1) * CH)});
     }
   },
@@ -264,6 +296,13 @@ const MP = {
   async gotChunk(d) {
     const inc = this.incoming; if (!inc || inc.key !== d.key) return;
     if (!inc.parts[d.i]) { inc.parts[d.i] = d.d; inc.got++; inc.n = d.n; }
+    // anything lost on the way gets asked for again once the flow stops
+    clearTimeout(inc.stallT);
+    inc.stallT = setTimeout(() => {
+      if (this.incoming !== inc) return;
+      const missing = []; for (let i = 0; i < inc.n && missing.length < 300; i++) if (!inc.parts[i]) missing.push(i);
+      if (missing.length) this.conn.send({t:'need', key:inc.key, missing});
+    }, 3000);
     const pct = Math.floor(inc.got / d.n * 100);
     if (pct !== inc.lastPct && (pct % 5 === 0 || pct === 99)) { inc.lastPct = pct; this.conn.send({t:'prog', pct}); this.lobbyMsg(`Downloading the song… ${pct}%`); }
     if (inc.got < d.n) return;
@@ -447,7 +486,7 @@ const MP = {
       const cls = p.host || p.ready ? 'ok' : '';
       return `<li class="${p.id === this.me ? 'me' : ''}"><span class="mpav" style="background:${avatarCol(p.name)}">${esc(p.name[0] || '?').toUpperCase()}</span>` +
         `<b>${esc(p.name)}${p.host ? ' <i title="Host">👑</i>' : ''}${p.id === this.me ? ' <small>(you)</small>' : ''}</b>` +
-        `<span class="mpst ${cls}">${st}</span>${!p.host && p.ping ? `<small class="mpping">${p.ping} ms</small>` : ''}` +
+        `<span class="mpst ${cls}">${st}</span>${p.relay ? '<small class="mpping" title="Connected through the backup relay: the direct connection was blocked">relay</small>' : ''}${!p.host && p.ping ? `<small class="mpping">${p.ping} ms</small>` : ''}` +
         (this.host && !p.host ? `<button class="ghost mpkick" data-kick="${esc(p.id)}" title="Remove from the lobby">✕</button>` : '') + `</li>`;
     }).join('') + (this.players.length < MP_MAX ? `<li class="mpempty">${MP_MAX - this.players.length} more can join</li>` : '');
     const ready = $('#mpReady'), start = $('#mpStartBtn');
