@@ -7,7 +7,7 @@
 // each player's live score and hits on to the others. Every player plays and is judged on their own
 // computer, with their own keys, speed and timing offset; at the end everyone's results are compared
 // and the best score wins.
-const MP_VERSION = 1, MP_MAX = 4, MP_PREFIX = 'rt-arcade-', CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+const MP_VERSION = 2, MP_MAX = 4, MP_PREFIX = 'rt-arcade-', CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const nowE = () => performance.timeOrigin + performance.now();   // this computer's clock, in ms
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const JCOL = ['#ffd479', '#8fe39a', '#b9b3aa', '#ff9b8a', '#ff7a6b', '#ff9b8a'];   // Sick Good Bad Shit Miss Dropped
@@ -461,6 +461,7 @@ const MP = {
 
   // ---------- screens ----------
   open() {
+    $('#mpVer').textContent = `Multiplayer v${MP_VERSION}`;
     $('#mpName').value = S.playerName || '';
     const showLobby = !!this.code;
     $('#mpStart').hidden = showLobby; $('#mpLobby').hidden = !showLobby;
