@@ -361,7 +361,11 @@ function play(fromPos = 0, keep = null, opts = {}) {
   if (opts.at != null) {
     // a set start time: if it has already gone by (a slow device), come in where the song is now
     lead = (opts.at - (performance.timeOrigin + performance.now())) / 1000 - 0.05;
-    if (lead < 0) { fromPos = -lead; lead = 0; bi = Math.max(0, tr.beats.findIndex(b => b >= fromPos - 1e-3)); }
+    if (lead < 0) {
+      fromPos = -lead; lead = 0; bi = Math.max(0, tr.beats.findIndex(b => b >= fromPos - 1e-3));
+      // notes that went by before you came in don't count against you
+      if (!keep) for (const n of chart) if (n.t < fromPos + 0.2) { n.j = 'Skip'; n.done = true; }
+    }
   }
   const au = startAudio(fromPos, lead);
   const firstBeat = tr.beats[bi] ?? fromPos;

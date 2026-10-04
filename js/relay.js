@@ -11,18 +11,33 @@ const RELAY_BASE = code => `rhythm-trainer/arcade1/${code}/`;
 
 // The smallest MQTT 3.1.1 client that does the job: connect, subscribe, publish (QoS 0), keep alive.
 class Mqtt {
-  constructor(url) { this.url = url; this.subs = new Map(); this.buf = new Uint8Array(0); this.onclose = null; }
+  constructor(url) { this.url = url; this.subs = new Map(); this.buf = new Uint8Array(0); this.onclose = null; this.closed = false; this.tries = 0; }
   connect() {
     return new Promise((resolve, reject) => {
       const ws = this.ws = new WebSocket(this.url, 'mqtt'); ws.binaryType = 'arraybuffer';
+      let up = false;
       const t = setTimeout(() => { reject(new Error('timeout')); try { ws.close(); } catch (e) {} }, 7000);
-      ws.onopen = () => ws.send(this.pkt(0x10, [...this.str('MQTT'), 4, 2, 0, 60, ...this.str('rt' + Math.random().toString(36).slice(2, 14))]));
-      ws.onerror = () => { clearTimeout(t); reject(new Error('error')); };
-      ws.onclose = () => { clearInterval(this.pingT); if (this.onclose) this.onclose(); };
-      ws.onmessage = e => this.read(new Uint8Array(e.data), () => { clearTimeout(t); resolve(this); });
-      this.pingT = setInterval(() => this.ws.readyState === 1 && this.ws.send(new Uint8Array([0xC0, 0])), 25000);
+      ws.onopen = () => ws.send(this.pkt(0x10, [...this.str('MQTT'), 4, 2, 0, 30, ...this.str('rt' + Math.random().toString(36).slice(2, 14))]));
+      ws.onerror = () => { clearTimeout(t); if (!up) reject(new Error('error')); };
+      ws.onclose = () => {
+        clearInterval(this.pingT); this.buf = new Uint8Array(0);
+        // a dropped broker connection (flaky internet) comes back by itself, with the same topics
+        if (up && !this.closed) this.reconnect();
+      };
+      ws.onmessage = e => this.read(new Uint8Array(e.data), () => {
+        clearTimeout(t); up = true; this.tries = 0;
+        for (const topic of this.subs.keys()) this.ws.send(this.pkt(0x82, [0, 1, ...this.str(topic), 0]));
+        resolve(this);
+      });
+      this.pingT = setInterval(() => this.ws.readyState === 1 && this.ws.send(new Uint8Array([0xC0, 0])), 15000);
     });
   }
+  reconnect() {
+    if (this.closed) return;
+    const wait = Math.min(8000, 500 * 2 ** this.tries++);
+    setTimeout(() => { if (!this.closed) this.connect().catch(() => this.reconnect()); }, wait);
+  }
+  get up() { return this.ws && this.ws.readyState === 1; }
   str(s) { const b = new TextEncoder().encode(s); return [b.length >> 8, b.length & 255, ...b]; }
   pkt(head, body) {
     const len = []; let n = body.length;
@@ -47,12 +62,12 @@ class Mqtt {
       this.buf = this.buf.slice(i + len);
     }
   }
-  sub(topic, fn) { this.subs.set(topic, fn); this.ws.send(this.pkt(0x82, [0, 1, ...this.str(topic), 0])); }
+  sub(topic, fn) { this.subs.set(topic, fn); if (this.up) this.ws.send(this.pkt(0x82, [0, 1, ...this.str(topic), 0])); }
   pub(topic, bytes) {
     const t = this.str(topic), body = new Uint8Array(t.length + bytes.length); body.set(t); body.set(bytes, t.length);
     if (this.ws.readyState === 1) this.ws.send(this.pkt(0x30, body));
   }
-  close() { this.onclose = null; clearInterval(this.pingT); try { this.ws.close(); } catch (e) {} }
+  close() { this.closed = true; this.onclose = null; clearInterval(this.pingT); try { this.ws.close(); } catch (e) {} }
 }
 
 // messages: JSON, with any binary (song chunks) carried as base64
@@ -71,10 +86,11 @@ class RelayConn {
     this.dataChannel = {get bufferedAmount() { return self.client.ws.bufferedAmount; }};
     this.others = [];   // guest: other brokers still being tried, until the host answers on one
     this.bufferSize = 0;
+    // a quiet relay (no heartbeat from the other side for a while) counts as gone
     this.hbT = setInterval(() => {
       if (!this.open) return;
-      this.raw({t:'_hb'});
-      if (Date.now() - this.seen > 12000) this.close(true);
+      this.raw({t:'_rhb'});
+      if (Date.now() - this.seen > 20000) this.close(true);
     }, 3000);
   }
   on(ev, fn) { (this.handlers[ev] = this.handlers[ev] || []).push(fn); }
@@ -84,7 +100,7 @@ class RelayConn {
   lock(client) { if (!this.others.length) return; if (client !== this.client) this.others.push(this.client); this.client = client; for (const c of this.others) if (c !== client) c.close(); this.others = []; }
   send(m) { if (this.open) this.raw(m); }
   start() { this.open = true; this.emit('open'); }
-  got(m) { this.seen = Date.now(); if (m.t === '_hb') return; if (m.t === '_bye') { this.close(true); return; } this.emit('data', m); }
+  got(m) { this.seen = Date.now(); if (m.t === '_rhb') return; if (m.t === '_bye') { this.close(true); return; } this.emit('data', m); }
   close(quiet) {
     if (!this.open && this.closed) return;
     if (!quiet && this.open) this.raw({t:'_bye'});
@@ -105,8 +121,9 @@ const Relay = {
         c.sub(base + 'h', bytes => {
           let o; try { o = decodeMsg(bytes); } catch (e) { return; }
           const rc = this.conns.get(o.f);
-          if (rc) { if (c === rc.client) rc.got(o.m); return; }
+          if (rc && c === rc.client) { rc.got(o.m); return; }
           if (o.m.t !== 'hello') return;
+          if (rc) { rc.close(true); this.conns.delete(o.f); }   // they came back on another broker
           // a guest says hello on every broker: wait a moment and answer on the best one it reached
           const p = this.pending.get(o.f) || {clients:[], m:o.m};
           p.clients.push(c);
@@ -116,7 +133,7 @@ const Relay = {
             this.pending.delete(o.f);
             const best = p.clients.sort((a, b) => RELAY_URLS.indexOf(a.url) - RELAY_URLS.indexOf(b.url))[0];
             const rc = new RelayConn(o.f, best, base + o.f, 'h');
-            this.conns.set(o.f, rc); rc.on('close', () => this.conns.delete(o.f));
+            this.conns.set(o.f, rc); rc.on('close', () => { if (this.conns.get(o.f) === rc) this.conns.delete(o.f); });
             onConn(rc); rc.start(); rc.got(p.m);
           }, 600);
         });
@@ -130,13 +147,15 @@ const Relay = {
     // the host may not have reached every broker, so say hello on all of them and keep the one it answers on
     const got = (await Promise.all(RELAY_URLS.map(url => new Mqtt(url).connect().catch(() => null)))).filter(Boolean);
     if (!got.length) return null;
-    this.clients.push(...got);
+    const old = this.conns.get('h'); if (old) old.close(true);
+    for (const c of this.clients) c.close();
+    this.clients = [...got];
     const rc = new RelayConn('h', got[0], base + 'h', me);
     rc.others = got.slice(1);
     this.conns.set('h', rc);   // so leaving says goodbye straight away
+    rc.on('close', () => { for (const c of [rc.client, ...rc.others]) c.close(); });
     for (const c of got) {
       c.sub(base + me, bytes => { try { const o = decodeMsg(bytes); if (o.f !== 'h') return; rc.lock(c); rc.got(o.m); } catch (e) {} });
-      c.onclose = () => { if (rc.client === c) rc.close(true); };
     }
     return rc;
   },

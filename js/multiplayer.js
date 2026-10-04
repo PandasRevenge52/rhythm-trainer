@@ -1,28 +1,86 @@
 'use strict';
 // ---------- multiplayer: the Arcade with friends on other computers ----------
 // The host makes a lobby with a short code; friends join with it. Browsers talk to each other
-// directly (WebRTC through PeerJS, js/vendor/peerjs.min.js); PeerJS's free public server is only
-// used to find each other. The host is the hub: it sends everyone the song file (or, for a random
-// song, the seed that writes the same song) and the exact chart, picks the start moment, and passes
-// each player's live score and hits on to the others. Every player plays and is judged on their own
-// computer, with their own keys, speed and timing offset; at the end everyone's results are compared
-// and the best score wins.
+// directly (WebRTC through PeerJS, js/vendor/peerjs.min.js), or through a public relay when the direct
+// route is blocked (js/relay.js); PeerJS's free public server is only used to find each other. The
+// host is the hub: it sends everyone the song file (or, for a random song, the seed that writes the
+// same song) and the exact chart, picks the start moment, and passes each player's live score and
+// hits on to the others. Every player plays and is judged on their own computer, with their own keys,
+// speed and timing offset; at the end everyone's results are compared and the best score wins.
+//
+// Built for bad connections (mobile hotspots, busy wifi): each player has an id that outlives any one
+// connection, so a dropout is a pause, not a goodbye. Important messages (song, start, results, hits)
+// are numbered, acknowledged and sent again until they arrive; a player who drops keeps their place
+// for a while and reconnects by themselves; the game itself never waits for the network.
 const MP_PANEL = 290;   // room between your lanes and the first other player, for your score panel
-const MP_VERSION = 2, MP_MAX = 4, MP_PREFIX = 'rt-arcade-', CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+const MP_VERSION = 3, MP_MAX = 4, MP_PREFIX = 'rt-arcade-', CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+const GRACE_LOBBY = 45000, GRACE_MATCH = 120000, GIVE_UP = 90000;   // how long a dropped player keeps their place / keeps trying
 const nowE = () => performance.timeOrigin + performance.now();   // this computer's clock, in ms
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const JCOL = ['#ffd479', '#8fe39a', '#b9b3aa', '#ff9b8a', '#ff7a6b', '#ff9b8a'];   // Sick Good Bad Shit Miss Dropped
+// this tab's player id: the same through reconnects (and a page reload), so you come back as you
+const myPid = () => { try { let p = sessionStorage.getItem('mpPid'); if (!p) sessionStorage.setItem('mpPid', p = 'p' + Math.random().toString(36).slice(2, 12)); return p; } catch (e) { return MP._pid || (MP._pid = 'p' + Math.random().toString(36).slice(2, 12)); } };
+
+// One player-to-player link that survives its connection being swapped out. send() is fire and forget
+// (live scores, pings: a newer one is on its way anyway); sendR() numbers the message and keeps sending
+// it until the other side confirms it, in order, even across a reconnect.
+class Link {
+  constructor(onMsg, onDown, onAlive) {
+    Object.assign(this, {onMsg, onDown, onAlive, c:null, out:0, unacked:new Map(), inLast:0, held:new Map(), seen:0, epoch:Math.random().toString(36).slice(2, 10), peerEpoch:null});
+    this.tickT = setInterval(() => this.tick(), 1500);
+  }
+  get up() { return !!(this.c && this.c.open); }
+  get relayed() { return !!(this.c && this.c.relayed); }
+  attach(c) {
+    if (this.c && this.c !== c) { const old = this.c; this.c = null; try { old.close(true); } catch (e) {} }
+    this.c = c; this.seen = Date.now();
+    if (!c._bound) {
+      c._bound = true;
+      c.on('data', m => { if (this.c === c) this.recv(m); });
+      const gone = () => { if (this.c === c) { this.c = null; this.onDown(); } };
+      c.on('close', gone); c.on('error', gone);
+    }
+    this.flush(true);
+  }
+  raw(m) { if (MP.cut || !this.up || (MP.dropRate && Math.random() < MP.dropRate)) return; try { this.c.send(m); } catch (e) {} }
+  send(m) { this.raw(m); }
+  sendR(m) { m._s = ++this.out; this.unacked.set(m._s, {m, at:Date.now()}); this.raw(m); }
+  // resend what hasn't been confirmed (everything, right after a reconnect)
+  flush(all) { const t = Date.now(); for (const u of this.unacked.values()) if (all || t - u.at > 2500) { u.at = t; this.raw(u.m); } }
+  recv(m) {
+    if (MP.cut) return;
+    this.seen = Date.now();
+    if (this.onAlive) this.onAlive();
+    if (m.t === '_hb') return;
+    if (m.t === '_ack') { for (const s of [...this.unacked.keys()]) if (s <= m.s) this.unacked.delete(s); return; }
+    if (m._s == null) return this.onMsg(m);
+    if (m._s > this.inLast) this.held.set(m._s, m);
+    while (this.held.has(this.inLast + 1)) { const x = this.held.get(++this.inLast); this.held.delete(this.inLast); this.onMsg(x); }
+    if (!this.ackT) this.ackT = setTimeout(() => { this.ackT = null; this.raw({t:'_ack', s:this.inLast}); }, 80);
+  }
+  tick() {
+    if (!this.up) return;
+    this.raw({t:'_hb'});
+    this.flush(false);
+    // nothing heard for a while: the connection is dead even if nobody said so (common on mobile data)
+    if (Date.now() - this.seen > 9000) { const c = this.c; this.c = null; try { c.close(true); } catch (e) {} this.onDown(); }
+  }
+  reset() { this.out = 0; this.unacked.clear(); this.inLast = 0; this.held.clear(); }
+  close() { clearInterval(this.tickT); const c = this.c; this.c = null; if (c) try { c.close(); } catch (e) {} }
+}
 
 const MP = {
-  code:null, host:false, peer:null, conns:new Map(), conn:null, me:null,
-  players:[],          // roster (the host's copy is the truth): {id, name, host, ready, have, pct, ping, state, inMatch}
+  code:null, host:false, peer:null, me:null,
+  links:new Map(),     // host: player id -> Link
+  link:null,           // guest: the link to the host
+  players:[],          // roster (the host's copy is the truth): {id, name, host, ready, have, pct, ping, state, inMatch, net, relay}
   song:null,           // what's being played: song info + chart
   haveKey:null,        // the song this computer has decoded and ready
   phase:'lobby',       // lobby | match
   inGame:false,        // this computer is playing a match right now
   live:new Map(),      // id -> {s, c, mc, a, hp, d, p, js:Map(note id -> judgement), flash:[], done}
   results:new Map(),   // id -> final results
-  offset:0, bestRtt:Infinity, prevSel:null, lay:{on:false},
+  offset:0, bestRtt:Infinity, prevSel:null, lay:{on:false}, lostAt:0,
 
   // ---------- connecting ----------
   peerOpts() {
@@ -42,33 +100,37 @@ const MP = {
       try { this.peer = await this.openPeer(MP_PREFIX + code); }
       catch (e) {
         if (e.type === 'unavailable-id') continue;
-        // the matchmaking server is down: the lobby can still run on the relay alone
-        viaRelayOnly = true;
+        viaRelayOnly = true;   // the matchmaking server is down: the lobby can still run on the relay alone
       }
-      {
-        Object.assign(this, {code, host:true, me:viaRelayOnly ? 'h' : this.peer.id, phase:'lobby'});
-        // the backup route, for friends whose direct connection can't get through
-        const relayUp = Relay.listen(code, c => this.onGuest(c));
-        if (viaRelayOnly && !(await relayUp)) { this.reset(); return this.fail({type:'network'}); }
-        this.players = [{id:this.me, name:myName(), host:true, ready:true, have:false, pct:0, ping:0, state:'lobby', inMatch:false}];
-        if (this.peer) {
-          this.peer.on('connection', c => this.onGuest(c));
-          this.peer.on('disconnected', () => { try { this.peer.reconnect(); } catch (e) {} });
-        }
-        this.showLobby(); this.sys('Lobby made. Send your friends the code.');
-        grant('mpHost');
-        this.menuChanged(true);
-        return;
+      Object.assign(this, {code, host:true, me:'host', phase:'lobby'});
+      // the backup route, for friends whose direct connection can't get through
+      const relayUp = Relay.listen(code, c => this.onTransport(c));
+      if (viaRelayOnly && !(await relayUp)) { this.reset(); return this.fail({type:'network'}); }
+      this.players = [{id:'host', name:myName(), host:true, ready:true, have:false, pct:0, ping:0, state:'lobby', inMatch:false, net:'ok'}];
+      if (this.peer) {
+        this.peer.on('connection', c => this.onTransport(c));
+        this.peer.on('disconnected', () => this.keepPeer());
       }
+      // dropped players get a while to come back; the roster goes out regularly so everyone stays in step
+      this.hostT = setInterval(() => this.hostTick(), 2000);
+      this.showLobby(); this.sys('Lobby made. Send your friends the code.');
+      grant('mpHost');
+      this.menuChanged(true);
+      return;
     }
     this.msg("Couldn't make a lobby. Try again in a moment.");
+  },
+  // stay registered with the matchmaking server through internet blips, so people can still find the lobby
+  keepPeer() {
+    if (!this.peer || this.peer.destroyed || this.peerRetry) return;
+    this.peerRetry = setTimeout(() => { this.peerRetry = null; if (this.peer && this.peer.disconnected && !this.peer.destroyed) { try { this.peer.reconnect(); } catch (e) {} this.keepPeer(); } }, 3000);
   },
   openPeer(id) {
     return new Promise((resolve, reject) => {
       const p = id ? new Peer(id, this.peerOpts()) : new Peer(this.peerOpts());
       const t = setTimeout(() => { p.destroy(); reject({type:'network'}); }, 12000);
       p.on('open', () => { clearTimeout(t); resolve(p); });
-      p.on('error', e => { clearTimeout(t); if (!p.open) { p.destroy(); reject(e); } else this.peerError(e); });
+      p.on('error', e => { clearTimeout(t); if (!p.open) { p.destroy(); reject(e); } });
     });
   },
   async join(code) {
@@ -77,53 +139,80 @@ const MP = {
     ensureAudio(); if (ctx.state !== 'running') ctx.resume().catch(() => {});   // this click counts as the go-ahead for sound
     this.reset();
     this.msg('Joining…');
+    this.me = myPid(); this.joinCode = code;
+    this.link = new Link(d => this.fromHost(d), () => { this.welcomed = null; this.hostLost(); }, () => { if (this.lostAt && this.welcomed === this.link.c) this.backOnline(); });
     const attempt = this.attempt = {};
-    // first the direct route; if it hasn't opened in a few seconds (or the lobby is relay-only), the relay
-    try { this.peer = await this.openPeer(null); } catch (e) { this.peer = null; }
+    try { this.peer = await this.openPeer(null); this.peer.on('disconnected', () => this.keepPeer()); } catch (e) { this.peer = null; }
     if (attempt !== this.attempt) return;
-    this.me = this.peer ? this.peer.id : 'g' + Math.random().toString(36).slice(2, 12);
-    let fellBack = false;
-    const fallback = async () => {
-      if (fellBack || this.conn || attempt !== this.attempt) return; fellBack = true;
-      this.msg('Direct connection blocked, trying the backup route…');
-      const rc = await Relay.dial(code, this.me);
-      if (attempt !== this.attempt || this.conn) return;
-      if (!rc) { this.msg("Couldn't connect to that lobby. Check your internet connection and try again."); return this.leave(true); }
-      rc.start(); this.useHostConn(rc, code);
-      setTimeout(() => { if (attempt === this.attempt && !this.code) { this.msg(`No answer from lobby ${code}. Check the code, and that the host still has the lobby open.`); this.leave(true); } }, 9000);
-    };
-    if (!this.peer) return fallback();
-    const c = this.peer.connect(MP_PREFIX + code, {reliable:true, serialization:'binary'});
-    setTimeout(fallback, 6000);
-    this.peer.on('error', e => { if (e.type === 'peer-unavailable') fallback(); });
-    c.on('open', () => { if (this.conn || attempt !== this.attempt) { c.close(); return; } this.useHostConn(c, code); });
+    this.routes(false);
+    setTimeout(() => { if (attempt === this.attempt && !this.code) { this.msg(`No answer from lobby ${code}. Check the code, and that the host still has the lobby open.`); this.leave(true); } }, 16000);
   },
-  useHostConn(c, code) {
-    c.on('open', () => {});
-    this.conn = c; this.relayed = !!c.relayed;
-    c.on('data', d => this.fromHost(d, code));
-    c.on('close', () => { if (this.conn === c) this.hostGone(); });
-    c.send({t:'hello', name:myName(), v:MP_VERSION}); this.syncClock();
+  // Try both ways to reach the host: direct, and the relay (straight away when reconnecting, or after a
+  // few seconds the first time, since direct is quicker when it works). Whichever opens first is used;
+  // if the relay won and direct comes through later, it switches over.
+  routes(again) {
+    const code = this.joinCode, attempt = this.attempt;
+    if (!code || !attempt) return;
+    let relayTried = false;
+    const relay = async () => {
+      if (relayTried || attempt !== this.attempt || (this.link.up && !again)) return; relayTried = true;
+      if (!again && !this.code) this.msg('Direct connection blocked, trying the backup route…');
+      const rc = await Relay.dial(code, this.me);
+      if (!rc || attempt !== this.attempt) { if (!rc && !again && !this.code) { this.msg("Couldn't connect to that lobby. Check your internet connection and try again."); this.leave(true); } return; }
+      rc.start(); this.offer(rc);
+    };
+    if (this.peer && !this.peer.destroyed) {
+      if (this.peer.disconnected) { try { this.peer.reconnect(); } catch (e) {} }
+      try {
+        const c = this.peer.connect(MP_PREFIX + code, {reliable:true, serialization:'binary'});
+        c.on('open', () => { if (attempt === this.attempt) this.offer(c); else c.close(); });
+      } catch (e) {}
+      this.peer.on('error', e => { if (e.type === 'peer-unavailable') relay(); });
+      setTimeout(relay, again ? 0 : 5000);
+    } else relay();
+  },
+  offer(c) {
+    const L = this.link;
+    if (L.up) {
+      if (L.relayed && !c.relayed) { /* upgrade: direct beats the relay */ }
+      else { if (L.c !== c) try { c.close(true); } catch (e) {} return; }
+    }
+    L.attach(c);
+    this.sayHello();
+    this.syncClock();
+  },
+  // hello until the host answers (it can get lost on a bad connection like anything else)
+  sayHello() {
+    clearInterval(this.helloT);
+    const send = () => {
+      const L = this.link;
+      if (!L || !L.up || this.welcomed === L.c) { clearInterval(this.helloT); return; }
+      L.raw({t:'hello', pid:this.me, name:myName(), v:MP_VERSION, epoch:L.epoch});
+    };
+    send(); this.helloT = setInterval(send, 1500);
   },
   fail(e) {
     const why = {'browser-incompatible':"This browser can't do multiplayer.", 'peer-unavailable':'No lobby with that code.'}[e && e.type];
     this.msg(why || "Couldn't reach the matchmaking server. Check your internet connection and try again.");
     this.leave(true);
   },
-  peerError(e) { if (e.type === 'network' || e.type === 'server-error') this.sys('Lost touch with the matchmaking server; friends already here are still connected.'); },
   reset() {
     try { this.peer && this.peer.destroy(); } catch (e) {}
     Relay.stop(); this.attempt = null;
-    Object.assign(this, {code:null, host:false, peer:null, conn:null, me:null, players:[], song:null, phase:'lobby', inGame:false, offset:0, bestRtt:Infinity});
-    this.conns = new Map(); this.live = new Map(); this.results = new Map();
-    clearInterval(this.pingT); clearInterval(this.liveT); this.incoming = null;
+    for (const L of this.links.values()) L.close();
+    if (this.link) this.link.close();
+    clearInterval(this.pingT); clearInterval(this.liveT); clearInterval(this.hostT); clearTimeout(this.reconT); clearTimeout(this.peerRetry); clearInterval(this.helloT); this.welcomed = null;
+    Object.assign(this, {code:null, host:false, peer:null, link:null, me:null, players:[], song:null, phase:'lobby', inGame:false, offset:0, bestRtt:Infinity, lostAt:0, joinCode:null, peerRetry:null, incoming:null});
+    this.links = new Map(); this.live = new Map(); this.results = new Map();
     $('#mpChatLog').innerHTML = '';
   },
   // leave the lobby; quiet: no "you left" fuss (errors, or already gone)
   leave(quiet) {
     const wasIn = !!this.code;
     if (this.inGame) { this.inGame = false; stopAudio(); state = 'menu'; G = null; }
-    if (this.host) for (const c of this.conns.values()) { try { c.send({t:'closed'}); } catch (e) {} }
+    // say goodbye so nobody waits for you to come back
+    if (this.host) for (const L of this.links.values()) L.raw({t:'closed'});
+    else if (this.link) this.link.raw({t:'bye'});
     this.reset();
     $('#mpQuit').hidden = true;
     // back to your own song and chart settings
@@ -133,103 +222,164 @@ const MP = {
     if (wasIn || !quiet) { $('#mpStart').hidden = false; $('#mpLobby').hidden = true; }
     if (!quiet) { renderMenu(); show('menu'); }
   },
-  hostGone() {
+  hostGone(why) {
     if (!this.code) return;
     const was = this.inGame;
     this.leave(true);
-    if (was) { renderMenu(); }
-    this.open(); this.msg('The host closed the lobby (or the connection dropped).');
+    if (was) renderMenu();
+    this.open(); this.msg(why || 'The host closed the lobby.');
+  },
+  // the guest lost the host: keep playing, keep trying
+  hostLost() {
+    if (!this.code && !this.attempt) return;
+    if (!this.lostAt) { this.lostAt = Date.now(); this.renderLobby(); }
+    clearTimeout(this.reconT);
+    const retry = () => {
+      if (!this.link || this.link.up) return;
+      // in a match, keep trying until well after your song ends; in the lobby, give up after a while
+      if (!this.inGame && Date.now() - this.lostAt > GIVE_UP) return this.hostGone('Lost the connection to the host. Check your internet, then join again with the code.');
+      this.routes(true);
+      this.renderLobby();
+      this.reconT = setTimeout(retry, 4000);
+    };
+    this.reconT = setTimeout(retry, 600);
+  },
+  backOnline() {
+    if (!this.lostAt) return;
+    this.lostAt = 0; clearTimeout(this.reconT);
+    // a song download that stalled while offline carries on
+    if (this.incoming) this.askMissing(this.incoming);
+    this.renderLobby();
   },
 
   // ---------- the host's side ----------
-  onGuest(c) {
-    c.on('open', () => {
-      if (this.players.length >= MP_MAX) { c.send({t:'nope', why:`That lobby is full (${MP_MAX} players).`}); setTimeout(() => c.close(), 500); return; }
-      this.conns.set(c.peer, c);
-    });
-    c.on('data', d => this.fromGuest(c, d));
-    c.on('close', () => this.guestGone(c.peer));
-    c.on('error', () => this.guestGone(c.peer));
+  onTransport(c) {
+    c.on('data', m => { if (!MP.cut && !c._link && m && m.t === 'hello') this.onHello(c, m); });
   },
-  guestGone(id) {
-    if (!this.conns.has(id)) return;
-    this.conns.delete(id);
-    const p = this.players.find(x => x.id === id); if (!p) return;
-    if (this.phase === 'match' && p.inMatch) { p.state = 'left'; this.sys(`${p.name} left the match.`); }
-    else { this.players = this.players.filter(x => x !== p); this.sys(`${p.name} left.`); }
+  onHello(c, m) {
+    if (m.v !== MP_VERSION) { c.send({t:'nope', why:"You and the host have different versions of the game. Both refresh the page (Ctrl+Shift+R) and try again."}); setTimeout(() => c.close(), 800); return; }
+    const pid = String(m.pid || '').slice(0, 24); if (!pid) return;
+    let p = this.players.find(x => x.id === pid);
+    if (!p && this.players.length >= MP_MAX) { c.send({t:'nope', why:`That lobby is full (${MP_MAX} players).`}); setTimeout(() => c.close(), 800); return; }
+    let L = this.links.get(pid);
+    if (!L) { L = new Link(d => this.fromGuest(pid, d), () => this.guestLost(pid)); this.links.set(pid, L); }
+    // a different epoch: their page started over (or it's their first time), so both sides start counting again
+    const fresh = L.peerEpoch !== m.epoch;
+    if (fresh) { L.reset(); L.peerEpoch = m.epoch; }
+    c._link = L; L.attach(c);
+    if (!p) {
+      p = {id:pid, name:uniqueName(String(m.name || 'Player').slice(0, 16), this.players), host:false, ready:false, have:false, pct:0, ping:0, state:'lobby', inMatch:false, net:'ok', relay:!!c.relayed};
+      this.players.push(p); this.sys(`${p.name} joined.`);
+    } else {
+      if (p.net === 'lost') this.sys(`${p.name} is back.`);
+      Object.assign(p, {net:'ok', relay:!!c.relayed, lostAt:0});
+    }
+    L.raw({t:'welcome', id:pid, code:this.code, phase:this.phase, fresh});
+    if (fresh) {
+      if (this.song) L.sendR({t:'song', song:this.song});
+      // a match is on that they're part of: they come straight in, at the right spot in the song
+      if (this.phase === 'match' && p.inMatch && !this.results.has(pid)) L.sendR({t:'start', at:this.matchAt, key:this.song.key});
+    }
+    this.pushRoster();
+  },
+  guestLost(pid) {
+    const p = this.players.find(x => x.id === pid); if (!p || p.net === 'lost') return;
+    Object.assign(p, {net:'lost', lostAt:Date.now()});
+    this.sys(`${p.name} lost connection. Waiting for them to come back…`);
+    this.pushRoster();
+  },
+  removePlayer(pid, msg) {
+    const p = this.players.find(x => x.id === pid); if (!p) return;
+    const L = this.links.get(pid); if (L) { L.close(); this.links.delete(pid); }
+    if (this.phase === 'match' && p.inMatch && !this.results.has(pid)) { p.state = 'left'; p.net = 'gone'; }
+    else this.players = this.players.filter(x => x !== p);
+    if (msg) this.sys(msg.replace('{name}', p.name));
     this.pushRoster(); this.checkAllDone();
   },
-  send(id, m) { const c = this.conns.get(id); if (c && c.open) try { c.send(m); } catch (e) {} },
-  broadcast(m, except) { for (const [id, c] of this.conns) if (id !== except && c.open) try { c.send(m); } catch (e) {} },
-  fromGuest(c, d) {
-    const id = c.peer, p = this.players.find(x => x.id === id);
+  hostTick() {
+    const t = Date.now();
+    for (const p of [...this.players]) if (p.net === 'lost') {
+      const limit = this.phase === 'match' && p.inMatch && !this.results.has(p.id) ? GRACE_MATCH : GRACE_LOBBY;
+      if (t - p.lostAt > limit) this.removePlayer(p.id, '{name} didn\'t make it back.');
+    }
+    this.sendRoster();   // a lost roster update fixes itself within a couple of seconds
+  },
+  send(id, m, rel) { const L = this.links.get(id); if (L) rel ? L.sendR(m) : L.send(m); },
+  broadcast(m, except, rel) { for (const [id, L] of this.links) if (id !== except) rel ? L.sendR({...m}) : L.send(m); },
+  fromGuest(id, d) {
+    const p = this.players.find(x => x.id === id), L = this.links.get(id);
+    if (!p || !L) return;
     switch (d.t) {
-      case 'hello': {
-        if (d.v !== MP_VERSION) { c.send({t:'nope', why:"You and the host have different versions of the game. Both refresh the page and try again."}); return; }
-        if (p || !this.conns.has(id)) return;
-        const name = uniqueName(String(d.name || 'Player').slice(0, 16), this.players);
-        this.players.push({id, name, host:false, ready:false, have:false, pct:0, ping:0, state:'lobby', inMatch:false, relay:!!c.relayed});
-        c.send({t:'welcome', id, code:this.code, phase:this.phase});
-        if (this.song) c.send({t:'song', song:this.song});
-        this.sys(`${name} joined.`); this.pushRoster();
-        break;
-      }
-      case 'ping': c.send({t:'pong', a:d.a, h:nowE()}); break;
-      case 'myping': if (p) { p.ping = d.ms; this.pushRoster(true); } break;
-      case 'need': if (this.song && d.key === this.song.key) this.sendFile(c, this.song.key, d.missing); break;
-      case 'prog': if (p) { p.pct = d.pct; this.pushRoster(true); } break;
-      case 'have': if (p && this.song && d.key === this.song.key) { p.have = true; p.pct = 100; this.pushRoster(); } break;
-      case 'ready': if (p) { p.ready = !!d.on; this.pushRoster(); } break;
-      case 'chat': if (p) this.chat(p.name, d.text); break;
-      case 'st': if (p) { this.gotLive(id, d); this.broadcast({...d, t:'live', id}, id); } break;
-      case 'res': if (p) { p.state = 'done'; this.gotResult(id, d.res); this.broadcast({t:'res', id, res:d.res}, id); this.pushRoster(); } break;
+      case 'hello': if (L.c) this.onHello(L.c, d); break;   // came back on the same relay connection
+      case 'bye': this.removePlayer(id, '{name} left.'); break;
+      case 'ping': L.send({t:'pong', a:d.a, h:nowE()}); break;
+      case 'myping': p.ping = d.ms; this.pushRoster(true); break;
+      case 'need': if (this.song && d.key === this.song.key) this.sendFile(id, this.song.key, d.missing); break;
+      case 'prog': p.pct = d.pct; this.pushRoster(true); break;
+      case 'have': if (this.song && d.key === this.song.key) { p.have = true; p.pct = 100; this.pushRoster(); } break;
+      case 'ready': p.ready = !!d.on; this.pushRoster(); break;
+      case 'chat': this.chat(p.name, d.text); break;
+      case 'st': this.gotLive(id, d); this.broadcast({...d, t:'live', id}, id); break;
+      case 'js': this.gotJs(id, d.js); this.broadcast({t:'ljs', id, js:d.js}, id, true); break;
+      case 'res':
+        if (this.results.has(id)) break;
+        p.state = 'done'; this.gotResult(id, d.res); this.broadcast({t:'res', id, res:d.res}, id, true); this.pushRoster(); break;
     }
   },
   pushRoster(soft) {
     // soft: progress / ping updates, at most a few a second
-    if (soft) { if (this.rosterT) return; this.rosterT = setTimeout(() => { this.rosterT = null; this.pushRoster(); }, 300); return; }
-    this.broadcast({t:'roster', players:this.players, phase:this.phase});
-    this.renderLobby();
+    if (soft) { if (this.rosterT) return; this.rosterT = setTimeout(() => { this.rosterT = null; this.pushRoster(); }, 400); return; }
+    this.sendRoster();
+    this.renderLobby(); this.renderResults();
   },
+  sendRoster() { if (this.host) this.broadcast({t:'roster', players:this.players.map(({lostAt, ...p}) => p), phase:this.phase}); },
   chat(name, text) {
     text = String(text || '').slice(0, 140).trim(); if (!text) return;
-    this.broadcast({t:'chat', name, text}); this.addChat(name, text);
+    this.broadcast({t:'chat', name, text}, null, true); this.addChat(name, text);
   },
-  sys(text) { if (this.host) this.broadcast({t:'chat', text}); this.addChat(null, text); },
+  sys(text) { if (this.host) this.broadcast({t:'chat', text}, null, true); this.addChat(null, text); },
   // the song and chart from the host's menu, sent whenever the host changes either
   menuChanged(now) {
     if (!this.host || !this.code || this.phase === 'match') return;
     clearTimeout(this.menuT);
-    this.menuT = setTimeout(() => this.pushSong(), now ? 0 : 200);
+    this.menuT = setTimeout(() => this.pushSong(), now ? 0 : 300);
   },
   pushSong() {
     if (!tr.buf || tr.loading) { this.song = null; this.renderLobby(); return; }
     const notes = buildChart();
     const key = tr.random ? 'r' + tr.seed : `${tr.name}|${tr.file ? tr.file.size : 0}|${tr.buf.length}`;
     const song = {key, name:tr.name, kind:tr.random ? 'random' : 'file', seed:tr.seed, size:tr.file ? tr.file.size : 0, dur:tr.buf.duration,
-      bpm:tr.bpm, first:tr.first, beats:tr.beats, src:A$.src, diff:A$.diff, hq:!!(tr.drums && tr.drums.hq), stars:chartStats(notes).stars,
+      bpm:tr.bpm, first:tr.first, beats:tr.beats.map(b => +b.toFixed(4)), src:A$.src, diff:A$.diff, hq:!!(tr.drums && tr.drums.hq), stars:chartStats(notes).stars,
       chart:notes.map(n => n.len ? [+n.t.toFixed(4), n.lane, +n.len.toFixed(3)] : [+n.t.toFixed(4), n.lane])};
     if (!notes.length) { this.song = null; this.renderLobby(); return; }
+    // nothing changed (the menu redraws for all sorts of reasons): don't send it again
+    if (this.song && JSON.stringify(this.song) === JSON.stringify(song)) return;
     const sameAudio = this.song && this.song.key === key;
     this.song = song; this.haveKey = key; this.hostedSong = true;
     for (const p of this.players) if (!p.host) { if (!sameAudio) { p.have = false; p.pct = 0; } p.ready = false; }
-    this.broadcast({t:'song', song});
+    this.broadcast({t:'song', song}, null, true);
     this.pushRoster();
   },
-  // only: just these chunks again (some went missing on the relay)
-  async sendFile(c, key, only) {
+  // only: just these pieces again (some went missing, or the connection dropped mid-way)
+  async sendFile(id, key, only) {
     if (!tr.file) return;
-    const buf = await tr.file.arrayBuffer(), CH = c.relayed ? 96000 : 16000, n = Math.ceil(buf.byteLength / CH), limit = c.relayed ? 6e5 : 2e6;
+    const L = this.links.get(id); if (!L) return;
+    const job = {}; L.fileJob = job;   // a newer request replaces this one
+    const buf = await tr.file.arrayBuffer(), CH = L.relayed ? 96000 : 16000, n = Math.ceil(buf.byteLength / CH), limit = L.relayed ? 6e5 : 2e6;
     for (const i of only || Array.from({length:n}, (_, i) => i)) {
-      if (!c.open || !this.song || this.song.key !== key) return;
+      if (L.fileJob !== job || !L.up || !this.song || this.song.key !== key) return;   // they'll ask for what's missing when they're back
       // don't pile megabytes into the connection: wait while it's still sending
-      while (c.open && ((c.dataChannel && c.dataChannel.bufferedAmount) || 0) + (c.bufferSize || 0) * CH > limit) await sleep(15);
-      c.send({t:'chunk', key, i, n, d:buf.slice(i * CH, (i + 1) * CH)});
+      const c = L.c;
+      while (L.up && ((c.dataChannel && c.dataChannel.bufferedAmount) || 0) + (c.bufferSize || 0) * CH > limit) await sleep(15);
+      L.send({t:'chunk', key, i, n, d:buf.slice(i * CH, (i + 1) * CH)});
     }
   },
   canStart() {
     if (!this.song) return 'Pick a song first.';
-    const waiting = this.players.filter(p => !p.host && (!p.have || !p.ready));
+    const others = this.players.filter(p => !p.host);
+    const lost = others.filter(p => p.net === 'lost');
+    if (lost.length) return `Waiting for ${lost.map(p => p.name).join(', ')} to reconnect…`;
+    const waiting = others.filter(p => !p.have || !p.ready);
     if (waiting.some(p => !p.have)) return `Sending the song to ${waiting.filter(p => !p.have).map(p => p.name).join(', ')}…`;
     if (waiting.length) return `Waiting for ${waiting.map(p => p.name).join(', ')} to be ready.`;
     return '';
@@ -237,47 +387,62 @@ const MP = {
   // rematch: straight back in with the same song, no need to ready up again
   startMatch(rematch) {
     if (!this.host || this.phase === 'match') return;
-    const why = this.canStart(); if (why && !(rematch && !why.startsWith('Sending') && this.song)) return;
-    const p = 60 / this.song.bpm, at = nowE() + Math.max(3000, 4 * p * 1000 + 1500);
-    this.phase = 'match';
+    const why = this.canStart(); if (why && !(rematch && why.startsWith('Waiting for') && !why.endsWith('reconnect…') && this.song)) return;
+    // a longer lead-in when someone is on a slow connection, so the start reaches everyone in time
+    const slow = [...this.links.values()].some(L => L.relayed) || this.players.some(p => p.ping > 300);
+    const p = 60 / this.song.bpm, at = nowE() + Math.max(slow ? 4500 : 3000, 4 * p * 1000 + (slow ? 2500 : 1500));
+    this.phase = 'match'; this.matchAt = at;
     for (const pl of this.players) Object.assign(pl, {inMatch:true, state:'playing', ready:false});
-    this.broadcast({t:'start', at, key:this.song.key});
+    this.broadcast({t:'start', at, key:this.song.key}, null, true);
     this.pushRoster();
     this.begin(at);
   },
 
   // ---------- the guest's side ----------
-  fromHost(d, code) {
+  fromHost(d) {
     switch (d.t) {
       case 'nope': this.msg(d.why); this.leave(true); break;
       case 'closed': this.hostGone(); break;
-      case 'welcome': this.code = code; this.phase = d.phase; this.showLobby(); grant('mpJoin'); break;
+      case 'welcome':
+        if (this.welcomed === this.link.c) break;   // an answer to a repeated hello
+        this.welcomed = this.link.c; clearInterval(this.helloT);
+        if (d.fresh) this.link.reset();   // the host is counting from the start again; so do we
+        this.backOnline();
+        if (!this.code) { this.code = this.joinCode; this.phase = d.phase; this.showLobby(); grant('mpJoin'); }
+        break;
       case 'kicked': this.leave(true); this.open(); this.msg('The host removed you from the lobby.'); break;
       case 'pong': {
         const t = nowE(), rtt = t - d.a;
         if (rtt < this.bestRtt * 1.3) { this.offset = d.h - (d.a + rtt / 2); this.bestRtt = Math.min(this.bestRtt, rtt); }
         this.ping = Math.round(rtt);
-        if (this.conn) this.conn.send({t:'myping', ms:this.ping});
+        this.link.send({t:'myping', ms:this.ping});
         break;
       }
       case 'roster': this.players = d.players; this.phase = d.phase; this.renderLobby(); this.renderResults(); break;
       case 'chat': this.addChat(d.name, d.text); break;
       case 'song': this.gotSong(d.song); break;
       case 'chunk': this.gotChunk(d); break;
-      case 'start': if (this.song && d.key === this.song.key && this.haveKey === d.key) this.begin(d.at - this.offset); break;
+      case 'start': this.gotStart(d); break;
       case 'live': this.gotLive(d.id, d); break;
+      case 'ljs': this.gotJs(d.id, d.js); break;
       case 'res': this.gotResult(d.id, d.res); break;
     }
   },
+  gotStart(d) {
+    if (this.inGame || d.at === this.startedAt) return;   // already playing, or this start was already used
+    if (!this.song || d.key !== this.song.key || this.haveKey !== d.key) { this.pendingStart = d; return; }   // as soon as the song is ready
+    this.pendingStart = null; this.startedAt = d.at;
+    this.begin(d.at - this.offset);
+  },
   syncClock() {
     // a burst of pings to line up the clocks (the quickest round trip gives the best estimate), then one every few seconds
-    for (let i = 0; i < 6; i++) setTimeout(() => this.conn && this.conn.open && this.conn.send({t:'ping', a:nowE()}), i * 150);
+    for (let i = 0; i < 8; i++) setTimeout(() => this.link && this.link.send({t:'ping', a:nowE()}), i * 200);
     clearInterval(this.pingT);
-    this.pingT = setInterval(() => { if (this.conn && this.conn.open && !this.inGame) this.conn.send({t:'ping', a:nowE()}); }, 3000);
+    this.pingT = setInterval(() => { if (this.link) this.link.send({t:'ping', a:nowE()}); }, this.inGame ? 5000 : 2500);
   },
   async gotSong(song) {
     this.song = song; this.renderLobby();
-    if (this.haveKey === song.key) { this.conn.send({t:'have', key:song.key}); return; }
+    if (this.haveKey === song.key) { this.link.sendR({t:'have', key:song.key}); this.songReady(); return; }
     this.haveKey = null; this.incoming = null;
     try {
       if (song.kind === 'random') {
@@ -289,24 +454,35 @@ const MP = {
         // the last song you were sent is kept, so a rematch (or rejoining) doesn't download it again
         const kept = await idb.get('mpSong').catch(() => null);
         if (kept && kept.key === song.key) await this.useSongFile(kept.blob, song);
-        else { this.lobbyMsg('Downloading the song…'); this.incoming = {key:song.key, parts:[], got:0, n:0, lastPct:-1}; this.conn.send({t:'need', key:song.key}); return; }
+        else {
+          this.lobbyMsg('Downloading the song…');
+          this.incoming = {key:song.key, parts:[], got:0, n:0, lastPct:-1};
+          this.link.sendR({t:'need', key:song.key});
+          this.askMissingLater(this.incoming);
+          return;
+        }
       }
       this.haveSong(song);
     } catch (e) { console.error(e); this.lobbyMsg("Couldn't open the host's song in this browser."); }
   },
+  // pieces that went missing (or a download cut short by a dropout) get asked for again once the flow stops
+  askMissingLater(inc) { clearTimeout(inc.stallT); inc.stallT = setTimeout(() => this.askMissing(inc), 2000); },
+  askMissing(inc) {
+    if (this.incoming !== inc) return;
+    if (!this.link.up) return this.askMissingLater(inc);
+    if (!inc.n) { this.link.sendR({t:'need', key:inc.key}); return this.askMissingLater(inc); }
+    const missing = []; for (let i = 0; i < inc.n && missing.length < 400; i++) if (!inc.parts[i]) missing.push(i);
+    if (missing.length) this.link.sendR({t:'need', key:inc.key, missing});
+    this.askMissingLater(inc);
+  },
   async gotChunk(d) {
     const inc = this.incoming; if (!inc || inc.key !== d.key) return;
     if (!inc.parts[d.i]) { inc.parts[d.i] = d.d; inc.got++; inc.n = d.n; }
-    // anything lost on the way gets asked for again once the flow stops
-    clearTimeout(inc.stallT);
-    inc.stallT = setTimeout(() => {
-      if (this.incoming !== inc) return;
-      const missing = []; for (let i = 0; i < inc.n && missing.length < 300; i++) if (!inc.parts[i]) missing.push(i);
-      if (missing.length) this.conn.send({t:'need', key:inc.key, missing});
-    }, 3000);
+    this.askMissingLater(inc);
     const pct = Math.floor(inc.got / d.n * 100);
-    if (pct !== inc.lastPct && (pct % 5 === 0 || pct === 99)) { inc.lastPct = pct; this.conn.send({t:'prog', pct}); this.lobbyMsg(`Downloading the song… ${pct}%`); }
+    if (pct !== inc.lastPct && (pct % 5 === 0 || pct === 99)) { inc.lastPct = pct; this.link.send({t:'prog', pct}); this.lobbyMsg(`Downloading the song… ${pct}%`); }
     if (inc.got < d.n) return;
+    clearTimeout(inc.stallT);
     this.incoming = null;
     const blob = new Blob(inc.parts, {type:'audio/mpeg'}), song = this.song;
     try {
@@ -326,43 +502,67 @@ const MP = {
     // the host's beat grid and timing, whatever this computer worked out for the song
     Object.assign(tr, {name:song.name, bpm:song.bpm, first:song.first, beats:song.beats});
     this.haveKey = song.key;
-    this.conn.send({t:'have', key:song.key});
+    this.link.sendR({t:'have', key:song.key});
     this.lobbyMsg(''); this.renderLobby();
+    this.songReady();
   },
+  songReady() { if (this.pendingStart) this.gotStart(this.pendingStart); },
 
   // ---------- a match ----------
   begin(at) {
     const s = this.song;
     if (!this.prevSel) this.prevSel = {src:A$.src, diff:A$.diff};
     A$.src = s.src; A$.diff = s.diff;   // so your results, leaderboard and achievements count the right chart
-    this.live = new Map(); this.results = new Map(); this.myRes = null;
+    this.live = new Map(); this.results = new Map(); this.myRes = null; this.counted = false;
     for (const p of this.players) if (p.state !== 'left') p.inMatch = true;
     for (const p of this.players) if (p.id !== this.me) this.live.set(p.id, {s:0, c:0, mc:0, a:100, hp:50, d:0, p:0, js:new Map(), flash:[]});
-    this.inGame = true; this.phase = 'match';
+    this.inGame = true; this.phase = 'match'; this.jsBuf = []; this.ticks = 0;
     $('#mpQuit').hidden = true;
     play(0, null, {chart:s.chart.map(([t, lane, len]) => len ? {t, lane, len} : {t, lane}), at});
     clearInterval(this.liveT);
-    this.liveT = setInterval(() => this.tickLive(), 100);
+    // slower live updates when anyone is on a slow route: less to send, same game
+    const slow = this.host ? [...this.links.values()].some(L => L.relayed) : this.link && (this.link.relayed || this.ping > 250);
+    this.liveT = setInterval(() => this.tickLive(), slow ? 250 : 120);
+    this.syncClock();
   },
   tickLive() {
     if (!this.inGame || state !== 'play' || !G) return;
     const d = {t:'st', s:G.score, c:G.combo, mc:G.maxCombo, a:G.judged ? +(G.accSum / G.judged * 100).toFixed(2) : 100, hp:Math.round(G.health),
-      d:G.down.reduce((m, on, i) => m | (on ? 1 << i : 0), 0), p:+(songNow() / tr.buf.duration).toFixed(3), js:G.jlog.splice(0)};
-    if (this.host) this.broadcast({...d, t:'live', id:this.me}); else if (this.conn && this.conn.open) this.conn.send(d);
+      d:G.down.reduce((m, on, i) => m | (on ? 1 << i : 0), 0), p:+(songNow() / tr.buf.duration).toFixed(3)};
+    // hits go reliably, in batches, so the others' view of your notes is right even after a dropout
+    this.jsBuf.push(...G.jlog.splice(0));
+    const flushJs = this.jsBuf.length && ++this.ticks % 3 === 0;
+    if (this.host) {
+      this.broadcast({...d, t:'live', id:this.me});
+      if (flushJs) this.broadcast({t:'ljs', id:this.me, js:this.jsBuf.splice(0)}, null, true);
+    } else if (this.link) {
+      this.link.send(d);
+      if (flushJs) this.link.sendR({t:'js', js:this.jsBuf.splice(0)});
+    }
   },
   gotLive(id, d) {
     const L = this.live.get(id); if (!L) return;
     Object.assign(L, {s:d.s, c:d.c, mc:d.mc, a:d.a, hp:d.hp, d:d.d, p:d.p});
-    for (const [nid, j] of d.js || []) { L.js.set(nid, j); const n = chart[nid]; if (n) L.flash.push({lane:n.lane, j, t:performance.now()}); }
     if (state === 'results') this.renderResults();
+  },
+  gotJs(id, js) {
+    const L = this.live.get(id); if (!L) return;
+    const now = performance.now();
+    for (const [nid, j] of js || []) { L.js.set(nid, j); const n = chart[nid]; if (n && L.flash.length < 12) L.flash.push({lane:n.lane, j, t:now}); }
   },
   // your song is over: share your results and wait for everyone else's
   finished(res) {
     this.inGame = false; clearInterval(this.liveT);
     res.name = myName();
     this.myRes = res; this.results.set(this.me, res);
-    if (this.host) { const p = this.players.find(x => x.id === this.me); if (p) p.state = 'done'; this.broadcast({t:'res', id:this.me, res}); this.pushRoster(); }
-    else if (this.conn && this.conn.open) this.conn.send({t:'res', res});
+    if (this.host) {
+      if (this.jsBuf && this.jsBuf.length) this.broadcast({t:'ljs', id:this.me, js:this.jsBuf.splice(0)}, null, true);
+      const p = this.players.find(x => x.id === this.me); if (p) p.state = 'done';
+      this.broadcast({t:'res', id:this.me, res}, null, true); this.pushRoster();
+    } else if (this.link) {
+      if (this.jsBuf && this.jsBuf.length) this.link.sendR({t:'js', js:this.jsBuf.splice(0)});
+      this.link.sendR({t:'res', res});   // arrives even if the connection is down right now
+    }
     $('#mpQuit').hidden = true;
     show('mpRes'); this.renderResults(); this.checkAllDone();
   },
@@ -383,7 +583,7 @@ const MP = {
       const r = this.results.get(p.id), mine = p.id === this.me;
       const L = this.live.get(p.id);
       const score = r ? r.score : mine && G ? G.score : L ? L.s : 0, acc = r ? r.acc : mine && G && G.judged ? G.accSum / G.judged * 100 : L ? L.a : 100;
-      rows.push({id:p.id, name:p.name, score, acc, done:!!r, left:p.state === 'left', res:r, prog:mine && G && state === 'play' ? songNow() / tr.buf.duration : L ? L.p : 1, mine});
+      rows.push({id:p.id, name:p.name, score, acc, done:!!r, left:p.state === 'left', lost:p.net === 'lost', res:r, prog:mine && G && state === 'play' ? songNow() / tr.buf.duration : L ? L.p : 1, mine});
     }
     return rows.sort((a, b) => b.score - a.score || b.acc - a.acc);
   },
@@ -399,6 +599,13 @@ const MP = {
     return (W - fw) / 2 - x0;
   },
   draw(g, v) {
+    // your own connection dropped: say so, quietly (the game carries on regardless)
+    if (!this.host && this.lostAt) {
+      const txt = 'Connection lost · reconnecting… your game keeps going', y = v.dir < 0 ? 56 : v.H - 50;
+      g.font = '600 13px "Figtree", system-ui, sans-serif'; const w = g.measureText(txt).width + 28;
+      g.fillStyle = '#2a1d18ee'; g.beginPath(); g.roundRect(v.x0 + v.fw / 2 - w / 2, y - 17, w, 26, 13); g.fill();
+      g.fillStyle = '#ffb199'; g.textAlign = 'center'; g.fillText(txt, v.x0 + v.fw / 2, y);
+    }
     if (!this.lay.on) return;
     const {mw} = this.lay, others = this.others(), lw = mw / 4, size = lw * 0.36, tt = v.t - 0.15;   // a little behind, so their hits arrive before their notes reach the line
     // a shrunken copy of a field: the scroll shrinks with the arrows, so notes keep their spacing instead of stretching out
@@ -444,10 +651,10 @@ const MP = {
       g.fillText(`${(r ? r.acc : L.a).toFixed(1)}% · ${L.c}×`, mx + 4, hy + 57);
       g.fillStyle = '#2a2521'; g.fillRect(mx + 4, hy + 64, mw - 8, 4);
       g.fillStyle = L.hp < 25 ? '#ff7a6b' : '#ef5b3a'; g.fillRect(mx + 4, hy + 64, Math.max(2, (mw - 8) * L.hp / 100), 4);
-      if (p.state === 'left' || r) {
-        g.fillStyle = BG + 'b3'; g.fillRect(mx, 0, mw, v.H);
+      if (p.state === 'left' || r || p.net === 'lost') {
+        g.fillStyle = BG + (r || p.state === 'left' ? 'b3' : '80'); g.fillRect(mx, 0, mw, v.H);
         g.fillStyle = r ? INK : MUTED; g.textAlign = 'center'; g.font = 'italic 700 18px "Fraunces", Georgia, serif';
-        g.fillText(p.state === 'left' && !r ? 'Left' : 'Finished', mx + mw / 2, v.H / 2);
+        g.fillText(r ? 'Finished' : p.state === 'left' ? 'Left' : 'Reconnecting…', mx + mw / 2, v.H / 2);
       }
       g.textAlign = 'center';
     });
@@ -460,7 +667,7 @@ const MP = {
       const yy = y + 24 + i * 22;
       g.fillStyle = r.mine ? '#ef5b3a' : r.left ? '#6b635a' : INK; g.font = `${r.mine ? 700 : 600} 14px "Figtree", system-ui, sans-serif`;
       g.fillText(`${i + 1}`, px, yy); g.fillText(clip(g, r.name, 100), px + 18, yy);
-      g.textAlign = 'right'; g.fillText(r.left ? 'left' : r.score.toLocaleString(), px + 200, yy); g.textAlign = 'left';
+      g.textAlign = 'right'; g.fillText(r.left ? 'left' : (r.lost ? '⚠ ' : '') + r.score.toLocaleString(), px + 200, yy); g.textAlign = 'left';
     });
     g.textAlign = 'center';
   },
@@ -490,11 +697,11 @@ const MP = {
     }
     const me = this.players.find(p => p.id === this.me);
     $('#mpPlayers').innerHTML = this.players.map(p => {
-      const st = p.state === 'playing' ? 'playing' : p.host ? 'host' : !p.have ? (p.pct ? `downloading ${p.pct}%` : this.song ? 'getting the song…' : 'here') : p.ready ? 'ready' : 'not ready';
-      const cls = p.host || p.ready ? 'ok' : '';
+      const st = p.net === 'lost' ? 'reconnecting…' : p.state === 'playing' ? 'playing' : p.host ? 'host' : !p.have ? (p.pct ? `downloading ${p.pct}%` : this.song ? 'getting the song…' : 'here') : p.ready ? 'ready' : 'not ready';
+      const cls = p.net === 'lost' ? 'bad' : p.host || p.ready ? 'ok' : '';
       return `<li class="${p.id === this.me ? 'me' : ''}"><span class="mpav" style="background:${avatarCol(p.name)}">${esc(p.name[0] || '?').toUpperCase()}</span>` +
         `<b>${esc(p.name)}${p.host ? ' <i title="Host">👑</i>' : ''}${p.id === this.me ? ' <small>(you)</small>' : ''}</b>` +
-        `<span class="mpst ${cls}">${st}</span>${p.relay ? '<small class="mpping" title="Connected through the backup relay: the direct connection was blocked">relay</small>' : ''}${!p.host && p.ping ? `<small class="mpping">${p.ping} ms</small>` : ''}` +
+        `<span class="mpst ${cls}">${st}</span>${p.relay ? '<small class="mpping" title="Connected through the backup relay: the direct connection was blocked">relay</small>' : ''}${!p.host && p.ping && p.net !== 'lost' ? `<small class="mpping ${p.ping > 400 ? 'slow' : ''}">${p.ping} ms</small>` : ''}` +
         (this.host && !p.host ? `<button class="ghost mpkick" data-kick="${esc(p.id)}" title="Remove from the lobby">✕</button>` : '') + `</li>`;
     }).join('') + (this.players.length < MP_MAX ? `<li class="mpempty">${MP_MAX - this.players.length} more can join</li>` : '');
     const ready = $('#mpReady'), start = $('#mpStartBtn');
@@ -504,7 +711,8 @@ const MP = {
       ready.disabled = !has || this.phase === 'match';
       ready.textContent = me && me.ready ? 'Not ready' : 'Ready';
       ready.classList.toggle('primary', !(me && me.ready));
-      const why = this.phase === 'match' && me && !me.inMatch ? "A match is on. You'll be in the next one." : this.lobbyNote || (has ? (me && me.ready ? 'Waiting for the host to start.' : '') : '');
+      const why = this.lostAt ? `Connection lost. Reconnecting… (${Math.round((Date.now() - this.lostAt) / 1000)} s)` :
+        this.phase === 'match' && me && !me.inMatch ? "A match is on. You'll be in the next one." : this.lobbyNote || (has ? (me && me.ready ? 'Waiting for the host to start.' : '') : '');
       $('#mpLobbyMsg').textContent = why;
     } else {
       const why = this.players.length < 2 ? 'Waiting for someone to join. You can also start on your own.' : this.canStart();
@@ -531,7 +739,8 @@ const MP = {
       h += `<div class="mpwin"><div class="mpcrown">👑</div><h2 class="atitle">${winner.mine ? 'You win!' : esc(winner.name) + ' wins!'}</h2>` +
         `<p class="muted">${esc(s.name)} · ${srcName(s.src)} · ${ADIFF[s.diff].name}</p></div>`;
     } else {
-      h += `<div class="mpwin"><h2 class="atitle">Waiting for the others…</h2><p class="muted">${pending.map(r => `${esc(r.name)} is ${Math.round(Math.min(1, r.prog || 0) * 100)}% through`).join(' · ')}</p></div>`;
+      h += `<div class="mpwin"><h2 class="atitle">Waiting for the others…</h2><p class="muted">${pending.map(r => r.lost ? `${esc(r.name)} is reconnecting` : `${esc(r.name)} is ${Math.round(Math.min(1, r.prog || 0) * 100)}% through`).join(' · ')}</p>` +
+        (!this.host && this.lostAt ? `<p class="mpwarn">Your connection dropped. Your results will be sent as soon as it's back.</p>` : '') + `</div>`;
     }
     // podium
     h += `<ol class="mppod">${rows.map((r, i) => `<li class="${r.mine ? 'me' : ''} ${winner && r === winner ? 'won' : ''}"><span class="mpplace">${r.left && !r.done ? '–' : i + 1}</span>` +
@@ -599,8 +808,8 @@ $('#mpCopyCode').addEventListener('click', e => copy(MP.code, e.currentTarget, '
 $('#mpCopyLink').addEventListener('click', e => copy(inviteLink(), e.currentTarget, 'Copy invite link'));
 $('#mpReady').addEventListener('click', () => {
   ensureAudio(); if (ctx.state !== 'running') ctx.resume().catch(() => {});
-  const me = MP.players.find(p => p.id === MP.me); if (!me || !MP.conn) return;
-  me.ready = !me.ready; MP.conn.send({t:'ready', on:me.ready}); MP.renderLobby();
+  const me = MP.players.find(p => p.id === MP.me); if (!me || !MP.link) return;
+  me.ready = !me.ready; MP.link.sendR({t:'ready', on:me.ready}); MP.renderLobby();
 });
 $('#mpStartBtn').addEventListener('click', () => { ensureAudio(); MP.startMatch(); });
 $('#mpSrc').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setA('src', togglePart(A$.src, b.dataset.v)); });
@@ -609,13 +818,13 @@ $('#mpSongPick').addEventListener('click', () => $('#aFile').click());
 $('#mpRandom').addEventListener('click', () => { A$.random = true; save(); tr.fresh = false; tr.random = true; MP.song = null; MP.renderLobby(); loadRandom(); });
 $('#mpPlayers').addEventListener('click', e => {
   const b = e.target.closest('[data-kick]'); if (!b || !MP.host) return;
-  const id = b.dataset.kick; MP.send(id, {t:'kicked'}); setTimeout(() => { const c = MP.conns.get(id); if (c) c.close(); MP.guestGone(id); }, 300);
+  const id = b.dataset.kick; MP.send(id, {t:'kicked'}, true); setTimeout(() => MP.removePlayer(id, '{name} was removed.'), 800);
 });
 $('#mpChatIn').addEventListener('keydown', e => {
   e.stopPropagation();
   if (e.key !== 'Enter' || !e.target.value.trim()) return;
   const text = e.target.value.trim().slice(0, 140); e.target.value = '';
-  if (MP.host) MP.chat(myName(), text); else if (MP.conn) { MP.conn.send({t:'chat', text}); }
+  if (MP.host) MP.chat(myName(), text); else if (MP.link) MP.link.sendR({t:'chat', text});
 });
 $('#mpSpeed').addEventListener('input', e => { A$.speed = +e.target.value; save(); $('#mpSpeedRead').textContent = A$.speed.toFixed(1); });
 $('#mpScroll').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { A$.down = b.dataset.v === 'down'; save(); MP.renderLobby(); } });
@@ -624,12 +833,10 @@ $('#mpQuitYes').addEventListener('click', () => MP.leave());
 $('#mpResLobby').addEventListener('click', () => { state = 'menu'; G = null; MP.counted = false; MP.open(); draw(); });
 $('#mpRematch').addEventListener('click', () => { state = 'menu'; G = null; MP.counted = false; MP.startMatch(true); });
 $('#mpResLeave').addEventListener('click', () => MP.leave());
-// guests who are sitting on the results screen get pulled into the next match
-const _begin = MP.begin.bind(MP);
-MP.begin = at => { MP.counted = false; _begin(at); };
 // an invite link (?join=CODE) opens straight onto the join box
 {
   const code = new URLSearchParams(location.search).get('join');
   if (code) { MP.open(); $('#mpCodeIn').value = code.toUpperCase(); setTimeout(() => $(S.playerName ? '#mpJoin' : '#mpName').focus(), 50); }
 }
 addEventListener('beforeunload', () => { if (MP.code) MP.leave(true); });
+setInterval(() => { if (MP.lostAt && $('#mp').classList.contains('show')) MP.renderLobby(); }, 1000);

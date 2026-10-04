@@ -166,3 +166,6 @@ body.playing .homebtn:hover{opacity:1}
 .mptable td,.mptable th{padding:5px 8px}
 .mptable{font-size:13.5px}
 .mpres .mppod li{padding:7px 14px}
+.mpst.bad{color:#ffb199}
+.mpping.slow{color:#ffb199}
+.mpwarn{color:#ffb199;font-size:13.5px;margin:6px 0 0}
