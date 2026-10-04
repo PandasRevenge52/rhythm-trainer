@@ -4,8 +4,11 @@
 // renders it to audio, and hands back the same analysis a real song gets: kick / snare / tom / hat
 // hits and vocal / guitar notes with a strength each. The Arcade builds its charts from that exactly
 // as it does for your music, so every difficulty follows the same rules, but no two songs are alike.
-async function randomSong() {
-  const R = Math.random, pick = a => a[Math.floor(R() * a.length)], chance = x => R() < x, between = (a, b) => a + R() * (b - a);
+// seed: the same seed always writes the same song (multiplayer lobbies use it so everyone gets the
+// host's random song without sending the audio)
+const seededRandom = seed => () => { seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+async function randomSong(seed = (Math.random() * 2 ** 31) | 0) {
+  const R = seededRandom(seed), pick = a => a[Math.floor(R() * a.length)], chance = x => R() < x, between = (a, b) => a + R() * (b - a);
   const shuffle = a => a.map(x => [R(), x]).sort((x, y) => x[0] - y[0]).map(x => x[1]);
 
   // The style sets the beat the whole song is built on, so songs differ in feel, not just in
@@ -278,6 +281,6 @@ async function randomSong() {
 
   const byTime = a => a.sort((x, y) => x[0] - y[0]);
   const beats = []; for (let i = 0; first + i * p <= dur + p; i++) beats.push(first + i * p);
-  return {buf, name:'Random song', style:style.name, bpm, first, beats,
+  return {seed, buf, name:'Random song', style:style.name, bpm, first, beats,
     drums:{kick:byTime(kicks), snare:byTime(snares), tom:byTime(toms.map(([t, v]) => [t, v])), hat:byTime(hats), vocal:byTime(vocal), inst:byTime(inst), curve:null, hq:false}};
 }

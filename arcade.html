@@ -56,6 +56,7 @@
 
     <p class="abest"><span id="aBest"></span> <button id="aBoard" class="linkish">Leaderboard</button></p>
     <button id="aPlay" class="primary big" disabled>Play</button>
+    <button id="aMulti" class="big mpbtn"><span aria-hidden="true">👥</span> Play with friends</button>
     <p class="keys"><span id="aKeysMenu"></span> or arrows · <kbd>Esc</kbd> pause · <kbd>Space</kbd> skip intro</p>
   </div>
 </div>
@@ -97,6 +98,54 @@
   </div>
 </div>
 
+<!-- multiplayer: start, lobby -->
+<div class="aov" id="mp">
+  <div class="apanel mppanel">
+    <div id="mpStart">
+      <h2 class="atitle">Play with friends</h2>
+      <p class="asub">Same song, same notes, everyone's arrows on everyone's screen. Up to 4 players.</p>
+      <label class="mpname"><span class="lbl">Your name</span><input id="mpName" maxlength="16" placeholder="Player" autocomplete="nickname"></label>
+      <div class="mpchoice">
+        <div class="mpbox"><h3>Host</h3><p class="muted">You pick the song. It's sent to everyone, notes and all.</p><button id="mpCreate" class="primary">Make a lobby</button></div>
+        <div class="mpbox"><h3>Join</h3><p class="muted">Got a code from a friend?</p><div class="mpjoin"><input id="mpCodeIn" maxlength="5" placeholder="CODE" autocomplete="off" spellcheck="false" aria-label="Lobby code"><button id="mpJoin">Join</button></div></div>
+      </div>
+      <p class="mpmsg" id="mpMsg" role="status"></p>
+      <div class="actions"><button class="ghost" id="mpBack">Back</button></div>
+    </div>
+    <div id="mpLobby" hidden>
+      <div class="mphead">
+        <div><span class="lbl">Lobby code</span><b id="mpCode" class="mpcode"></b></div>
+        <div class="mpshare"><button id="mpCopyCode">Copy code</button><button id="mpCopyLink">Copy invite link</button></div>
+      </div>
+      <div class="asong mpsong" id="mpSong"></div>
+      <div id="mpHostCtl">
+        <div class="aset"><span class="lbl">Song</span><span class="mpsongbtns"><button id="mpSongPick">Load a song</button><button id="mpRandom">Random song</button></span></div>
+        <div class="aset"><span class="lbl">Play along to</span><div class="seg multi" id="mpSrc"><button data-v="drums">Drums</button><button data-v="vocals">Vocals</button><button data-v="guitar">Guitar</button></div></div>
+        <div class="aset"><span class="lbl">Difficulty</span><div class="seg" id="mpDiff"><button data-v="easy">Easy</button><button data-v="normal">Normal</button><button data-v="hard">Hard</button><button data-v="expert">Expert</button><button data-v="insane">Insane</button></div></div>
+      </div>
+      <ul class="mpplayers" id="mpPlayers"></ul>
+      <div class="mpchat"><div id="mpChatLog" aria-live="polite"></div><input id="mpChatIn" placeholder="Say something… (Enter to send)" maxlength="140" autocomplete="off"></div>
+      <details class="more aopts"><summary><span>Your options</span><span class="val">just for you</span></summary>
+        <div class="arow"><span class="lbl">Scroll</span><div class="seg" id="mpScroll"><button data-v="down">Down</button><button data-v="up">Up</button></div></div>
+        <div class="arow"><span class="lbl">Speed <b id="mpSpeedRead"></b></span><input type="range" id="mpSpeed" min="1" max="4" step="0.1" aria-label="Scroll speed"></div>
+        <p class="muted mpnote">Keys, volume and timing offset come from the Arcade's own options. Matches can't be paused, and nobody fails out: everyone plays to the end.</p>
+      </details>
+      <p class="mpmsg" id="mpLobbyMsg" role="status"></p>
+      <div class="actions"><button class="ghost" id="mpLeave">Leave</button><span class="spacer"></span><button id="mpReady">Ready</button><button class="primary" id="mpStartBtn">Start</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- multiplayer: results -->
+<div class="aov" id="mpRes">
+  <div class="apanel mpres">
+    <div id="mpResBody"></div>
+    <p class="muted mpnote" id="mpResNote"></p>
+    <div class="actions"><button class="ghost" id="mpResLeave">Leave lobby</button><span class="spacer"></span><button id="mpResLobby">Back to lobby</button><button class="primary" id="mpRematch">Rematch</button></div>
+  </div>
+</div>
+<div class="mpquit" id="mpQuit" hidden><b>Leave the match?</b><span class="muted">The song keeps playing for everyone else.</span><div><button id="mpQuitNo">Keep playing</button><button class="primary" id="mpQuitYes">Leave</button></div></div>
+
 <!-- leaderboard -->
 <div class="aov" id="board">
   <div class="apanel">
@@ -115,5 +164,7 @@
 <script src="js/drums.js"></script>
 <script src="js/randomsong.js"></script>
 <script src="js/arcade.js"></script>
+<script src="js/vendor/peerjs.min.js"></script>
+<script src="js/multiplayer.js"></script>
 </body>
 </html>

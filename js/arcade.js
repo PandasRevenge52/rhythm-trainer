@@ -35,12 +35,13 @@ const ADIFF = {
   // Drums feels like Hard on Vocals. peak: the most it allows in any 2 seconds. Higher levels are
   // built from the same strongest notes plus more, so each one is the level below and then some.
   // hatW: how much hi-hats count; voxMin: how convincingly sung a note must be; chords: two-key
-  // chords on strong accents; doubles: chords on the biggest hits (Insane)
+  // chords on strong accents; doubles: chords on the biggest hits (Insane); six: sextuplet spots for fast fills;
+  // npsMulti / peakMulti: lower caps when more than one part is picked
   easy:   {name:'Easy',   grid:2, frac:0.36, nps:1.2, peak:2.5, holdMin:0.5,  hatW:0,   voxMin:0.5,  chords:false, doubles:false},
   normal: {name:'Normal', grid:1, frac:0.52, nps:1.9, peak:3.5, holdMin:0.4,  hatW:0,   voxMin:0.42, chords:false, doubles:false},
   hard:   {name:'Hard',   grid:1, frac:0.67, nps:2.7, peak:5,   holdMin:0.32, hatW:0.6, voxMin:0.38, chords:true,  doubles:false},
-  expert: {name:'Expert', grid:1, frac:0.83, nps:3.6, peak:6.5, holdMin:0.25, hatW:0.9, voxMin:0.33, chords:true,  doubles:false},
-  insane: {name:'Insane', grid:1, frac:1,    nps:4.8, peak:8.5, holdMin:0.2,  hatW:1,   voxMin:0.28, chords:true,  doubles:true},
+  expert: {name:'Expert', grid:1, frac:0.83, nps:3.6, peak:6.5, holdMin:0.25, hatW:0.9, voxMin:0.33, chords:true,  doubles:false, six:true},
+  insane: {name:'Insane', grid:1, frac:1,    nps:6.5, peak:11,  holdMin:0.2,  hatW:1,   voxMin:0.28, chords:true,  doubles:true,  six:true, npsMulti:4.8, peakMulti:8.5},
 };
 if (!ADIFF[A$.diff]) A$.diff = 'normal';
 const PARTS = ['drums', 'vocals', 'guitar'], PART_NAMES = {drums:'Drums', vocals:'Vocals', guitar:'Guitar'};
@@ -55,6 +56,8 @@ const cv = $('#field'), g = cv.getContext('2d');
 // random: a random song (a new one every run); fresh: it hasn't been played yet
 const tr = {buf:null, name:'', bpm:120, first:0, drums:null, loading:false, random:false, fresh:false};
 let chart = [], state = 'menu', G = null;
+// multiplayer (js/multiplayer.js) takes over a few things while a match is on
+const mpOn = () => typeof MP !== 'undefined' && MP.inGame;
 
 // ---------- song loading (shared with the trainer) ----------
 async function loadSong(blob, meta) {
@@ -77,7 +80,7 @@ async function loadSong(blob, meta) {
     }
     // tell the trainer about it too, so both use the same song and grid
     if (!(meta && meta.bpm && meta.name === name)) idb.set('songMeta', {name, bpm, first, startAt:0, detected:bpm}).catch(() => {});
-    Object.assign(tr, {buf, name, bpm, first, drums, beats, random:false});
+    Object.assign(tr, {buf, name, bpm, first, drums, beats, random:false, file:blob, seed:null});
     renderMenu();
   } catch (e) { info("Couldn't read that file. Try an MP3, WAV or OGG"); }
   finally { tr.loading = false; }
@@ -91,7 +94,7 @@ function loadRandom() {
   if (tr.loading) return Promise.resolve(false);
   tr.loading = true; $('#aPlay').disabled = true;
   info('Writing a new song…');
-  return writing = randomSong().then(r => { Object.assign(tr, r, {random:true, fresh:true}); renderMenu(); return true; },
+  return writing = randomSong().then(r => { Object.assign(tr, r, {random:true, fresh:true, file:null}); renderMenu(); return true; },
     e => { console.error(e); info("Couldn't make a random song in this browser."); return false; })
     .finally(() => { tr.loading = false; writing = null; });
 }
@@ -114,16 +117,26 @@ function buildChart(diff = A$.diff, src = A$.src) {
   if (!tr.drums) return [];
   const cfg = ADIFF[diff], p = 60 / tr.bpm;
   // Notes snap to 16ths (8ths on Easy) between the song's tracked beats, which follow the band as
-  // the tempo drifts, instead of a fixed grid that slowly slides off the music.
+  // the tempo drifts, instead of a fixed grid that slowly slides off the music. Expert and Insane
+  // also have sextuplet spots for fast fills, used only when a hit is clearly nearer one of those,
+  // so straight grooves stay straight. Positions count in twelfths of a beat (idx 12 = one beat).
   const B = tr.beats && tr.beats.length > 2 ? tr.beats : null;
+  const STRAIGHT = cfg.grid === 2 ? [0, 6, 12] : [0, 3, 6, 9, 12], SIX = cfg.six ? [2, 4, 8, 10] : [];
+  const nearest = (x, list) => list.reduce((a, b) => Math.abs(b - x) < Math.abs(a - x) ? b : a);
   const snap = t => {
-    if (!B) { const step = p / 4 * cfg.grid, q = Math.round((t - tr.first) / step); return {idx:q * cfg.grid, t:tr.first + q * step, err:Math.abs(t - (tr.first + q * step)), pb:p}; }
-    let lo = 0, hi = B.length - 2;
-    if (t <= B[0]) lo = 0; else if (t >= B[hi]) lo = hi; else while (hi - lo > 1) { const m = (lo + hi) >> 1; if (B[m] <= t) lo = m; else hi = m; }
-    const pb = B[lo + 1] - B[lo]; let q = Math.round((t - B[lo]) / pb * 4 / cfg.grid) * cfg.grid, bi = lo;
-    if (q >= 4 && bi + 1 < B.length - 1) { bi++; q -= 4; }
-    const pb2 = B[bi + 1] - B[bi], ts = B[bi] + q / 4 * pb2;
-    return {idx:bi * 4 + q, t:ts, err:Math.abs(t - ts), pb:pb2};
+    let b0, pb, bi;
+    if (!B) { bi = Math.floor((t - tr.first) / p); b0 = tr.first + bi * p; pb = p; }
+    else {
+      let lo = 0, hi = B.length - 2;
+      if (t <= B[0]) lo = 0; else if (t >= B[hi]) lo = hi; else while (hi - lo > 1) { const m = (lo + hi) >> 1; if (B[m] <= t) lo = m; else hi = m; }
+      bi = lo; b0 = B[lo]; pb = B[lo + 1] - B[lo];
+    }
+    const x = (t - b0) / pb * 12;
+    let q = nearest(x, STRAIGHT), step = 3 * cfg.grid;
+    if (SIX.length) { const q6 = nearest(x, SIX); if (Math.abs(x - q6) * 1.8 < Math.abs(x - q)) { q = q6; step = 2; } }
+    if (q >= 12) { q -= 12; bi++; if (B) { if (bi < B.length - 1) { b0 = B[bi]; pb = B[bi + 1] - B[bi]; } else { bi--; q += 12; } } else b0 += p; }
+    const ts = b0 + q / 12 * pb;
+    return {idx:bi * 12 + q, t:ts, err:Math.abs(t - ts), pb, tol:Math.min(0.05, pb / 12 * step * 0.45)};
   };
   const parts = srcParts(src), soloVox = parts.size === 1 && parts.has('vocals');
   const useDrums = parts.has('drums'), useVox = parts.has('vocals') && tr.drums.vocal, useInst = parts.has('guitar') && tr.drums.inst;
@@ -132,7 +145,7 @@ function buildChart(diff = A$.diff, src = A$.src) {
     const slots = new Map();
     const add = (name, list, w) => { for (const [t, s] of list) {
       const sn = snap(t);
-      if (sn.idx < 0 || sn.err > Math.min(0.05, sn.pb / 4 * cfg.grid * 0.45)) continue;
+      if (sn.idx < 0 || sn.err > sn.tol) continue;
       const o = slots.get(sn.idx) || {k:0, s:0, h:0, t:sn.t};
       o[name] = Math.max(o[name], s * w); slots.set(sn.idx, o);
     } };
@@ -167,7 +180,7 @@ function buildChart(diff = A$.diff, src = A$.src) {
     }
     if (soloVox) for (const [name, list] of [['k', tr.drums.kick], ['s', tr.drums.snare]]) for (const [t, s] of list) {
       if (s < 0.8 || vox.some(([vt, , , vd]) => t > vt - 0.12 && t < vt + Math.max(vd, 0.12) + 0.05)) continue;
-      const sn = snap(t); if (sn.idx < 0 || sn.err > Math.min(0.05, sn.pb / 4 * cfg.grid * 0.45)) continue;
+      const sn = snap(t); if (sn.idx < 0 || sn.err > sn.tol) continue;
       cands.push({t:sn.t, idx:sn.idx, s:s * 0.35, kind:name});
     }
   }
@@ -187,7 +200,9 @@ function buildChart(diff = A$.diff, src = A$.src) {
   const pool = cands.sort((a, b) => b.s - a.s).filter(c => { const key = c.idx + c.kind; if (seen.has(key)) return false; seen.add(key); return true; });
   const activeWins = new Set(pool.map(c => Math.floor(c.t / 2)));
   const active = activeWins.size * 2, poolNps = pool.length / Math.max(1, active);
-  const target = Math.round(Math.min(cfg.nps, cfg.frac * poolNps) * active), perWin = Math.round(cfg.peak * 2), inWin = new Map();
+  // with several parts picked, "everything" would be a wall of notes, so Insane keeps a lower cap there
+  const multi = srcParts(src).size > 1, nps = multi && cfg.npsMulti ? cfg.npsMulti : cfg.nps, peak = multi && cfg.peakMulti ? cfg.peakMulti : cfg.peak;
+  const target = Math.round(Math.min(nps, cfg.frac * poolNps) * active), perWin = Math.round(peak * 2), inWin = new Map();
   const kept = [];
   for (const c of pool) {
     if (kept.length >= target) break;
@@ -201,7 +216,7 @@ function buildChart(diff = A$.diff, src = A$.src) {
   const ranges = {v:range('v'), g:range('g')};
   const notes = [], laneFreeAt = [0, 0, 0, 0];
   const prevMel = {v:null, g:null};
-  let lastK = {idx:-99, lane:1}, lastS = {idx:-99, lane:3}, lastH = {idx:-99, lane:2};
+  let lastK = {idx:-999, lane:1}, lastS = {idx:-999, lane:3}, lastH = {idx:-999, lane:2};
   const busy = (lane, t) => laneFreeAt[lane] > t + 1e-6 || notes.some(n => n.lane === lane && Math.abs(n.t - t) < 0.08);
   const place = (t, lane, extra = {}) => { const n = {t, lane, ...extra}; notes.push(n); laneFreeAt[lane] = Math.max(laneFreeAt[lane], t + (n.len || 0) + 0.08); return n; };
   for (const c of kept) {
@@ -225,17 +240,17 @@ function buildChart(diff = A$.diff, src = A$.src) {
       continue;
     }
     // drums: kicks on D/F (D on the beat), snares on J/K (J on 2, K on 4), quick repeats alternate
-    const onBeat = c.idx % 4 === 0, beatInBar = Math.floor(c.idx / 4) % 4;
+    const onBeat = c.idx % 12 === 0, beatInBar = Math.floor(c.idx / 12) % 4;
     // each drum has a pair of keys; "the other key" is always worked out within that pair, even if
     // the last note had to move to a different lane because its own was busy
     const other = (pair, l) => l === pair[0] ? pair[1] : pair[0];
     let lane, last;
-    if (c.kind === 'k') { last = lastK; lane = c.idx - last.idx <= 2 ? other([0, 1], last.lane) : onBeat ? 0 : 1; }
-    else if (c.kind === 's') { last = lastS; lane = c.idx - last.idx <= 2 || !onBeat ? other([2, 3], last.lane) : beatInBar === 3 ? 3 : 2; }
+    if (c.kind === 'k') { last = lastK; lane = c.idx - last.idx <= 6 ? other([0, 1], last.lane) : onBeat ? 0 : 1; }
+    else if (c.kind === 's') { last = lastS; lane = c.idx - last.idx <= 6 || !onBeat ? other([2, 3], last.lane) : beatInBar === 3 ? 3 : 2; }
     else { last = lastH; lane = other([1, 2], last.lane); }
     if (busy(lane, c.t)) { const alt = [0, 1, 2, 3].sort((a, b) => Math.abs(a - lane) - Math.abs(b - lane)).find(l => !busy(l, c.t)); if (alt == null) continue; lane = alt; }
     place(c.t, lane);
-    if (cfg.doubles && c.kind !== 'h' && c.s >= 0.9 && c.idx % 4 === 0) { const alt = c.kind === 'k' ? 1 - lane : 5 - lane; if (alt >= 0 && alt < 4 && !busy(alt, c.t)) place(c.t, alt); }
+    if (cfg.doubles && c.kind !== 'h' && c.s >= 0.9 && c.idx % 12 === 0) { const alt = c.kind === 'k' ? 1 - lane : 5 - lane; if (alt >= 0 && alt < 4 && !busy(alt, c.t)) place(c.t, alt); }
     const rec = {idx:c.idx, lane};
     if (c.kind === 'k') lastK = rec; else if (c.kind === 's') lastS = rec; else lastH = rec;
   }
@@ -285,6 +300,7 @@ function renderMenu() {
   const best = (P.arcade || {})[bestKey()];
   $('#aBest').innerHTML = best ? `Your best here: <b>${best.score.toLocaleString()}</b> · ${best.acc.toFixed(2)}% · ${best.grade}${best.fc ? ' · FC' : ''}` : '';
   $('#aPlay').disabled = !tr.buf || !chart.length;
+  if (typeof MP !== 'undefined') MP.menuChanged();
 }
 const setA = (k, v) => { A$[k] = v; save(); renderMenu(); };
 // parts are toggles: play along to any mix of them (the last one can't be switched off)
@@ -317,7 +333,7 @@ addEventListener('drop', e => {
   const f = [...(e.dataTransfer?.files || [])].find(f => f.type.startsWith('audio') || /\.(mp3|wav|ogg|m4a|aac|flac)$/i.test(f.name));
   if (f && state === 'menu') pickFile(f);
 });
-function show(id) { for (const o of ['menu', 'pause', 'results', 'board', 'cal']) $('#' + o).classList.toggle('show', o === id); document.body.classList.toggle('playing', !id); }
+function show(id) { for (const o of ['menu', 'pause', 'results', 'board', 'cal', 'mp', 'mpRes']) $('#' + o).classList.toggle('show', o === id); document.body.classList.toggle('playing', !id); }
 
 // ---------- a run ----------
 function startAudio(fromPos, lead) {
@@ -328,23 +344,31 @@ function startAudio(fromPos, lead) {
   src.start(when, fromPos);
   return {bus, music, src, when};
 }
-function play(fromPos = 0, keep = null) {
+// opts (multiplayer): chart - play exactly these notes; at - the moment (performance.timeOrigin +
+// performance.now(), in ms) the song should start, so everyone in the lobby starts together
+function play(fromPos = 0, keep = null, opts = {}) {
   // random songs: every new run (Play, Again, Start over) gets a song nobody has played yet
-  if (!keep && tr.random && !tr.fresh) { loadRandom().then(ok => ok && play(fromPos, keep)); return; }
+  if (!keep && !opts.chart && tr.random && !tr.fresh) { loadRandom().then(ok => ok && play(fromPos, keep)); return; }
   ensureAudio();
-  if (ctx.state !== 'running') { ctx.resume().then(() => play(fromPos, keep), () => play(fromPos, keep)); return; }
+  if (ctx.state !== 'running') { ctx.resume().then(() => play(fromPos, keep, opts), () => play(fromPos, keep, opts)); return; }
   if (!keep) tr.fresh = false;
   syncClock();
-  if (!keep) chart = buildChart();
+  if (!keep) chart = opts.chart ? opts.chart.map((n, id) => ({...n, id, j:null, held:false, done:false})) : buildChart();
   // a 4-beat count-in before the music, at the tempo where you start
-  const bi = Math.max(0, tr.beats.findIndex(b => b >= fromPos - 1e-3));
-  const p = (tr.beats[bi + 1] ?? tr.beats[bi] + 60 / tr.bpm) - tr.beats[bi] || 60 / tr.bpm, lead = 4 * p;
+  let bi = Math.max(0, tr.beats.findIndex(b => b >= fromPos - 1e-3));
+  const p = (tr.beats[bi + 1] ?? tr.beats[bi] + 60 / tr.bpm) - tr.beats[bi] || 60 / tr.bpm;
+  let lead = 4 * p;
+  if (opts.at != null) {
+    // a set start time: if it has already gone by (a slow device), come in where the song is now
+    lead = (opts.at - (performance.timeOrigin + performance.now())) / 1000 - 0.05;
+    if (lead < 0) { fromPos = -lead; lead = 0; bi = Math.max(0, tr.beats.findIndex(b => b >= fromPos - 1e-3)); }
+  }
   const au = startAudio(fromPos, lead);
   const firstBeat = tr.beats[bi] ?? fromPos;
-  for (let i = 1; i <= 4; i++) click(au.bus, au.when + (firstBeat - fromPos) - i * p, i === 4);
+  for (let i = 1; i <= 4; i++) { const ct = au.when + (firstBeat - fromPos) - i * p; if (ct > ctx.currentTime) click(au.bus, ct, i === 4); }
   G = keep ? Object.assign(keep, au, {pos0:fromPos}) : {...au, pos0:fromPos, score:0, combo:0, maxCombo:0, health:50,
     counts:{Sick:0, Good:0, Bad:0, Shit:0, Miss:0}, accSum:0, judged:0, pop:null, press:[0, 0, 0, 0], down:[false, false, false, false],
-    splash:[], errs:[], offs:[], failed:false, minHealth:100};
+    splash:[], errs:[], offs:[], failed:false, minHealth:100, jlog:[]};
   G.countFrom = au.when + (firstBeat - fromPos) - 4 * p; G.beat = p;
   G.firstNote = chart.length ? chart[0].t : 0;
   stall = {song:-9, wall:performance.now()}; G.startedAt = performance.now();
@@ -356,7 +380,7 @@ function play(fromPos = 0, keep = null) {
 const songNow = () => { const raw = ctx.currentTime - G.when + G.pos0, t = audioNow() - G.when + G.pos0; return Math.abs(t - raw) > 1 ? raw : t; };
 function stopAudio() { if (G) { try { G.src.stop(); } catch (e) {} try { G.bus.disconnect(); } catch (e) {} } }
 function pause(reason = '') {
-  if (state !== 'play') return;
+  if (state !== 'play' || mpOn()) return;   // a match can't be paused: everyone plays on together
   G.pausedAt = Math.max(0, songNow());
   G.playedBefore = (G.playedBefore || 0) + Math.max(0, G.pausedAt - G.pos0);   // for the time-played stat
   stopAudio(); state = 'paused';
@@ -370,7 +394,7 @@ function resume() {
   play(Math.max(0, G.pausedAt - 2 * G.beat), G);
 }
 // long intros: Space jumps to two beats before the first note
-const canSkip = () => state === 'play' && G.firstNote - songNow() > 4;
+const canSkip = () => state === 'play' && !mpOn() && G.firstNote - songNow() > 4;
 function skipIntro() {
   if (!canSkip()) return;
   const to = G.firstNote - 2 * G.beat;
@@ -446,6 +470,7 @@ function judge(n, jIdx, dt) {
   G.counts[J.name]++; G.accSum += J.acc; G.judged++;
   G.score += J.pts; G.health = Math.min(100, G.health + J.hp);
   G.combo++; G.maxCombo = Math.max(G.maxCombo, G.combo);
+  G.jlog.push([n.id, jIdx]);
   G.pop = {text:J.name, t:performance.now(), dt, col:J.col};
   G.errs.push({dt, col:J.col, t:performance.now()}); if (G.errs.length > 30) G.errs.shift();
   G.offs.push(dt);
@@ -456,6 +481,7 @@ function judge(n, jIdx, dt) {
 function miss(n, text = 'Miss') {
   n.j = 'Miss'; n.done = true; n.held = false;
   G.counts.Miss++; G.judged++; G.combo = 0; G.sickRun = 0;
+  G.jlog.push([n.id, 4]);
   G.health += MISS_HP;
   G.pop = {text, t:performance.now(), col:'#ff7a6b'};
 }
@@ -473,7 +499,7 @@ function offLane(lane) {
   const t = songNow();
   for (const n of chart) if (n.lane === lane && n.held) {
     n.held = false; n.done = true;
-    if (t < n.t + n.len - 0.1) { G.health += HOLD_BREAK_HP; G.combo = 0; G.dropped = true; G.pop = {text:'Dropped', t:performance.now(), col:'#ff9b8a'}; }
+    if (t < n.t + n.len - 0.1) { G.health += HOLD_BREAK_HP; G.combo = 0; G.dropped = true; G.jlog.push([n.id, 5]); G.pop = {text:'Dropped', t:performance.now(), col:'#ff9b8a'}; }
     else { G.score += 100; G.health = Math.min(100, G.health + HOLD_HP); G.holdsOK = (G.holdsOK || 0) + 1; }
   }
 }
@@ -488,7 +514,7 @@ function update() {
     }
   }
   G.minHealth = Math.min(G.minHealth ?? 100, G.health);
-  if (G.health <= 0) { G.health = 0; if (!A$.noFail) { G.failed = true; finish(); return false; } }
+  if (G.health <= 0) { G.health = 0; if (!A$.noFail && !mpOn()) { G.failed = true; finish(); return false; } }
   const last = chart.length ? chart[chart.length - 1] : null;
   // the end: judged on the raw audio clock, so a clock glitch can't cut the song short. After the last
   // note the song plays out to its end (up to 8 s of outro)
@@ -599,6 +625,8 @@ function finish() {
   if (tr.random) setTimeout(loadRandom, 400);
   $('#rNote').textContent = !G.offs.length ? '' : Math.abs(mean) < 8 ? `Your timing averaged ${Math.abs(mean).toFixed(0)} ms off. That's right on it.` :
     `You were ${Math.abs(mean).toFixed(0)} ms ${mean < 0 ? 'early' : 'late'} on average. If that happens every time, nudge the timing offset ${mean < 0 ? 'down' : 'up'} by about that much.`;
+  if (mpOn()) { MP.finished({score:G.score, acc:+acc.toFixed(2), grade, fc, rating, maxCombo:G.maxCombo, counts:{...G.counts}, mean:+mean.toFixed(1),
+    maxSick:G.maxSick || 0, holdsOK:G.holdsOK || 0, minHealth:Math.round(G.minHealth), notes:chart.length, xp}); return; }
   show('results');
 }
 
@@ -620,6 +648,8 @@ function noteArrow(x, y, size, lane) {
     return gr;
   }, '#141210');
 }
+// where the lanes start: centred, or further left in a match to make room for the other players
+const fieldX0 = (W, fw) => (W - fw) / 2 - (mpOn() ? MP.shift(W, fw) : 0);
 const BG = '#141210', FIELD = '#1b1815', LINE = '#2c2723', INK = '#efe8dd', MUTED = '#a39a8e';
 function draw() {
   const dpr = devicePixelRatio || 1, W = innerWidth, H = innerHeight;
@@ -627,7 +657,7 @@ function draw() {
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
   g.fillStyle = BG; g.fillRect(0, 0, W, H);
   if (!G) return;
-  const laneW = Math.min(112, (W - 32) / LANES), fw = laneW * LANES, x0 = (W - fw) / 2, size = laneW * 0.4;
+  const laneW = Math.min(112, (W - 32) / LANES), fw = laneW * LANES, x0 = fieldX0(W, fw), size = laneW * 0.4;
   const recY = A$.down ? H - 110 : 110, dir = A$.down ? -1 : 1, pps = 420 * A$.speed;   // pixels per second
   const t = state === 'play' ? songNow() : G.pausedAt ?? 0;
   const lx = i => x0 + laneW * (i + 0.5), now = performance.now();
@@ -677,7 +707,7 @@ function draw() {
   G.splash = G.splash.filter(s => now - s.t < 260);
   for (const s of G.splash) { const k = (now - s.t) / 260; arrow(lx(s.lane), recY, size * (1 + k * 0.6), s.lane, null, LANE_COL[s.lane], 1 - k); }
   // hit error meter: where your last hits landed, early to the left, late to the right
-  const emY = recY - dir * (size + 26), emW = Math.min(fw - 20, 220), emX = W / 2;
+  const emY = recY - dir * (size + 26), emW = Math.min(fw - 20, 220), emX = x0 + fw / 2;
   g.fillStyle = '#2c272388'; g.fillRect(emX - emW / 2, emY - 1, emW, 2);
   g.fillStyle = '#ffd47955'; g.fillRect(emX - emW / 2 * (0.045 / 0.166), emY - 3, emW * (0.045 / 0.166), 6);
   g.fillStyle = INK; g.fillRect(emX - 1, emY - 7, 2, 14);
@@ -688,7 +718,7 @@ function draw() {
   gr.addColorStop(0, BG); gr.addColorStop(0.6, BG + 'e6'); gr.addColorStop(1, BG + '00');
   g.fillStyle = gr; g.fillRect(0, A$.down ? 0 : H - fadeH, W, fadeH);
   // health bar along the edge away from the targets
-  const hbW = Math.min(360, W - 40), hbY = A$.down ? 22 : H - 32, hbX = (W - hbW) / 2;
+  const hbW = Math.min(360, W - 40), hbY = A$.down ? 22 : H - 32, hbX = Math.max(20, x0 + fw / 2 - hbW / 2);
   g.fillStyle = '#2a2521'; g.beginPath(); g.roundRect(hbX, hbY, hbW, 10, 5); g.fill();
   g.fillStyle = G.health < 25 ? '#ff7a6b' : '#ef5b3a'; g.beginPath(); g.roundRect(hbX, hbY, Math.max(4, hbW * G.health / 100), 10, 5); g.fill();
   const prog = Math.max(0, Math.min(1, t / tr.buf.duration)), acc = G.judged ? (G.accSum / G.judged * 100).toFixed(2) + '%' : '–';
@@ -714,11 +744,13 @@ function draw() {
     let yy = py + 20;
     for (const J of [...JUDGE, {name:'Miss', col:'#ff7a6b'}]) { g.fillStyle = J.col; g.fillText(`${J.name}  ${G.counts[J.name]}`, x0 - 32, yy); yy += 26; }
     g.textAlign = 'center';
+    if (mpOn()) MP.drawStandings(g, px, py + 310);
   } else {
     // narrow screens: one compact line next to the health bar
     g.fillStyle = INK; g.font = '600 14px "Figtree", system-ui, sans-serif'; g.textAlign = 'center';
     g.fillText(`${G.score.toLocaleString()}  ·  ${G.combo}×  ·  ${acc}  ·  ${Math.round(prog * 100)}%`, W / 2, hbY + (A$.down ? 32 : -12));
   }
+  if (mpOn()) MP.draw(g, {t, pps, recY, dir, W, H, x0, fw, now});
   // judgement popup (the combo lives in the side panel now, not in the middle of the notes)
   const midY = A$.down ? recY - 190 : recY + 190;
   if (G.pop) {
@@ -726,15 +758,15 @@ function draw() {
     if (age < 600) {
       g.globalAlpha = age < 450 ? 1 : 1 - (age - 450) / 150;
       g.fillStyle = G.pop.col; g.font = `italic 700 ${Math.round(30 - Math.min(age, 80) / 16)}px "Fraunces", Georgia, serif`;
-      g.fillText(G.pop.text, W / 2, midY);
-      if (G.pop.dt != null && G.pop.text !== 'Sick') { g.font = '600 13px "Figtree", system-ui, sans-serif'; g.fillStyle = MUTED; g.fillText(`${G.pop.dt < 0 ? 'early' : 'late'} ${Math.round(Math.abs(G.pop.dt) * 1000)} ms`, W / 2, midY + 22); }
+      g.fillText(G.pop.text, x0 + fw / 2, midY);
+      if (G.pop.dt != null && G.pop.text !== 'Sick') { g.font = '600 13px "Figtree", system-ui, sans-serif'; g.fillStyle = MUTED; g.fillText(`${G.pop.dt < 0 ? 'early' : 'late'} ${Math.round(Math.abs(G.pop.dt) * 1000)} ms`, x0 + fw / 2, midY + 22); }
       g.globalAlpha = 1;
     }
   }
   // count-in and intro skip
   if (state === 'play') {
     const k = Math.floor((audioNow() - G.countFrom) / G.beat);
-    if (k >= 0 && k < 4) { g.fillStyle = INK; g.font = 'italic 700 76px "Fraunces", Georgia, serif'; g.fillText(k < 3 ? String(3 - k) : 'Go', W / 2, H / 2); }
+    if (k >= 0 && k < 4) { g.fillStyle = INK; g.font = 'italic 700 76px "Fraunces", Georgia, serif'; g.fillText(k < 3 ? String(3 - k) : 'Go', x0 + fw / 2, H / 2); }
     if (canSkip()) { g.fillStyle = MUTED; g.font = '600 14px "Figtree", system-ui, sans-serif'; g.fillText('Space to skip the intro', W / 2, A$.down ? H - 30 : 40); }
   }
 }
@@ -875,7 +907,9 @@ addEventListener('keydown', e => {
   if (state === 'play' && e.code in KEYS) { e.preventDefault(); if (!e.repeat) onLane(KEYS[e.code], e.timeStamp); return; }
   if (e.repeat) return;
   if (e.code === 'Space' && state === 'play') { e.preventDefault(); skipIntro(); }
+  else if (e.code === 'Escape' && mpOn()) { if (state === 'play') MP.askQuit(); }
   else if (e.code === 'Escape') { if (state === 'play') pause(); else if (state === 'paused') resume(); else if (state === 'results') toMenu(); }
+  else if (e.code === 'Enter' && typeof MP !== 'undefined' && MP.code) { /* the lobby has its own buttons */ }
   else if (e.code === 'Enter') {
     if (state === 'menu' && !$('#aPlay').disabled) { e.preventDefault(); play(); }
     else if (state === 'paused') { e.preventDefault(); resume(); }
@@ -895,7 +929,7 @@ $('#rMenu').addEventListener('click', toMenu);
 // touch: tap a lane
 cv.addEventListener('pointerdown', e => {
   if (state !== 'play') return;
-  const W = innerWidth, laneW = Math.min(112, (W - 32) / LANES), x0 = (W - laneW * LANES) / 2, lane = Math.floor((e.clientX - x0) / laneW);
+  const W = innerWidth, laneW = Math.min(112, (W - 32) / LANES), x0 = fieldX0(W, laneW * LANES), lane = Math.floor((e.clientX - x0) / laneW);
   if (lane >= 0 && lane < LANES) { onLane(lane, e.timeStamp); const up = () => { offLane(lane); removeEventListener('pointerup', up); }; addEventListener('pointerup', up); }
 });
 

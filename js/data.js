@@ -183,7 +183,7 @@ const freshProfile = () => ({xp:0, hits:0, passes:0, bestCombo:0, endlessBest:0,
   path:{}, cells:{}, daily:{}, dailies:{}, metersSeen:{}, inputsSeen:{}, arcade:{}, arcadeClears:0, arcadeSongs:{}, leaderboard:{},
   arcadeHits:0, arcadeSrcs:{}, arcadeDiffs:{}, arcadeFCs:{}, arcadePFCs:{},
   arcadeSicks:0, arcadeTime:0, arcadeFails:0, arcadeFCCount:0, arcadeSRanks:0, arcadeBestCombo:0, arcadeBestScore:0, arcadeHoldsOK:0,
-  arcadeDiffN:{}, arcadePartN:{}, arcadePlays:{}, arcadeCombos:{}});
+  arcadeDiffN:{}, arcadePartN:{}, arcadePlays:{}, arcadeCombos:{}, mpMatches:0, mpWins:0});
 const P = (() => { try { return Object.assign(freshProfile(), JSON.parse(localStorage.getItem('rhythm-trainer-profile') || '{}')); } catch (e) { return freshProfile(); } })();
 // The trainer and the Arcade can be open in two tabs at once, each with its own copy of the profile.
 // So a save first merges in whatever is already stored (nothing ever goes backwards), and every
@@ -538,6 +538,17 @@ const ACH = [
   A('Arcade style', 'arcadeMorning', '🌅', 'Breakfast Beats', 'Clear a song between 5 and 8 am', 40),
   A('Arcade style', 'arcadeWeekend', '🎉', 'Weekend Warrior', 'Clear a song on a Saturday or Sunday', 30),
   A('Arcade style', 'arcadeSession25', '🍿', 'All-Nighter', 'Clear 25 songs in one sitting', 400),
+  A('Multiplayer', 'mpHost', '🏠', 'Open House', 'Make a multiplayer lobby', 20),
+  A('Multiplayer', 'mpJoin', '🚪', 'Plus One', "Join a friend's lobby", 20),
+  A('Multiplayer', 'mpFirst', '🎉', 'Party Starter', 'Finish your first multiplayer match', 40),
+  A('Multiplayer', 'mpWin', '👑', 'Crowned', 'Win a multiplayer match', 100),
+  A('Multiplayer', 'mpLose', '🥈', 'Good Game', 'Lose a multiplayer match (it happens)', 15),
+  A('Multiplayer', 'mpFull', '🏟️', 'Full House', 'Play a match with 4 players', 120),
+  A('Multiplayer', 'mpClose', '😰', 'Nail-Biter', 'Win by less than 1% of the score', 200),
+  A('Multiplayer', 'mpStomp', '🦶', 'Not Even Close', 'Win with 50% more score than second place', 150),
+  A('Multiplayer', 'mpFlawless', '💎', 'Flawless Victory', 'Win a match with a full combo', 400),
+  ...tiers('Multiplayer', 'mpWins', '🏆', () => P.mpWins || 0, [[5, 'Champion', 'Win 5 matches', 250], [25, 'Dynasty', 'Win 25 matches', 800], [100, 'Undisputed', 'Win 100 matches', 2500]]),
+  ...tiers('Multiplayer', 'mpMatches', '🎮', () => P.mpMatches || 0, [[10, 'Party Regular', 'Play 10 matches', 120], [50, 'Social Butterfly', 'Play 50 matches', 500], [200, 'Lobby Legend', 'Play 200 matches', 1500]]),
   A('Arcade style', 'arcadeLadder', '🪜', 'Climbing the Ladder', 'Clear the same song on Easy, Normal, Hard, Expert and Insane', 500),
 ];
 const fmtGoal = (a, v) => !a.id.startsWith('time') ? `${Math.floor(v).toLocaleString()} / ${a.goal.toLocaleString()}` :

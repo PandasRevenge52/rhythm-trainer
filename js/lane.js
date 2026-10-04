@@ -8,6 +8,27 @@ function readColors() {
   for (const k of ['ink','muted','line','accent','perfect','good','ok','miss','rest','lane']) col[k] = cs.getPropertyValue('--' + k).trim();
   col.resthit = col.miss;
 }
+// The same rest signs as the notation, drawn around (x, y): whole and half rests are blocks under
+// or on a short line, quarters the squiggle, 8ths and 16ths the hooked flags.
+function laneRest(g, x, y, dur, c, k) {
+  g.save(); g.translate(x, y); g.scale(k, k);
+  g.fillStyle = c; g.strokeStyle = c; g.lineCap = 'round'; g.lineJoin = 'round';
+  const dotted = [3, 6, 12].some(d => Math.abs(dur - d) < 0.01), base = dotted ? dur / 1.5 : dur;
+  if (base >= 7.5) {   // whole (hangs below its line) and half (sits on it)
+    g.fillRect(-13, -1.5, 26, 3);
+    if (base >= 15) g.fillRect(-9, 1.5, 18, 9); else g.fillRect(-9, -10.5, 18, 9);
+  } else if (base > 2.5) {   // quarter
+    g.lineWidth = 4; g.beginPath();
+    g.moveTo(-3, -16); g.lineTo(4, -6); g.lineTo(-3, 2); g.lineTo(4, 10); g.bezierCurveTo(-5, 7, -5, 15, 1, 19); g.stroke();
+  } else {   // 8th, and a second flag for a 16th
+    g.lineWidth = 2.4;
+    g.beginPath(); g.arc(-3, -9, 3.8, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.moveTo(-4, -7); g.quadraticCurveTo(2, -4, 6, -12); g.lineTo(-1, 16); g.stroke();
+    if (base < 1.2) { g.beginPath(); g.arc(-6, 1, 3.8, 0, Math.PI * 2); g.fill(); g.beginPath(); g.moveTo(-7, 3); g.quadraticCurveTo(-1, 6, 3.4, -1.5); g.stroke(); }
+  }
+  if (dotted) { g.beginPath(); g.arc(12, -4, 2.6, 0, Math.PI * 2); g.fill(); }
+  g.restore();
+}
 function drawLane(now) {
   if (!S.lane) return;
   const dpr = window.devicePixelRatio || 1, W = lane.clientWidth, H = lane.clientHeight;
@@ -50,8 +71,10 @@ function drawLane(now) {
       if (x + w < -12 || x > W + 12 || x > ahead) continue;
       const j = s.j[ev.idx];
       if (ev.rest) {
-        g.strokeStyle = j ? col.miss : col.rest; g.lineWidth = 1.5; g.setLineDash([3, 4]);
-        g.beginPath(); g.roundRect(x - 7, y - 7, Math.max(8, w - 4), 14, 7); g.stroke(); g.setLineDash([]);
+        // a soft band for how long the rest lasts, and the rest sign itself where it starts
+        const c = j ? col.miss : col.muted;
+        g.fillStyle = c; g.globalAlpha = 0.1; g.beginPath(); g.roundRect(x - 8, y - 8, Math.max(16, w - 4), 16, 8); g.fill();
+        g.globalAlpha = j ? 1 : 0.85; laneRest(g, x, y, ev.dur, c, two ? 0.55 : 0.7); g.globalAlpha = 1;
       } else {
         const c = j ? col[j] : col.accent;
         g.fillStyle = c; g.globalAlpha = 0.18; g.beginPath(); g.roundRect(x, y - 2.5, Math.max(0, w - 12), 5, 2.5); g.fill();
