@@ -7,6 +7,7 @@
 // each player's live score and hits on to the others. Every player plays and is judged on their own
 // computer, with their own keys, speed and timing offset; at the end everyone's results are compared
 // and the best score wins.
+const MP_PANEL = 290;   // room between your lanes and the first other player, for your score panel
 const MP_VERSION = 2, MP_MAX = 4, MP_PREFIX = 'rt-arcade-', CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const nowE = () => performance.timeOrigin + performance.now();   // this computer's clock, in ms
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -391,24 +392,30 @@ const MP = {
   // ---------- drawing the other players while you play ----------
   shift(W, fw) {
     const n = this.others().length; if (!n) { this.lay = {on:false}; return 0; }
-    const left = W > fw + 400 ? 150 : 16, mw = Math.min(150, (W - left - fw - 250 - 24) / n - 18);
+    const left = W > fw + 400 ? 150 : 16, mw = Math.min(150, (W - left - fw - MP_PANEL - 24) / n - 18);
     this.lay = {on:mw >= 74 && W > fw + 400, mw};
     if (!this.lay.on) return 0;
-    const need = fw + 250 + n * (mw + 18), x0 = Math.max(left, (W - need) / 2);
+    const need = fw + MP_PANEL + n * (mw + 18), x0 = Math.max(left, (W - need) / 2);
     return (W - fw) / 2 - x0;
   },
   draw(g, v) {
     if (!this.lay.on) return;
     const {mw} = this.lay, others = this.others(), lw = mw / 4, size = lw * 0.36, tt = v.t - 0.15;   // a little behind, so their hits arrive before their notes reach the line
+    // a shrunken copy of a field: the scroll shrinks with the arrows, so notes keep their spacing instead of stretching out
+    v = {...v, pps:v.pps * mw / v.fw * 1.1};
     const lead = this.standings()[0];
     others.forEach((p, k) => {
       const L = this.live.get(p.id) || {s:0, c:0, a:100, hp:50, d:0, js:new Map(), flash:[]}, r = this.results.get(p.id);
-      const mx = v.x0 + v.fw + 250 + k * (mw + 18), lx = i => mx + lw * (i + 0.5);
+      const mx = v.x0 + v.fw + MP_PANEL + k * (mw + 18), lx = i => mx + lw * (i + 0.5);
       g.fillStyle = FIELD; g.fillRect(mx, 0, mw, v.H);
       g.fillStyle = LINE; for (let i = 1; i < 4; i++) g.fillRect(mx + lw * i, 0, 1, v.H);
       for (let i = 0; i < 4; i++) {
         const down = L.d & (1 << i);
-        if (down) { g.fillStyle = LANE_COL[i] + '22'; g.fillRect(mx + lw * i + 1, 0, lw - 1, v.H); }
+        if (down) {   // a short glow up from the target while they hold the key, like your own lanes
+          const gr = g.createLinearGradient(0, v.recY, 0, v.recY + v.dir * 160);
+          gr.addColorStop(0, LANE_COL[i] + '33'); gr.addColorStop(1, LANE_COL[i] + '00');
+          g.fillStyle = gr; g.fillRect(mx + lw * i + 1, Math.min(v.recY, v.recY + v.dir * 160), lw - 1, 160);
+        }
         arrow(lx(i), v.recY, size, i, down ? LANE_COL[i] + '44' : '#221e1a', down ? LANE_COL[i] : '#5a5249');
       }
       for (const n of chart) {

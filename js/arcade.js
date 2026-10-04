@@ -729,8 +729,15 @@ function draw() {
     const px = x0 + fw + 40, py = A$.down ? H * 0.42 : H * 0.18;
     const label = (txt, y) => { g.fillStyle = MUTED; g.font = '700 11.5px "Figtree", system-ui, sans-serif'; g.fillText(txt, px, y); };
     g.textAlign = 'left';
-    label('SCORE', py); g.fillStyle = INK; g.font = '700 30px "Fraunces", Georgia, serif'; g.fillText(G.score.toLocaleString(), px, py + 32);
-    label('COMBO', py + 70); g.fillStyle = G.combo >= 5 ? INK : MUTED; g.font = '700 38px "Fraunces", Georgia, serif'; g.fillText(G.combo, px, py + 108);
+    label('SCORE', py); g.fillStyle = INK; let ss = 30; g.font = `700 ${ss}px "Fraunces", Georgia, serif`;
+    while (ss > 20 && g.measureText(G.score.toLocaleString()).width > 228) { ss -= 2; g.font = `700 ${ss}px "Fraunces", Georgia, serif`; }
+    g.fillText(G.score.toLocaleString(), px, py + 32);
+    // the combo shrinks a little if it and its best wouldn't fit the panel (big combos, other players beside it)
+    label('COMBO', py + 70);
+    g.font = '600 13px "Figtree", system-ui, sans-serif'; const bw = g.measureText(`best ${G.maxCombo}`).width;
+    let cs = 38; g.font = `700 ${cs}px "Fraunces", Georgia, serif`;
+    while (cs > 22 && g.measureText(String(G.combo)).width + 12 + bw > 228) { cs -= 2; g.font = `700 ${cs}px "Fraunces", Georgia, serif`; }
+    g.fillStyle = G.combo >= 5 ? INK : MUTED; g.fillText(G.combo, px, py + 108);
     const cw = g.measureText(String(G.combo)).width;
     g.fillStyle = MUTED; g.font = '600 13px "Figtree", system-ui, sans-serif'; g.fillText(`best ${G.maxCombo}`, px + cw + 12, py + 106);
     label('ACCURACY', py + 146); g.fillStyle = INK; g.font = '700 22px "Figtree", system-ui, sans-serif'; g.fillText(acc, px, py + 174);
