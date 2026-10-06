@@ -611,6 +611,17 @@ const MP = {
     const left = this.players.filter(p => p.inMatch && p.state !== 'left' && !this.results.has(p.id));
     if (!left.length) { this.phase = 'lobby'; for (const p of this.players) { p.inMatch = p.state !== 'left'; if (p.state !== 'left') p.state = 'lobby'; } this.players = this.players.filter(p => p.state !== 'left' || p.host); this.pushRoster(); }
   },
+  resSuspect(res) {
+    const notes = (this.song && this.song.chart && this.song.chart.length) || 0; if (!notes || !res) return false;
+    const c = res.counts || {}, judged = c.Sick + c.Good + c.Bad + c.Shit + c.Miss;
+    if (judged > notes + 2) return true;
+    if (res.maxCombo > judged + 1) return true;
+    const expectAcc = judged ? (c.Sick + c.Good * 0.75 + c.Bad * 0.4 + c.Shit * 0.1) / judged * 100 : 0;
+    if (Math.abs(expectAcc - res.acc) > 1.2) return true;
+    const maxScore = notes * 400 + Math.ceil((this.song.dur || 0)) * 120 + 50000;
+    if (res.score > maxScore) return true;
+    return false;
+  },
   standings() {
     const rows = [];
     for (const p of this.players) {
@@ -618,7 +629,7 @@ const MP = {
       const r = this.results.get(p.id), mine = p.id === this.me;
       const L = this.live.get(p.id);
       const score = r ? r.score : mine && G ? G.score : L ? L.s : 0, acc = r ? r.acc : mine && G && G.judged ? G.accSum / G.judged * 100 : L ? L.a : 100;
-      rows.push({id:p.id, name:p.name, score, acc, done:!!r, left:p.state === 'left', lost:p.net === 'lost', res:r, prog:mine && G && state === 'play' ? songNow() / tr.buf.duration : L ? L.p : 1, mine});
+      rows.push({id:p.id, name:p.name, score, acc, done:!!r, left:p.state === 'left', lost:p.net === 'lost', res:r, suspect:!!r && this.resSuspect(r), prog:mine && G && state === 'play' ? songNow() / tr.buf.duration : L ? L.p : 1, mine});
     }
     return rows.sort((a, b) => b.score - a.score || b.acc - a.acc);
   },
@@ -767,7 +778,7 @@ const MP = {
   renderResults() {
     if (state !== 'results' || !$('#mpRes').classList.contains('show')) return;
     const rows = this.standings(), done = rows.every(r => r.done || r.left), s = this.song;
-    const winner = done ? rows.find(r => r.done) : null;
+    const winner = done ? rows.find(r => r.done && !r.suspect) : null;
     const pending = rows.filter(r => !r.done && !r.left);
     let h = '';
     if (winner) {
@@ -780,7 +791,7 @@ const MP = {
     // podium
     h += `<ol class="mppod">${rows.map((r, i) => `<li class="${r.mine ? 'me' : ''} ${winner && r === winner ? 'won' : ''}"><span class="mpplace">${r.left && !r.done ? '–' : i + 1}</span>` +
       `<span class="mpav" style="background:${avatarCol(r.name)}">${esc(r.name[0] || '?').toUpperCase()}</span><b>${esc(r.name)}</b>` +
-      `<span class="mpsc">${r.left && !r.done ? 'left' : r.score.toLocaleString()}</span><small>${r.done ? `${r.res.grade} · ${r.res.acc.toFixed(2)}%${r.res.fc ? ' · FC' : ''}` : r.left ? '' : 'still playing'}</small></li>`).join('')}</ol>`;
+      `<span class="mpsc">${r.left && !r.done ? 'left' : r.score.toLocaleString()}</span><small>${r.suspect ? '⚠ unverified score' : r.done ? `${r.res.grade} · ${r.res.acc.toFixed(2)}%${r.res.fc ? ' · FC' : ''}` : r.left ? '' : 'still playing'}</small></li>`).join('')}</ol>`;
     // side-by-side stats, best in each row picked out
     const fin = rows.filter(r => r.done);
     if (fin.length > 1 || (fin.length && done)) {
