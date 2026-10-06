@@ -43,13 +43,12 @@ class Link {
     }
     this.flush(true);
   }
-  raw(m) { if (MP.cut || !this.up || (MP.dropRate && Math.random() < MP.dropRate)) return; try { this.c.send(m); } catch (e) {} }
+  raw(m) { if (!this.up) return; try { this.c.send(m); } catch (e) {} }
   send(m) { this.raw(m); }
   sendR(m) { m._s = ++this.out; this.unacked.set(m._s, {m, at:Date.now()}); this.raw(m); }
   // resend what hasn't been confirmed (everything, right after a reconnect)
   flush(all) { const t = Date.now(); for (const u of this.unacked.values()) if (all || t - u.at > 2500) { u.at = t; this.raw(u.m); } }
   recv(m) {
-    if (MP.cut) return;
     const now = Date.now();
     if (now - this._rateT > 1000) { this._rateT = now; this._rateN = 0; }
     if (++this._rateN > 400) return;   // M2: far above an honest client (~10/s); drop the rest
@@ -264,7 +263,7 @@ const MP = {
 
   // ---------- the host's side ----------
   onTransport(c) {
-    c.on('data', m => { if (!MP.cut && !c._link && m && m.t === 'hello') this.onHello(c, m); });
+    c.on('data', m => { if (!c._link && m && m.t === 'hello') this.onHello(c, m); });
   },
   onHello(c, m) {
     if (m.v !== MP_VERSION) { c.send({t:'nope', why:"You and the host have different versions of the game. Both refresh the page (Ctrl+Shift+R) and try again."}); setTimeout(() => c.close(), 800); return; }
