@@ -5,7 +5,7 @@
   --bg:#141210; --panel:#1b1815; --paper:#1b1815; --raise:#25211d; --ink:#efe8dd; --muted:#a39a8e; --line:#302a25;
   --accent:#ef5b3a; --perfect:#7fd88f; --good:#6cb8f0; --ok:#e8c35a; --miss:#ff7a6b; --rest:#6b635a;
   --lane:#171411; --chip:#231f1b; --shadow:none; --focus:#ef5b3a;
-  --serif:"Fraunces", "Twemoji", Georgia, "Times New Roman", serif; --sans:"Figtree", "Twemoji", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --serif:"Fraunces", "Twemoji", Georgia, "Times New Roman", serif; --sans:"Figtree", "Figtree Fallback", "Twemoji", system-ui, -apple-system, "Segoe UI", sans-serif;
   --early:#3f8aef; --late:#ec6430;
 }
 *{box-sizing:border-box}
