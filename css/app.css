@@ -145,7 +145,7 @@ body.drag .stage{outline:2px dashed var(--accent);outline-offset:4px}
 .sheet.upnext{opacity:.45}
 .sheet .tag{position:absolute;left:4px;top:0;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);opacity:0;transition:opacity var(--dur-4)}
 .sheet.upnext .tag{opacity:1}
-.fill{animation:fill var(--dur-4) var(--var(--ease-out))}
+.fill{animation:fill var(--dur-4) var(--ease-out)}
 @keyframes fill{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
 #countin{position:absolute;top:2px;right:0;font-size:13px;font-weight:600;color:var(--accent);background:var(--chip);padding:3px 10px;border-radius:var(--r-pill);opacity:0;transition:opacity var(--dur-2);font-variant-numeric:tabular-nums}
 #countin.show{opacity:1}
