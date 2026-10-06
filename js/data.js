@@ -266,7 +266,10 @@ const TITLES = ['Tapper', 'Beat Keeper', 'Groover', 'Offbeat Explorer', 'Syncopa
   'Human Metronome', 'Pulse Oracle', 'Rhythm Virtuoso', 'Groove Deity', 'Master of Time', 'Rhythm Legend'];
 const roman = n => [[1000,'M'],[900,'CM'],[500,'D'],[400,'CD'],[100,'C'],[90,'XC'],[50,'L'],[40,'XL'],[10,'X'],[9,'IX'],[5,'V'],[4,'IV'],[1,'I']].reduce((s, [v, r]) => { while (n >= v) { s += r; n -= v; } return s; }, '');
 const titleFor = L => L <= 100 ? TITLES[Math.floor((L - 1) / 4)] : `Rhythm Legend ${roman(Math.floor((L - 101) / 10) + 2)}`;
-const todayStr = () => new Date().toLocaleDateString('en-CA');
+// a local date as YYYY-MM-DD (what toLocaleDateString('en-CA') gives, without loading the browser's date
+// formatting data, which made the first call cost ~200 ms on page load)
+const dayStr = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const todayStr = () => dayStr(new Date());
 
 // ---------- achievements ----------
 // Ones with `get`/`goal` unlock by themselves when a stat reaches the goal (and show progress in
@@ -280,7 +283,7 @@ function starsFor(i) { const p = P.path[i]; if (!p || p.passes < 3) return 0; re
 function dailyStreak() {
   let n = 0; const d = new Date();
   if (!P.dailies[todayStr()]) d.setDate(d.getDate() - 1);   // today not played yet doesn't break it
-  while (P.dailies[d.toLocaleDateString('en-CA')]) { n++; d.setDate(d.getDate() - 1); }
+  while (P.dailies[dayStr(d)]) { n++; d.setDate(d.getDate() - 1); }
   return n;
 }
 const ACH = [
