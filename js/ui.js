@@ -349,9 +349,13 @@ renderIdle();
 if (S.play === 'song') restoreSong();
 if (S.midi) enableMidi(true);
 if (S.mic) { S.mic = false; syncControls(); }   // the browser needs a click before it will open the mic again
-// make the sound engine ahead of the first Start (see prepareAudio)
-{ const prep = () => 'requestIdleCallback' in window ? requestIdleCallback(prepareAudio, {timeout:1000}) : setTimeout(prepareAudio, 300);
-  if (document.readyState === 'complete') prep(); else addEventListener('load', prep, {once:true}); }
+// Make the sound engine ahead of the first Start (see prepareAudio), at the first sign of someone using the page
+// that isn't itself a click, tap or key (moving the mouse, scrolling), so neither the page load nor a press waits
+// for it; or 10 s after load if nothing happens. Pressing Enter before either still pays it once.
+{ const evs = ['pointermove', 'scroll', 'wheel'];
+  const prep = e => { if (e && e.type === 'pointermove' && e.pointerType === 'touch') return; evs.forEach(t => removeEventListener(t, prep, true)); prepareAudio(); };
+  evs.forEach(t => addEventListener(t, prep, {capture:true, passive:true}));
+  addEventListener('load', () => setTimeout(() => 'requestIdleCallback' in window ? requestIdleCallback(() => prep()) : prep(), 10000), {once:true}); }
 // Installable, offline-capable app when served over http(s) (service workers don't run from file://).
 if (location.protocol.startsWith('http') && 'serviceWorker' in navigator) {
   const l = document.createElement('link'); l.rel = 'manifest'; l.href = 'manifest.webmanifest'; document.head.appendChild(l);
