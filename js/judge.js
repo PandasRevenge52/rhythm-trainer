@@ -197,8 +197,10 @@ function renderStats() {
   hist.innerHTML = history.slice(0, 40).reverse().map(x => `<span title="Pass ${x.pass}: ${Math.round(x.acc*100)}%" style="height:${Math.max(3, x.acc*26)}px"></span>`).join('');
   hist.title = `Session: ${Math.round(session.w / session.n * 100)}% over ${history.length} passes`;
 }
+// U3: phones and tablets (no hover, a finger for a pointer) get tapping hints instead of keys they don't have
+const touchOnly = () => matchMedia('(hover: none) and (pointer: coarse)').matches;
 function idleText() {
-  const keys = S.hands === 2 ? `Left hand <kbd>F</kbd>, right hand <kbd>J</kbd>.` : `Hit with <kbd>Space</kbd>, <kbd>F</kbd> or <kbd>J</kbd>.`;
+  const keys = touchOnly() ? 'Tap the staff or lane to hit.' : S.hands === 2 ? `Left hand <kbd>F</kbd>, right hand <kbd>J</kbd>.` : `Hit with <kbd>Space</kbd>, <kbd>F</kbd> or <kbd>J</kbd>.`;
   if (S.play === 'endless') return `Survive as long as you can. Misses and hits on rests cost a life, and a clean pass wins one back. It speeds up every pass.` +
     (P.endlessBest ? ` Best: <b>${P.endlessBest.toLocaleString()}</b>` : '');
   if (S.play === 'daily') {
@@ -207,7 +209,7 @@ function idleText() {
       (done ? `Your best today: <b>${done.score.toLocaleString()}</b> (${Math.round(done.acc * 100)}%). ` : '') + `Streak: <b>${dailyStreak()}</b> 🔥`;
   }
   if (S.play === 'song') return song.buf ? `Press <kbd>Enter</kbd> to play along. Use <kbd>L</kbd> to check the clicks line up with the music first.` : 'Load an MP3 to play rhythms along with it.';
-  return `Press <kbd>Enter</kbd> to start. ${keys}`;
+  return touchOnly() ? keys : `Press <kbd>Enter</kbd> to start. ${keys}`;
 }
 function renderIdle() { $('#acc').textContent = ''; $('#statText').innerHTML = idleText(); }
 function renderHud() {

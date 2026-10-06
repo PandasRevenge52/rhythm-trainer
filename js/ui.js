@@ -145,7 +145,7 @@ function setHands(n) {
   S.hands = n; save();
   pattern = newPattern(); queued = null;
   syncControls(); refreshIdle(); renderIdle();
-  if (n === 2) toast('Two hands: right hand (upper notes) on J, left hand (lower notes) on F');
+  if (n === 2) toast(touchOnly() ? 'Two hands: right hand (upper notes), left hand (lower notes). Tap the staff or lane to hit.' : 'Two hands: right hand (upper notes) on J, left hand (lower notes) on F');
 }
 // Polyrhythm picker: one ratio fills every bar (switching to the time signature it needs), or Mix
 // drops ones that fit the current time signature in among your normal rhythms.
