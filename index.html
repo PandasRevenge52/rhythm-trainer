@@ -16,10 +16,10 @@
   <header>
     <a class="brand" href="index.html"><h1>Rhythm <em>Trainer</em></h1><span class="tagline">read it, count it, play it</span></a>
     <div class="modes" id="playSeg" role="tablist" aria-label="Game mode">
-      <button data-v="practice" title="Practice (1)">Practice</button>
-      <button data-v="endless" title="Endless (2)">Endless</button>
-      <button data-v="daily" title="Daily challenge (3)">Daily</button>
-      <button data-v="song" title="Play along to a song (4)">Song</button>
+      <button role="tab" data-v="practice" title="Practice (1)">Practice</button>
+      <button role="tab" data-v="endless" title="Endless (2)">Endless</button>
+      <button role="tab" data-v="daily" title="Daily challenge (3)">Daily</button>
+      <button role="tab" data-v="song" title="Play along to a song (4)">Song</button>
     </div>
     <div class="hright">
       <a class="ghost arcade-link" href="arcade.html" title="Arcade: a 4-lane falling-note game from your song's drums">Arcade</a>
@@ -171,7 +171,7 @@
   <footer><p class="sig">Made by Kaeson. Practise a little every day.</p></footer>
 </main>
 
-<div class="modal" id="modal" role="dialog" aria-modal="true"><div class="card" id="modalCard"></div></div>
+<div class="modal" id="modal" role="dialog" aria-modal="true" aria-label="Dialog" inert><div class="card" id="modalCard"></div></div>
 
 <!-- plain scripts (not modules) so the app also runs straight from the file system; "defer" keeps their order
      but lets the page paint before they have all downloaded -->

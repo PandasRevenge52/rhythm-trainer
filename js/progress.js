@@ -52,6 +52,11 @@ const modalOpen = () => modal.classList.contains('show');
 function showModal(html, kind = 'info') {
   modalCard.innerHTML = html; modalKind = kind;
   modalCard.className = 'card' + (['profile', 'path', 'songsetup'].includes(kind) ? ' wide' : '');
+  // named by its own heading for screen readers; inert (out of reach) whenever it's closed
+  const h = modalCard.querySelector('h2, h3');
+  if (h) { h.id = 'modalTitle'; modal.setAttribute('aria-labelledby', 'modalTitle'); modal.removeAttribute('aria-label'); }
+  else { modal.removeAttribute('aria-labelledby'); modal.setAttribute('aria-label', 'Dialog'); }
+  modal.inert = false;
   modal.classList.add('show');
   modalCard.scrollTop = 0;
 }
@@ -60,7 +65,7 @@ function closeModal() {
   if (modalKind === 'cal') calCancel();
   if (modalKind === 'songsetup') stopSongPreview();
   stopDemo();
-  modal.classList.remove('show'); modalKind = null;
+  modal.classList.remove('show'); modal.inert = true; modalKind = null;
 }
 modal.addEventListener('click', e => {
   if (e.target === modal || e.target.closest('[data-close]')) closeModal();

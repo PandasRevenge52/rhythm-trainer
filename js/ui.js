@@ -62,6 +62,7 @@ function syncControls() {
   mark('#restChips', v => S.rests.includes(+v));
   mark('#extraChips', v => S.extras.includes(v));
   mark('#playSeg', v => v === S.play);
+  document.querySelectorAll('#playSeg button').forEach(b => b.setAttribute('aria-selected', b.dataset.v === S.play));
   mark('#gapSeg', v => v === S.gap);
   mark('#viewSeg', v => v === S.view);
   $('#stage').dataset.play = S.play;
