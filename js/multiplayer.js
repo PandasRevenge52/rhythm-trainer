@@ -13,12 +13,13 @@
 // are numbered, acknowledged and sent again until they arrive; a player who drops keeps their place
 // for a while and reconnects by themselves; the game itself never waits for the network.
 const MP_PANEL = 290;   // room between your lanes and the first other player, for your score panel
-const MP_VERSION = 3, MP_MAX = 4, MP_PREFIX = 'rt-arcade-', CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+const MP_VERSION = 4, MP_MAX = 4, MP_PREFIX = 'rt-arcade-', CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const GRACE_LOBBY = 45000, GRACE_MATCH = 120000, GIVE_UP = 90000;   // how long a dropped player keeps their place / keeps trying
 const nowE = () => performance.timeOrigin + performance.now();   // this computer's clock, in ms
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const JCOL = ['#ffd479', '#8fe39a', '#b9b3aa', '#ff9b8a', '#ff7a6b', '#ff9b8a'];   // Sick Good Bad Shit Miss Dropped
 // this tab's player id: the same through reconnects (and a page reload), so you come back as you
+const randToken = (n = 18) => { const a = new Uint8Array(n); crypto.getRandomValues(a); return Array.from(a, b => (b % 36).toString(36)).join(''); };
 const myPid = () => { try { let p = sessionStorage.getItem('mpPid'); if (!p) sessionStorage.setItem('mpPid', p = 'p' + Math.random().toString(36).slice(2, 12)); return p; } catch (e) { return MP._pid || (MP._pid = 'p' + Math.random().toString(36).slice(2, 12)); } };
 
 // One player-to-player link that survives its connection being swapped out. send() is fire and forget
@@ -140,6 +141,7 @@ const MP = {
     this.reset();
     this.msg('Joining…');
     this.me = myPid(); this.joinCode = code;
+    try { const kv = JSON.parse(sessionStorage.getItem('mpSecret') || 'null'); this.secret = kv && kv.code === code ? kv.secret : null; } catch (e) { this.secret = null; }
     this.link = new Link(d => this.fromHost(d), () => { this.welcomed = null; this.hostLost(); }, () => { if (this.lostAt && this.welcomed === this.link.c) this.backOnline(); });
     const attempt = this.attempt = {};
     try { this.peer = await this.openPeer(null); this.peer.on('disconnected', () => this.keepPeer()); } catch (e) { this.peer = null; }
@@ -187,7 +189,7 @@ const MP = {
     const send = () => {
       const L = this.link;
       if (!L || !L.up || this.welcomed === L.c) { clearInterval(this.helloT); return; }
-      L.raw({t:'hello', pid:this.me, name:myName(), v:MP_VERSION, epoch:L.epoch});
+      L.raw({t:'hello', pid:this.me, name:myName(), v:MP_VERSION, epoch:L.epoch, secret:this.secret});
     };
     send(); this.helloT = setInterval(send, 1500);
   },
@@ -260,21 +262,25 @@ const MP = {
     if (m.v !== MP_VERSION) { c.send({t:'nope', why:"You and the host have different versions of the game. Both refresh the page (Ctrl+Shift+R) and try again."}); setTimeout(() => c.close(), 800); return; }
     const pid = String(m.pid || '').slice(0, 24); if (!pid) return;
     let p = this.players.find(x => x.id === pid);
-    if (!p && this.players.length >= MP_MAX) { c.send({t:'nope', why:`That lobby is full (${MP_MAX} players).`}); setTimeout(() => c.close(), 800); return; }
     let L = this.links.get(pid);
+    const sameConn = L && L.c === c;
+    // H3: a different connection may only take an existing player's slot if it proves the private
+    // reconnect token the host gave that player. Without it, it's an impostor using a known player id.
+    if (p && !sameConn && p.secret && m.secret !== p.secret) { c.send({t:'nope', why:"Couldn't rejoin this lobby. Refresh the page (Ctrl+Shift+R) and join again with the code."}); setTimeout(() => c.close(), 800); return; }
+    if (!p && this.players.length >= MP_MAX) { c.send({t:'nope', why:`That lobby is full (${MP_MAX} players).`}); setTimeout(() => c.close(), 800); return; }
     if (!L) { L = new Link(d => this.fromGuest(pid, d), () => this.guestLost(pid)); this.links.set(pid, L); }
     // a different epoch: their page started over (or it's their first time), so both sides start counting again
     const fresh = L.peerEpoch !== m.epoch;
     if (fresh) { L.reset(); L.peerEpoch = m.epoch; }
     c._link = L; L.attach(c);
     if (!p) {
-      p = {id:pid, name:uniqueName(String(m.name || 'Player').slice(0, 16), this.players), host:false, ready:false, have:false, pct:0, ping:0, state:'lobby', inMatch:false, net:'ok', relay:!!c.relayed};
+      p = {id:pid, name:uniqueName(String(m.name || 'Player').slice(0, 16), this.players), host:false, ready:false, have:false, pct:0, ping:0, state:'lobby', inMatch:false, net:'ok', relay:!!c.relayed, secret:randToken()};
       this.players.push(p); this.sys(`${p.name} joined.`);
     } else {
       if (p.net === 'lost') this.sys(`${p.name} is back.`);
       Object.assign(p, {net:'ok', relay:!!c.relayed, lostAt:0});
     }
-    L.raw({t:'welcome', id:pid, code:this.code, phase:this.phase, fresh});
+    L.raw({t:'welcome', id:pid, code:this.code, phase:this.phase, fresh, secret:p.secret});
     if (fresh) {
       if (this.song) L.sendR({t:'song', song:this.song});
       // a match is on that they're part of: they come straight in, at the right spot in the song
@@ -334,7 +340,7 @@ const MP = {
     this.sendRoster();
     this.renderLobby(); this.renderResults();
   },
-  sendRoster() { if (this.host) this.broadcast({t:'roster', players:this.players.map(({lostAt, ...p}) => p), phase:this.phase}); },
+  sendRoster() { if (this.host) this.broadcast({t:'roster', players:this.players.map(({lostAt, secret, ...p}) => p), phase:this.phase}); },
   chat(name, text) {
     text = String(text || '').slice(0, 140).trim(); if (!text) return;
     this.broadcast({t:'chat', name, text}, null, true); this.addChat(name, text);
@@ -408,6 +414,7 @@ const MP = {
       case 'welcome':
         if (this.welcomed === this.link.c) break;   // an answer to a repeated hello
         this.welcomed = this.link.c; clearInterval(this.helloT);
+        if (d.secret) { this.secret = d.secret; try { sessionStorage.setItem('mpSecret', JSON.stringify({code:this.joinCode, secret:d.secret})); } catch (e) {} }
         if (d.fresh) this.link.reset();   // the host is counting from the start again; so do we
         this.backOnline();
         if (!this.code) { this.code = this.joinCode; this.phase = d.phase; this.showLobby(); grant('mpJoin'); }
