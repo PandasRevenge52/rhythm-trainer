@@ -7,7 +7,14 @@
 // seed: the same seed always writes the same song (multiplayer lobbies use it so everyone gets the
 // host's random song without sending the audio)
 const seededRandom = seed => () => { seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
-async function randomSong(seed = (Math.random() * 2 ** 31) | 0) {
+// Give the page a turn: scheduler.yield() where there is one, else a message (unlike setTimeout it isn't
+// clamped to 4 ms after a few rounds, or throttled to once a second in a background tab).
+const yieldChan = new MessageChannel(), yieldWaiting = [];
+yieldChan.port1.onmessage = () => yieldWaiting.shift()();
+const yieldToPage = () => globalThis.scheduler && scheduler.yield ? scheduler.yield()
+  : new Promise(r => { yieldWaiting.push(r); yieldChan.port2.postMessage(0); });
+// onProgress(0..1) is told how far the audio has got, now and then
+async function randomSong(seed = (Math.random() * 2 ** 31) | 0, onProgress = null) {
   const R = seededRandom(seed), pick = a => a[Math.floor(R() * a.length)], chance = x => R() < x, between = (a, b) => a + R() * (b - a);
   const shuffle = a => a.map(x => [R(), x]).sort((x, y) => x[0] - y[0]).map(x => x[1]);
 
@@ -268,14 +275,34 @@ async function randomSong(seed = (Math.random() * 2 ** 31) | 0) {
     }
   }
   const TRI = 0, SQUARE = 1, SAW = 2;
-  for (const [t, v] of kicks) kick(t, 0.9 * v);
-  for (const [t, v] of snares) snareHit(t, 0.7 * v);
-  for (const [t, v] of hats) hat(t, 0.3 * v);
-  for (const [t, v, k] of toms) tom(t, 0.8 * v, [210, 165, 125, 95][k]);
-  for (const [t, v, midi, len] of vocal) { note(t, midi, len, 0.26 * v, TRI, 3200); note(t, midi, len, 0.05 * v, SQUARE, 1800); }
-  for (const [t, v, midi, len] of inst) note(t, midi, len, 0.13 * v, SAW, 1600);
-  for (const [t, midi, len] of bass) note(t, midi, len, 0.35, TRI, 600);
-  for (let i = 0; i < out.length; i++) out[i] = Math.tanh(out[i] * 0.9);   // keep the peaks from clipping
+  // Writing every sample takes a second or more (several on a phone), so it's done in slices with a
+  // break in between: the page keeps responding. The sounds still run in exactly this order, so the
+  // noise they draw from R, and with it the audio for a given seed, stays the same.
+  const jobs = [
+    ...kicks.map(([t, v]) => () => kick(t, 0.9 * v)),
+    ...snares.map(([t, v]) => () => snareHit(t, 0.7 * v)),
+    ...hats.map(([t, v]) => () => hat(t, 0.3 * v)),
+    ...toms.map(([t, v, k]) => () => tom(t, 0.8 * v, [210, 165, 125, 95][k])),
+    ...vocal.map(([t, v, midi, len]) => () => { note(t, midi, len, 0.26 * v, TRI, 3200); note(t, midi, len, 0.05 * v, SQUARE, 1800); }),
+    ...inst.map(([t, v, midi, len]) => () => note(t, midi, len, 0.13 * v, SAW, 1600)),
+    ...bass.map(([t, midi, len]) => () => note(t, midi, len, 0.35, TRI, 600)),
+  ];
+  const CLIP = 1 << 18;   // samples per slice of the final clip pass
+  const steps = jobs.length + Math.ceil(out.length / CLIP);
+  let sliceStart = performance.now();
+  const breathe = async done => {
+    if (performance.now() - sliceStart < 25) return;
+    if (onProgress) onProgress(done / steps);
+    await yieldToPage();
+    sliceStart = performance.now();
+  };
+  for (let j = 0; j < jobs.length; j++) { jobs[j](); await breathe(j + 1); }
+  for (let i0 = 0, k = 0; i0 < out.length; i0 += CLIP, k++) {
+    const i1 = Math.min(out.length, i0 + CLIP);
+    for (let i = i0; i < i1; i++) out[i] = Math.tanh(out[i] * 0.9);   // keep the peaks from clipping
+    await breathe(jobs.length + k + 1);
+  }
+  if (onProgress) onProgress(1);
   const buf = ctx.createBuffer(1, out.length, sr);
   buf.copyToChannel(out, 0);
 
