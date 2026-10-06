@@ -31,6 +31,7 @@ function laneRest(g, x, y, dur, c, k) {
 }
 // Each note's count label under the lane, worked out once per rhythm instead of every frame: null where it's
 // hidden (a left-hand note sharing its spot with a right-hand onset; the right hand's label is shown).
+const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 const laneLabelCache = new WeakMap();
 function laneLabels(pat) {
   let L = laneLabelCache.get(pat);
@@ -129,6 +130,23 @@ function drawLane(now) {
     g.fillText(`${combo} combo`, W - 12, 21);
     if (mult() > 1) { g.fillStyle = col.muted; g.font = '700 12px system-ui,sans-serif'; g.fillText(`×${mult()} points`, W - 12, 37); }
     g.textAlign = 'center';
+  }
+  // U6: the count-in as one big number over the lane, popping in on each click (it runs off the same audio clock as
+  // the lane, so it's exactly in time) and shrinking away as beat 1 of the music arrives
+  const cur = run && run.segments.find(s => now >= s.start && now < segEnd(s));
+  if (cur) {
+    const m = cur.pat.meter, t16 = (now - cur.start) / cur.s16;
+    let n = null, p = 1, out = 0;
+    if (cur.type === 'count') { const b = beatAt(m, Math.min(t16, m.len - 0.01)); n = b.i + 1; p = (t16 - b.start) / b.len; }
+    else { const prev = run.segments[run.segments.indexOf(cur) - 1], half = m.beats[0] / 2;
+      if (prev && prev.type === 'count' && t16 < half) { n = m.beats.length; out = t16 / half; } }
+    if (n != null) {
+      const x = Math.min(1, p * 3), back = 1 + 2.7 * (x - 1) ** 3 + 1.7 * (x - 1) ** 2;   // ease-out-back: a small overshoot
+      const k = (reducedMotion.matches ? 1 : 0.8 + 0.2 * back) * (1 - 0.35 * out);
+      g.save(); g.globalAlpha = (1 - out) * (0.4 + 0.6 * Math.max(0, 1 - p)); g.fillStyle = col.accent;
+      g.font = `700 ${Math.round(H * 0.6)}px Fraunces, Georgia, serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.translate(W / 2, mid + 2); g.scale(k, k); g.fillText(n, 0, 0); g.restore();
+    }
   }
   // effects
   const t = performance.now();
