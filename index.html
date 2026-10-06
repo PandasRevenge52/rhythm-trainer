@@ -164,7 +164,7 @@
     <canvas id="lane"></canvas>
     <div class="stats">
       <div id="acc"></div>
-      <div id="statText"></div>
+      <div id="statText">Press <kbd>Enter</kbd> to start. Hit with <kbd>Space</kbd>, <kbd>F</kbd> or <kbd>J</kbd>.</div>
       <div class="hist" id="hist"></div>
     </div>
   </section>
@@ -173,20 +173,21 @@
 
 <div class="modal" id="modal" role="dialog" aria-modal="true"><div class="card" id="modalCard"></div></div>
 
-<!-- plain scripts (not modules) so the app also runs straight from the file system -->
-<script src="js/data.js"></script>
-<script src="js/generate.js"></script>
-<script src="js/drums.js"></script>
-<script src="js/notation.js"></script>
-<script src="js/audio.js"></script>
-<script src="js/engine.js"></script>
-<script src="js/judge.js"></script>
-<script src="js/progress.js"></script>
-<script src="js/calibrate.js"></script>
-<script src="js/song.js"></script>
-<script src="js/songsetup.js"></script>
-<script src="js/input.js"></script>
-<script src="js/lane.js"></script>
-<script src="js/ui.js"></script>
+<!-- plain scripts (not modules) so the app also runs straight from the file system; "defer" keeps their order
+     but lets the page paint before they have all downloaded -->
+<script defer src="js/data.js"></script>
+<script defer src="js/generate.js"></script>
+<script defer src="js/drums.js"></script>
+<script defer src="js/notation.js"></script>
+<script defer src="js/audio.js"></script>
+<script defer src="js/engine.js"></script>
+<script defer src="js/judge.js"></script>
+<script defer src="js/progress.js"></script>
+<script defer src="js/calibrate.js"></script>
+<script defer src="js/song.js"></script>
+<script defer src="js/songsetup.js"></script>
+<script defer src="js/input.js"></script>
+<script defer src="js/lane.js"></script>
+<script defer src="js/ui.js"></script>
 </body>
 </html>
