@@ -58,6 +58,23 @@ const tr = {buf:null, name:'', bpm:120, first:0, drums:null, loading:false, rand
 let chart = [], state = 'menu', G = null;
 // multiplayer (js/multiplayer.js) takes over a few things while a match is on
 const mpOn = () => typeof MP !== 'undefined' && MP.inGame;
+// Multiplayer (PeerJS, the relay, the lobby: ~46 KB gzip) only loads when someone wants it: "Play with
+// friends", or an invite link (?join=CODE). Plain script tags in order, so it still works from file://.
+let mpLoading = null;
+function loadMultiplayer() {
+  if (typeof MP !== 'undefined') return Promise.resolve();
+  return mpLoading = mpLoading || ['js/vendor/peerjs.min.js', 'js/relay.js', 'js/multiplayer.js'].reduce((chain, src) => chain.then(() => new Promise((resolve, reject) => {
+    const s = document.createElement('script'); s.src = src; s.onload = resolve; s.onerror = () => reject(new Error(src)); document.head.appendChild(s);
+  })), Promise.resolve()).catch(e => { mpLoading = null; throw e; });
+}
+$('#aMulti').addEventListener('click', e => {
+  if (typeof MP !== 'undefined') return;   // loaded: multiplayer.js handles the button itself
+  const b = e.currentTarget, label = b.innerHTML;
+  b.disabled = true; b.textContent = 'Loading…';
+  loadMultiplayer().then(() => MP.open(), () => info("Couldn't load multiplayer. Check your connection and try again."))
+    .finally(() => { b.disabled = false; b.innerHTML = label; });
+});
+if (new URLSearchParams(location.search).has('join')) loadMultiplayer().catch(() => info("Couldn't load multiplayer. Check your connection and refresh."));
 
 // ---------- song loading (shared with the trainer) ----------
 async function loadSong(blob, meta) {
