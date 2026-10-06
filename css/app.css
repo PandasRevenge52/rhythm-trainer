@@ -443,6 +443,11 @@ h1,h2,.card h2,.side-head h2,.atitle{font-family:var(--serif);font-weight:600;le
 .modes{background:none;padding:0;gap:4px;border-radius:0}
 .modes button{font-size:15px;padding:8px 12px;border-radius:0;border:0;border-bottom:2px solid transparent}
 .modes button.on{background:none;box-shadow:none;border-bottom-color:var(--accent)}
+/* U7: one underline that slides to the chosen tab (transform only) instead of jumping between tabs */
+.modes{position:relative}
+.modes.slide button.on{border-bottom-color:transparent}
+.modebar{position:absolute;left:0;bottom:0;width:1px;height:2px;background:var(--accent);transform-origin:0 0;pointer-events:none}
+.modes.slide.ready .modebar{transition:transform var(--dur-3) var(--ease-out)}
 /* section titles read like headings, not labels */
 .grp h3{font:italic 500 17px var(--serif);text-transform:none;letter-spacing:0;color:var(--ink);margin-bottom:6px}
 .card h3{font:italic 500 16px var(--serif);text-transform:none;letter-spacing:0;color:var(--ink)}

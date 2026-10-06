@@ -63,6 +63,7 @@ function syncControls() {
   mark('#extraChips', v => S.extras.includes(v));
   mark('#playSeg', v => v === S.play);
   document.querySelectorAll('#playSeg button').forEach(b => b.setAttribute('aria-selected', b.dataset.v === S.play));
+  placeModeBar();
   mark('#gapSeg', v => v === S.gap);
   mark('#viewSeg', v => v === S.view);
   $('#stage').dataset.play = S.play;
@@ -90,6 +91,17 @@ function syncControls() {
   $('#polySel').value = S.polyPick || 'mix';
   syncLevelOptions(); renderInputStatus(); renderSetupSum();
 }
+// U7: the mode tabs' underline slides to the chosen tab. Placed without sliding the first time (and after a resize).
+function placeModeBar(instant) {
+  const seg = $('#playSeg'), on = seg.querySelector('button.on'), bar = seg.querySelector('.modebar');
+  if (!on || !bar) return;
+  if (instant) seg.classList.remove('ready');
+  bar.style.transform = `translateX(${on.offsetLeft}px) scaleX(${on.offsetWidth})`;
+  seg.classList.add('slide');
+  if (!seg.classList.contains('ready')) requestAnimationFrame(() => requestAnimationFrame(() => seg.classList.add('ready')));
+}
+addEventListener('resize', () => placeModeBar(true));
+if (document.fonts) document.fonts.ready.then(() => placeModeBar(true));   // the tabs' widths settle once Figtree is in
 // U1 (phones): the setup controls fold into one summary row; it says what's set and opens them.
 function renderSetupSum() {
   const lv = $('#level'), name = (lv.options[lv.selectedIndex] || {}).text || '';
