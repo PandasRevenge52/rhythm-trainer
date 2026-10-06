@@ -94,12 +94,13 @@ const MP = {
     const [host, port] = q.split(':');
     return {host, port:+port || 9000, path:'/', secure:false, debug:0};
   },
-  newCode() { let c = ''; for (let i = 0; i < 5; i++) c += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]; return c; },
+  newCode() { const a = new Uint8Array(6); crypto.getRandomValues(a); return Array.from(a, b => CODE_CHARS[b % CODE_CHARS.length]).join(''); },
   async create() {
     this.reset();
     this.msg('Making a lobby…');
     for (let tries = 0; tries < 5; tries++) {
       const code = this.newCode();
+      this.lobbyKey = randToken(22);   // H1: the relay encryption secret; shared only through the invite-link fragment
       let viaRelayOnly = false;
       try { this.peer = await this.openPeer(MP_PREFIX + code); }
       catch (e) {
@@ -108,7 +109,7 @@ const MP = {
       }
       Object.assign(this, {code, host:true, me:'host', phase:'lobby'});
       // the backup route, for friends whose direct connection can't get through
-      const relayUp = Relay.listen(code, c => this.onTransport(c));
+      const relayUp = Relay.listen(code, c => this.onTransport(c), this.lobbyKey);
       if (viaRelayOnly && !(await relayUp)) { this.reset(); return this.fail({type:'network'}); }
       this.players = [{id:'host', name:myName(), host:true, ready:true, have:false, pct:0, ping:0, state:'lobby', inMatch:false, net:'ok'}];
       if (this.peer) {
@@ -137,9 +138,10 @@ const MP = {
       p.on('error', e => { clearTimeout(t); if (!p.open) { p.destroy(); reject(e); } });
     });
   },
-  async join(code) {
+  async join(code, key) {
     code = code.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-    if (code.length !== 5) return this.msg('Lobby codes are 5 letters and numbers.');
+    if (code.length !== 6) return this.msg('Lobby codes are 6 letters and numbers.');
+    this.lobbyKey = key || null;
     ensureAudio(); if (ctx.state !== 'running') ctx.resume().catch(() => {});   // this click counts as the go-ahead for sound
     this.reset();
     this.msg('Joining…');
@@ -150,7 +152,7 @@ const MP = {
     try { this.peer = await this.openPeer(null); this.peer.on('disconnected', () => this.keepPeer()); } catch (e) { this.peer = null; }
     if (attempt !== this.attempt) return;
     this.routes(false);
-    setTimeout(() => { if (attempt === this.attempt && !this.code) { this.msg(`No answer from lobby ${code}. Check the code, and that the host still has the lobby open.`); this.leave(true); } }, 16000);
+    setTimeout(() => { if (attempt === this.attempt && !this.code) { this.msg(this.lobbyKey ? `No answer from lobby ${code}. Check the code, and that the host still has the lobby open.` : `Couldn't reach lobby ${code}. If the direct connection is blocked, ask for the invite link (it works through the backup route).`); this.leave(true); } }, 16000);
   },
   // Try both ways to reach the host: direct, and the relay (straight away when reconnecting, or after a
   // few seconds the first time, since direct is quicker when it works). Whichever opens first is used;
@@ -161,8 +163,11 @@ const MP = {
     let relayTried = false;
     const relay = async () => {
       if (relayTried || attempt !== this.attempt || (this.link.up && !again)) return; relayTried = true;
+      // the relay is encrypted with the lobby key, which only the invite link carries. Typed-only joins
+      // have no key, so they can't use the relay; the direct route (also encrypted) is their only path.
+      if (!this.lobbyKey) { if (!again && !this.code) this.msg('Connecting…'); return; }
       if (!again && !this.code) this.msg('Direct connection blocked, trying the backup route…');
-      const rc = await Relay.dial(code, this.me);
+      const rc = await Relay.dial(code, this.me, this.lobbyKey);
       if (!rc || attempt !== this.attempt) { if (!rc && !again && !this.code) { this.msg("Couldn't connect to that lobby. Check your internet connection and try again."); this.leave(true); } return; }
       rc.start(); this.offer(rc);
     };
@@ -862,12 +867,12 @@ $('#aMulti').addEventListener('click', () => MP.open());
 $('#mpBack').addEventListener('click', () => show('menu'));
 $('#mpName').addEventListener('change', e => { S.playerName = e.target.value.trim().slice(0, 16); save(); });
 $('#mpCreate').addEventListener('click', () => { S.playerName = $('#mpName').value.trim().slice(0, 16); save(); ensureAudio(); MP.create(); });
-$('#mpJoin').addEventListener('click', () => { S.playerName = $('#mpName').value.trim().slice(0, 16); save(); MP.join($('#mpCodeIn').value); });
+$('#mpJoin').addEventListener('click', () => { S.playerName = $('#mpName').value.trim().slice(0, 16); save(); const c = $('#mpCodeIn').value.trim().toUpperCase(); MP.join(c, c === MP._linkCode ? MP._linkKey : null); });
 $('#mpCodeIn').addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') $('#mpJoin').click(); });
 $('#mpCodeIn').addEventListener('input', e => { e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''); });
 $('#mpName').addEventListener('keydown', e => e.stopPropagation());
 $('#mpLeave').addEventListener('click', () => { MP.leave(); });
-const inviteLink = () => `${/^https?:/.test(location.protocol) ? location.origin + location.pathname : 'https://pandasrevenge52.github.io/rhythm-trainer/arcade.html'}?join=${MP.code}`;
+const inviteLink = () => `${/^https?:/.test(location.protocol) ? location.origin + location.pathname : 'https://pandasrevenge52.github.io/rhythm-trainer/arcade.html'}?join=${MP.code}#k=${encodeURIComponent(MP.lobbyKey || '')}`;
 const copy = (text, btn, label) => { (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(() => { btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = label, 1400); }, () => prompt('Copy this:', text)); };
 $('#mpCopyCode').addEventListener('click', e => copy(MP.code, e.currentTarget, 'Copy code'));
 $('#mpCopyLink').addEventListener('click', e => copy(inviteLink(), e.currentTarget, 'Copy invite link'));
@@ -901,7 +906,13 @@ $('#mpResLeave').addEventListener('click', () => MP.leave());
 // an invite link (?join=CODE) opens straight onto the join box
 {
   const code = new URLSearchParams(location.search).get('join');
-  if (code) { MP.open(); $('#mpCodeIn').value = code.toUpperCase(); setTimeout(() => $(S.playerName ? '#mpJoin' : '#mpName').focus(), 50); }
+  if (code) {
+    MP._linkCode = code.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+    const m = location.hash.match(/[#&]k=([^&]+)/); MP._linkKey = m ? decodeURIComponent(m[1]) : null;
+    // the key shouldn't linger in the address bar / history
+    try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+    MP.open(); $('#mpCodeIn').value = MP._linkCode; setTimeout(() => $(S.playerName ? '#mpJoin' : '#mpName').focus(), 50);
+  }
 }
 addEventListener('beforeunload', () => { if (MP.code) MP.leave(true); });
 setInterval(() => { if (MP.lostAt && $('#mp').classList.contains('show')) MP.renderLobby(); }, 1000);

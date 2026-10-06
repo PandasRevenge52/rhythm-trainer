@@ -183,3 +183,5 @@ body.playing .homebtn:hover{opacity:1}
 .mpst.bad{color:#ffb199}
 .mpping.slow{color:#ffb199}
 .mpwarn{color:#ffb199;font-size:13.5px;margin:6px 0 0}
+
+.mpsharenote{font-size:12px;margin:6px 0 0;line-height:1.4}

@@ -8,7 +8,18 @@
 // best first: EMQX drops messages that come in quickly, so it's the last resort
 const RELAY_URLS = ['wss://broker.hivemq.com:8884/mqtt', 'wss://test.mosquitto.org:8081/mqtt', 'wss://broker.emqx.io:8084/mqtt'];
 const RELAY_MAX_PEERS = 8;   // M2: cap distinct relay senders so an attacker can't spawn unbounded connections
-const RELAY_BASE = code => `rhythm-trainer/arcade1/${code}/`;
+// H1: the topic is a hash of the code (the literal code isn't exposed on the public broker), and a new
+// prefix ('a2') keeps new, encrypted clients from colliding with old plaintext ones.
+async function relayTopic(code) {
+  const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('rt-relay/' + code));
+  return 'rhythm-trainer/a2/' + Array.from(new Uint8Array(h).slice(0, 10), b => b.toString(16).padStart(2, '0')).join('') + '/';
+}
+// AES-GCM key from the lobby secret (the strong key from the invite-link fragment, or the code as a
+// weaker fallback for typed-only joins). The brokers never see this key.
+async function relayKey(material) {
+  const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('rt-relay-key/' + material));
+  return crypto.subtle.importKey('raw', h, {name:'AES-GCM'}, false, ['encrypt', 'decrypt']);
+}
 
 // The smallest MQTT 3.1.1 client that does the job: connect, subscribe, publish (QoS 0), keep alive.
 class Mqtt {
@@ -76,6 +87,19 @@ const b64 = buf => { let s = ''; const u = new Uint8Array(buf); for (let i = 0; 
 const unb64 = s => { const bin = atob(s), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u.buffer; };
 const encodeMsg = (from, m) => new TextEncoder().encode(JSON.stringify({f:from, m:m.d instanceof ArrayBuffer ? {...m, d:undefined, d64:b64(m.d)} : m}));
 const decodeMsg = bytes => { const o = JSON.parse(new TextDecoder().decode(bytes)); if (o.m && o.m.d64) { o.m.d = unb64(o.m.d64); delete o.m.d64; } return o; };
+// every relay message is encrypted and authenticated with the lobby key (12-byte IV prepended).
+// A message that doesn't decrypt (forged, or from someone without the key) returns null and is dropped.
+async function sealMsg(from, m) {
+  if (!Relay.key) return null;
+  const plain = encodeMsg(from, m), iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM', iv}, Relay.key, plain));
+  const out = new Uint8Array(12 + ct.length); out.set(iv); out.set(ct, 12); return out;
+}
+async function openMsg(bytes) {
+  if (!Relay.key || bytes.length < 13) return null;
+  try { const plain = new Uint8Array(await crypto.subtle.decrypt({name:'AES-GCM', iv:bytes.slice(0, 12)}, Relay.key, bytes.slice(12))); return decodeMsg(plain); }
+  catch (e) { return null; }
+}
 
 // Looks like a PeerJS DataConnection to multiplayer.js: peer, open, send(), on('open'|'data'|'close'), close().
 // Without a real connection there's no "closed" signal, so each side sends a heartbeat and a quiet
@@ -96,7 +120,7 @@ class RelayConn {
   }
   on(ev, fn) { (this.handlers[ev] = this.handlers[ev] || []).push(fn); }
   emit(ev, x) { for (const fn of this.handlers[ev] || []) fn(x); }
-  raw(m) { const bytes = encodeMsg(this.me, m); this.client.pub(this.toTopic, bytes); for (const c of this.others) c.pub(this.toTopic, bytes); }
+  raw(m) { sealMsg(this.me, m).then(bytes => { if (!bytes) return; this.client.pub(this.toTopic, bytes); for (const c of this.others) c.pub(this.toTopic, bytes); }).catch(() => {}); }
   // the host answered through this broker: use only it from now on
   lock(client) { if (!this.others.length) return; if (client !== this.client) this.others.push(this.client); this.client = client; for (const c of this.others) if (c !== client) c.close(); this.others = []; }
   send(m) { if (this.open) this.raw(m); }
@@ -110,17 +134,18 @@ class RelayConn {
 }
 
 const Relay = {
-  clients:[], conns:new Map(), pending:new Map(),
+  clients:[], conns:new Map(), pending:new Map(), key:null,
   // host: listen on every broker that answers; onConn gets a RelayConn for each new guest
-  async listen(code, onConn) {
+  async listen(code, onConn, secret) {
     this.stop();
-    const base = RELAY_BASE(code);
+    this.key = await relayKey(secret || code);
+    const base = await relayTopic(code);
     await Promise.all(RELAY_URLS.map(async url => {
       try {
         const c = await new Mqtt(url).connect();
         this.clients.push(c);
-        c.sub(base + 'h', bytes => {
-          let o; try { o = decodeMsg(bytes); } catch (e) { return; }
+        c.sub(base + 'h', async bytes => {
+          const o = await openMsg(bytes); if (!o || !o.f || typeof o.m !== 'object') return;
           const rc = this.conns.get(o.f);
           if (rc && c === rc.client) { rc.got(o.m); return; }
           if (o.m.t !== 'hello') return;
@@ -144,8 +169,9 @@ const Relay = {
     return this.clients.length;
   },
   // guest: the first broker that answers carries this player's connection to the host
-  async dial(code, me) {
-    const base = RELAY_BASE(code);
+  async dial(code, me, secret) {
+    this.key = await relayKey(secret || code);
+    const base = await relayTopic(code);
     // the host may not have reached every broker, so say hello on all of them and keep the one it answers on
     const got = (await Promise.all(RELAY_URLS.map(url => new Mqtt(url).connect().catch(() => null)))).filter(Boolean);
     if (!got.length) return null;
@@ -157,9 +183,9 @@ const Relay = {
     this.conns.set('h', rc);   // so leaving says goodbye straight away
     rc.on('close', () => { for (const c of [rc.client, ...rc.others]) c.close(); });
     for (const c of got) {
-      c.sub(base + me, bytes => { try { const o = decodeMsg(bytes); if (o.f !== 'h') return; rc.lock(c); rc.got(o.m); } catch (e) {} });
+      c.sub(base + me, async bytes => { const o = await openMsg(bytes); if (!o || o.f !== 'h' || typeof o.m !== 'object') return; rc.lock(c); rc.got(o.m); });
     }
     return rc;
   },
-  stop() { for (const rc of [...this.conns.values()]) rc.close(); this.conns.clear(); this.pending.clear(); for (const c of this.clients) c.close(); this.clients = []; },
+  stop() { this.key = null; for (const rc of [...this.conns.values()]) rc.close(); this.conns.clear(); this.pending.clear(); for (const c of this.clients) c.close(); this.clients = []; },
 };

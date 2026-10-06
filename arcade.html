@@ -120,7 +120,7 @@
       <label class="mpname"><span class="lbl">Your name</span><input id="mpName" maxlength="16" placeholder="Player" autocomplete="nickname"></label>
       <div class="mpchoice">
         <div class="mpbox"><h3>Host</h3><p class="muted">You pick the song. It's sent to everyone, notes and all.</p><button id="mpCreate" class="primary">Make a lobby</button></div>
-        <div class="mpbox"><h3>Join</h3><p class="muted">Got a code from a friend?</p><div class="mpjoin"><input id="mpCodeIn" maxlength="5" placeholder="CODE" autocomplete="off" spellcheck="false" aria-label="Lobby code"><button id="mpJoin">Join</button></div></div>
+        <div class="mpbox"><h3>Join</h3><p class="muted">Got a code from a friend?</p><div class="mpjoin"><input id="mpCodeIn" maxlength="6" placeholder="CODE" autocomplete="off" spellcheck="false" aria-label="Lobby code"><button id="mpJoin">Join</button></div></div>
       </div>
       <p class="mpmsg" id="mpMsg" role="status"></p>
       <div class="actions"><button class="ghost" id="mpBack">Back</button><span class="spacer"></span><small class="muted" id="mpVer" title="You and your friends need the same version. If yours differ, press Ctrl+Shift+R."></small></div>
@@ -129,6 +129,7 @@
       <div class="mphead">
         <div><span class="lbl">Lobby code</span><b id="mpCode" class="mpcode"></b></div>
         <div class="mpshare"><button id="mpCopyCode">Copy code</button><button id="mpCopyLink">Copy invite link</button></div>
+        <p class="muted mpsharenote">Share the invite link for friends on another network — it also carries the key that keeps the backup connection private. A typed code works when the direct connection does.</p>
       </div>
       <div class="asong mpsong" id="mpSong"></div>
       <div id="mpHostCtl">
