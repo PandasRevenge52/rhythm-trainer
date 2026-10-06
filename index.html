@@ -2,6 +2,11 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<!-- Content-Security-Policy: scripts only from this site (no inline scripts), so injected code can't run.
+     Connections limited to the PeerJS signalling server and the relay brokers. Frame protection,
+     nosniff and Permissions-Policy need response headers, which GitHub Pages can't set (see security.md). -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; media-src 'self' blob:; connect-src 'self' https://0.peerjs.com wss://0.peerjs.com wss://broker.hivemq.com:8884 wss://test.mosquitto.org:8081 wss://broker.emqx.io:8084; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#141210">
 <meta name="color-scheme" content="dark">
