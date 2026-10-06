@@ -15,6 +15,9 @@
 *{box-sizing:border-box}
 html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans)}
 main{max-width:1180px;margin:0 auto;padding:18px 16px 32px}
+/* U4: with the settings panel open beside the page (wide screens, where you can keep playing), the page makes room
+   for it instead of being covered; when there's room for both anyway, nothing moves */
+body.side-docked main{margin-right:max(384px, calc((100% - 1180px) / 2))}
 button,select,input{font:inherit;color:inherit}
 button{background:var(--chip);border:1px solid transparent;border-radius:var(--r-md);padding:8px 13px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:background var(--dur-1),border-color var(--dur-1),color var(--dur-1),box-shadow var(--dur-1),transform var(--dur-press),filter var(--dur-1)}
 button:hover{border-color:var(--line)}

@@ -256,6 +256,7 @@ function setDrawer(open, section) {
   drawer.inert = !open;
   drawer.setAttribute('aria-modal', String(modal));
   scrim.hidden = !modal;
+  document.body.classList.toggle('side-docked', open && !modal);
   $('#setBtn').setAttribute('aria-expanded', String(open));
   if (open) {
     if (section) { const g = $(section); g.scrollIntoView({block:'start'}); }
@@ -266,7 +267,7 @@ $('#setBtn').addEventListener('click', () => setDrawer(!drawerOpen()));
 $('#sideClose').addEventListener('click', () => setDrawer(false));
 scrim.addEventListener('click', () => setDrawer(false));
 $('#inputChip').addEventListener('click', () => setDrawer(true, '#grpInput'));
-addEventListener('resize', () => { if (drawerOpen()) { const m = drawerModal(); scrim.hidden = !m; drawer.setAttribute('aria-modal', String(m)); } });
+addEventListener('resize', () => { if (drawerOpen()) { const m = drawerModal(); scrim.hidden = !m; drawer.setAttribute('aria-modal', String(m)); document.body.classList.toggle('side-docked', !m); } });
 // keep Tab inside the sheet while it's a modal overlay
 drawer.addEventListener('keydown', e => {
   if (e.key !== 'Tab' || !drawerModal()) return;
