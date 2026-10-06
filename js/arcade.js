@@ -361,7 +361,7 @@ addEventListener('drop', e => {
   const f = [...(e.dataTransfer?.files || [])].find(f => f.type.startsWith('audio') || /\.(mp3|wav|ogg|m4a|aac|flac)$/i.test(f.name));
   if (f && state === 'menu') pickFile(f);
 });
-function show(id) { for (const o of ['menu', 'pause', 'results', 'board', 'cal', 'mp', 'mpRes']) $('#' + o).classList.toggle('show', o === id); document.body.classList.toggle('playing', !id); }
+function show(id) { $('#menu').classList.remove('boot'); for (const o of ['menu', 'pause', 'results', 'board', 'cal', 'mp', 'mpRes']) $('#' + o).classList.toggle('show', o === id); document.body.classList.toggle('playing', !id); }
 
 // ---------- a run ----------
 function startAudio(fromPos, lead) {
