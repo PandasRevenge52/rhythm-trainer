@@ -289,6 +289,23 @@ function chartStats(notes) {
 // ---------- menu ----------
 const mark = (sel, fn) => document.querySelectorAll(sel + ' button').forEach(b => b.classList.toggle('on', fn(b.dataset.v)));
 const bestKey = () => `${tr.name}|${A$.src}|${A$.diff}`;
+// Star rating on each difficulty button. Each one needs that difficulty's whole chart, so after a new song
+// they're worked out one per task (the selected one first, it's already built) instead of freezing the menu.
+let starsJob = 0;
+function renderStars() {
+  const job = ++starsJob, btns = [...document.querySelectorAll('#aDiff button')].sort((a, b) => (b.dataset.v === A$.diff) - (a.dataset.v === A$.diff));
+  const cached = d => chartCache.drums === tr.drums && chartCache.map.has(d + '|' + A$.src);
+  for (const b of btns) if (!cached(b.dataset.v) && b.dataset.v !== A$.diff) b.querySelector('small').textContent = '★ …';
+  const next = () => {
+    if (job !== starsJob || !tr.buf) return;   // a newer menu has taken over
+    while (btns.length) {
+      const b = btns.shift(), fresh = !cached(b.dataset.v);
+      b.querySelector('small').textContent = '★ ' + chartStats(buildChart(b.dataset.v)).stars.toFixed(1);
+      if (fresh && btns.length) return void yieldToPage().then(next);
+    }
+  };
+  next();
+}
 function renderMenu() {
   $('#aSongName').textContent = tr.buf ? tr.name : 'No song loaded';
   if (tr.buf) {
@@ -299,8 +316,7 @@ function renderMenu() {
     const parts = srcParts(A$.src), noInst = parts.has('guitar') && !tr.drums.inst;
     $('#aChartInfo').textContent = noInst && parts.size === 1 ? 'Guitar charts need a high-quality chart for this song (tools/make-charts).' : chart.length ? `${noInst ? 'No guitar part for this song (it needs a high-quality chart) · ' : ''}` +  `${chart.length} notes${st.holds ? ` · ${st.holds} hold${st.holds === 1 ? '' : 's'}` : ''} · busiest ${st.peak.toFixed(1)} notes/s` :
       A$.src === 'vocals' ? "This song doesn't have a clear enough lead vocal. Add Drums or Guitar." : 'Not enough to build a chart from. Try another chart type.';
-    // star rating on each difficulty button
-    for (const b of document.querySelectorAll('#aDiff button')) b.querySelector('small').textContent = '★ ' + chartStats(buildChart(b.dataset.v)).stars.toFixed(1);
+    renderStars();
   } else { $('#aChartInfo').textContent = ''; document.querySelectorAll('#aDiff small').forEach(el => el.textContent = ''); }
   mark('#aSrc', v => srcParts(A$.src).has(v));
   mark('#aDiff', v => v === A$.diff);
