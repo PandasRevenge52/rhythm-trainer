@@ -154,6 +154,7 @@ function start(opts = {}) {
   syncMetro();
   run.timer = setInterval(scheduler, 25); scheduler();
   renderHud(); updateButtons();
+  revealStage();
   kick();
 }
 function stop(quiet) {

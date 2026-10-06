@@ -98,6 +98,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 @keyframes hurt{0%{box-shadow:0 0 0 3px var(--miss)}100%{box-shadow:0 0 0 0 transparent}}
 .toolbar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;padding-bottom:12px;margin-bottom:8px;border-bottom:1px solid var(--line)}
 .group{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.setupsum{display:none}
 select{background:var(--chip);border:1px solid transparent;border-radius:var(--r-md);padding:8px 30px 8px 12px;cursor:pointer;appearance:none;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23888' stroke-width='1.6'/%3E%3C/svg%3E");
   background-repeat:no-repeat;background-position:right 11px center}
@@ -405,6 +406,13 @@ details.more[open]>:not(summary){animation:reveal var(--dur-2) var(--ease-out)}
   .viewseg{grid-column:span 6} .viewseg button{flex:1;justify-content:center}
   /* phone toolbar order: Start / Listen New Path / Notes-Count / the rest */
   #startBtn{order:1} #listenBtn,#newBtn,#pathBtn{order:2} .viewseg{order:3} #level,#meter,#barsSel,.tempo,.chip-in{order:4}
+  /* U1: the setup controls fold into one summary row, so the staff and lane fit on the screen with Start */
+  .setupsum{display:flex;grid-column:span 6;order:4;justify-content:space-between;min-width:0;padding:9px 12px}
+  .setupsum span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;text-align:left}
+  .setupsum .chev{flex:none;transition:transform var(--dur-2) var(--ease-out)}
+  .toolbar.setup-open .setupsum .chev{transform:rotate(180deg)}
+  .toolbar:not(.setup-open) :is(#level,#meter,#barsSel,.tempo,.chip-in){display:none}
+  .toolbar.setup-open :is(#level,#meter,#barsSel,.tempo,.chip-in){animation:reveal var(--dur-2) var(--ease-out) both}
 }
 
 /* song setup */

@@ -48,7 +48,7 @@ function settingsChanged() {
 }
 function setBpm(v, quiet) {
   S.bpm = Math.max(40, Math.min(220, Math.round(+v || S.bpm))); save();
-  $('#bpmNum').value = S.bpm;
+  $('#bpmNum').value = S.bpm; renderSetupSum();
   if (!run) kick(); else if (!quiet && S.play === 'practice') toast(`${S.bpm} BPM from the next pass`);
 }
 const mark = (sel, fn) => document.querySelectorAll(sel + ' button').forEach(b => b.classList.toggle('on', fn(b.dataset.v)));
@@ -88,7 +88,23 @@ function syncControls() {
   $('#polyRow').hidden = S.hands !== 2;
   $('#polyPickRow').hidden = S.hands !== 2 || !S.poly;
   $('#polySel').value = S.polyPick || 'mix';
-  syncLevelOptions(); renderInputStatus();
+  syncLevelOptions(); renderInputStatus(); renderSetupSum();
+}
+// U1 (phones): the setup controls fold into one summary row; it says what's set and opens them.
+function renderSetupSum() {
+  const lv = $('#level'), name = (lv.options[lv.selectedIndex] || {}).text || '';
+  $('#setupSumText').textContent = [name.replace(/^🔒\s*/, ''), S.meter, `${S.bars} bar${S.bars > 1 ? 's' : ''}`, `${S.bpm} BPM`].join(' · ');
+}
+function setSetupOpen(open) { $('.toolbar').classList.toggle('setup-open', open); $('#setupSum').setAttribute('aria-expanded', open); }
+$('#setupSum').addEventListener('click', () => setSetupOpen(!$('.toolbar').classList.contains('setup-open')));
+// U1: on a phone, or a short landscape screen, the staff starts below the controls. On Start, scroll so Start/Stop
+// sits at the top with the staff and lane under it (instant with reduced motion).
+function revealStage() {
+  setSetupOpen(false);
+  if (innerWidth > 640 && innerHeight > 520) return;
+  const top = Math.max(0, $('#stage').getBoundingClientRect().top + scrollY - 6);
+  if (Math.abs(scrollY - top) < 4) return;
+  scrollTo({top, behavior:matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'});
 }
 function setPlay(v) {
   if (v === S.play) return;
