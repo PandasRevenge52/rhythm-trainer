@@ -85,6 +85,8 @@ function syncControls() {
   const fixed = S.play === 'daily';
   $('#level').disabled = fixed; $('#meter').disabled = fixed || (S.play === 'song' && S.songSource === 'song');
   $('#polyRow').hidden = S.hands !== 2;
+  $('#polyPickRow').hidden = S.hands !== 2 || !S.poly;
+  $('#polySel').value = S.polyPick || 'mix';
   syncLevelOptions(); renderInputStatus();
 }
 function setPlay(v) {
@@ -106,13 +108,19 @@ function setLevel(i, quiet) {
   if (!levelUnlocked(i) && S.play === 'practice') toast(`🔒 ${L.name} unlocks after you pass ${LEVELS[i - 1].name}. Listen is still open`);
   else toast(`${S.play === 'endless' ? 'Start at' : 'Difficulty'} ${i + 1}/${LEVELS.length} · ${L.name}: ${L.desc}` + (S.play === 'practice' ? `, ${L.bpm} BPM` : ''));
 }
-function setMeter(id) {
+function setMeter(id, quiet) {
   if (!METERS[id]) return;
   if (run) stop(true);
-  S.meter = id; save();
+  S.meter = id;
+  // a picked polyrhythm that can't fill this time signature goes back to the mix
+  const r = POLY_RATIOS.find(x => x.id === S.polyPick), dropped = r && S.poly && S.hands === 2 && !polyFits(r, METERS[id]);
+  if (dropped) S.polyPick = 'mix';
+  save();
   pattern = newPattern(); queued = null;
   syncControls(); refreshIdle();
   const m = METERS[id];
+  if (quiet) return;
+  if (dropped) return toast(`${r.id} needs ${POLY_METER[r.b]}, so polyrhythms are back to Mix`);
   toast(`${id}: ${m.beats.length} beats of ${m.beats.map(b => b === 6 ? 'dotted quarter' : 'quarter').filter((x, i, a) => a.indexOf(x) === i).join(' + ')}${m.compound && m.unit === 4 ? ` (grouped ${m.beats.map(b => b / 2).join('+')})` : ''}`);
 }
 function setHands(n) {
@@ -122,6 +130,22 @@ function setHands(n) {
   syncControls(); refreshIdle(); renderIdle();
   if (n === 2) toast('Two hands: right hand (upper notes) on J, left hand (lower notes) on F');
 }
+// Polyrhythm picker: one ratio fills every bar (switching to the time signature it needs), or Mix
+// drops ones that fit the current time signature in among your normal rhythms.
+function setPolyPick(id) {
+  if (run) stop(true);
+  S.polyPick = id; save();
+  const r = POLY_RATIOS.find(x => x.id === id);
+  if (r && !polyFits(r, meterOf(S.meter))) setMeter(POLY_METER[r.b], true);
+  pattern = newPattern(); queued = null;
+  syncControls(); refreshIdle(); renderIdle();
+  if (!r) return toast('Polyrhythms that fit the time signature, mixed in with your rhythms');
+  toast(`${r.a} against ${r.b}: right hand (J) plays ${r.a}, left hand (F) keeps ${r.b} beats` + (POLY_TIPS[r.id] ? `. Tip: ${POLY_TIPS[r.id]}` : ''));
+}
+$('#polySel').innerHTML = '<option value="mix">Mix (whatever fits)</option>' +
+  [2, 3, 4, 5].map(b => `<optgroup label="Against ${b} beats">` +
+    POLY_RATIOS.filter(r => r.b === b).map(r => `<option value="${r.id}">${r.a} against ${r.b}</option>`).join('') + '</optgroup>').join('');
+$('#polySel').addEventListener('change', e => setPolyPick(e.target.value));
 // any hand-tuning of the rhythm settings turns the level into "Custom"
 const customised = () => { S.level = null; save(); syncControls(); };
 $('#level').innerHTML = LEVELS.map((L, i) => `<option value="${i}">${i + 1} · ${L.name}</option>`).join('') + '<option value="custom" hidden>Custom</option>';

@@ -165,7 +165,7 @@ function passAchievements(s, acc, n, errs, mean) {
   if (!game && !daily && S.level == null && S.play !== 'song') unlock('tinkerer');
   if (mean != null && Math.abs(mean) < 5 && st.offs.length >= 6) unlock('pocket');
   if (evs.filter(e => e.rest).length >= 4 && !st.rest) unlock('restful');
-  if (evs.some(e => e.tup)) unlock('triplets');
+  if (evs.some(e => e.tup && e.tup.kind !== 'n')) unlock('triplets');
   if (evs.some(e => e.tup && e.tup.kind === 't16')) unlock('sext');
   if (evs.some(e => e.dot && near(e.dur, 3))) unlock('dotcom');
   if (s.pat.bars >= 4) unlock('bars4');

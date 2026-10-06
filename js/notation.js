@@ -12,6 +12,8 @@ const shown = {pat:null, seg:null, cur:-1, bar:-1};
 
 // how many flags/beams a duration gets: 16ths and 16th triplets 2, 8ths / dotted 8ths / 8th triplets 1
 const beamCount = d => d < 1.01 ? 2 : near(d, 2) || near(d, 3) || near(d, 4/3) ? 1 : 0;
+// the value a note is written as: polyrhythm tuplets (5:4, 7:6...) carry it, everything else is its length
+const wdur = e => (e.tup && e.tup.w) || e.dur;
 // Voice geometry. One voice: heads in the middle, stems up. Two voices (two hands): right hand
 // high with stems up, left hand low with stems down.
 function voiceGeo(pat, voice, T) {
@@ -24,7 +26,7 @@ function flag(sx, fy, up) {
   return `<path d="M${sx},${fy} C${sx+1.5},${fy+7*d} ${sx+11},${fy+9*d} ${sx+8.5},${fy+21*d} C${sx+9.5},${fy+13*d} ${sx+4},${fy+11*d} ${sx},${fy+9*d} Z" fill="currentColor"/>`;
 }
 function noteSVG(e, x, V, beamed) {
-  const dur = e.dur, y = V.y, hollow = dur >= 7.9, sx = stemX(x, V);
+  const dur = wdur(e), y = V.y, hollow = dur >= 7.9, sx = stemX(x, V);
   let s = `<ellipse cx="${x}" cy="${y}" rx="${hollow?7:6.6}" ry="${hollow?4.9:4.7}" transform="rotate(-22 ${x} ${y})" ` +
     (hollow ? `fill="var(--paper)" stroke="currentColor" stroke-width="1.9"/>` : `fill="currentColor"/>`);
   if (e.dot) s += `<circle cx="${x + 11}" cy="${y - 1}" r="2.1" fill="currentColor"/>`;
@@ -49,11 +51,13 @@ function restSVG(dur, x, T) {
     `<path d="M${x-6},${T+24.5} Q${x-1},${T+27} ${x+3.1},${T+21.5}" ${st} stroke-width="1.8"/>`;
 }
 // Beam consecutive 8ths/16ths (and their dotted/triplet kin) inside the same beat; rests break a group.
+// A polyrhythm tuplet is beamed as one group even where it crosses beats.
 function beamGroups(bar) {
   const groups = []; let cur = [];
+  const grp = e => e.tup && e.tup.kind === 'n' ? 'n' + e.tup.id : e.beatIdx;
   for (const e of bar) {
-    const beamable = !e.rest && beamCount(e.dur) > 0;
-    if (beamable && cur.length && cur[0].beatIdx === e.beatIdx) cur.push(e);
+    const beamable = !e.rest && beamCount(wdur(e)) > 0;
+    if (beamable && cur.length && grp(cur[0]) === grp(e)) cur.push(e);
     else { if (cur.length) groups.push(cur); cur = beamable ? [e] : []; }
   }
   if (cur.length) groups.push(cur);
@@ -63,7 +67,7 @@ function beamSVG(g, X, V) {
   const xs = g.map(e => stemX(X(e), V) + (V.up ? -0.8 : -0.8)), d = V.up ? 1 : -1;
   const y0 = V.up ? V.tip : V.tip - 5;
   const rect = (a, b, y) => `<rect x="${a}" y="${y}" width="${b - a + 1.6}" height="5" class="ink"/>`;
-  const two = e => beamCount(e.dur) === 2;
+  const two = e => beamCount(wdur(e)) === 2;
   let s = rect(xs[0], xs[xs.length-1], y0);
   g.forEach((e, i) => {
     if (!two(e)) return;
@@ -73,17 +77,17 @@ function beamSVG(g, X, V) {
   });
   return s;
 }
-// "3" over each tuplet; a bracket too unless the whole tuplet is one beamed group.
+// The tuplet number ("3", "5", "7:6"...) over each tuplet; a bracket too unless it's one beamed group.
 function tupletSVG(bar, X, V, beamed) {
   let s = '';
   const byId = new Map();
   for (const e of bar) if (e.tup) { if (!byId.has(e.tup.id)) byId.set(e.tup.id, []); byId.get(e.tup.id).push(e); }
   for (const evs of byId.values()) {
-    const x1 = X(evs[0]) - 4, x2 = X(evs[evs.length - 1]) + 9, xm = (x1 + x2) / 2;
-    if (evs.every(e => beamed.has(e))) { s += `<text class="tup" x="${xm}" y="${V.up ? V.tip - 5 : V.tip + 14}">3</text>`; continue; }
+    const x1 = X(evs[0]) - 4, x2 = X(evs[evs.length - 1]) + 9, xm = (x1 + x2) / 2, lab = evs[0].tup.label || '3';
+    if (evs.every(e => beamed.has(e))) { s += `<text class="tup" x="${xm}" y="${V.up ? V.tip - 5 : V.tip + 14}">${lab}</text>`; continue; }
     const y = V.up ? V.tip - 10 : V.tip + 10, h = V.up ? 5 : -5;
     s += `<path d="M${x1},${y+h} V${y} H${xm-7} M${xm+7},${y} H${x2} V${y+h}" fill="none" stroke="currentColor" stroke-width="1.1" class="tupb"/>` +
-      `<text class="tup" x="${xm}" y="${y + 4}">3</text>`;
+      `<text class="tup" x="${xm}" y="${y + 4}">${lab}</text>`;
   }
   return s;
 }
@@ -96,7 +100,7 @@ function countVoiceMarkup(pat, bar, X, T, voice) {
   const hlTop = pat.twoHand ? T - 40 : T - 30, hlH = pat.twoHand ? 140 : 104;
   let s = '';
   for (const e of bar) {
-    const x = X(e), syl = countLabel(e, true);
+    const x = X(e), syl = e.tup && e.tup.kind === 'n' ? String(e.tup.k + 1) : countLabel(e, true);
     s += `<g class="ev${e.rest ? ' rest' : ''}" data-i="${e.idx}"><rect class="hl" x="${x-15}" y="${hlTop}" width="31" height="${hlH}" rx="8"/>` +
       (e.rest ? `<text class="csyl crest" x="${x}" y="${y}">(${syl})</text>`
               : `<text class="csyl" x="${x}" y="${y}">${syl}</text>` +
@@ -127,7 +131,7 @@ function voiceMarkup(pat, bar, X, T, voice) {
 // Two hands share one row of counts: every right-hand onset, plus left-hand onsets that aren't
 // crowded by one (polyrhythms would otherwise print "let" and "a" on top of each other).
 function countEvents(rh, lh) {
-  const r = rh.filter(e => !e.rest);
+  const r = rh.filter(e => !e.rest && countLabel(e, true) !== '');
   return [...r, ...lh.filter(e => !e.rest && !r.some(o => Math.abs(o.pos - e.pos) < 0.7))];
 }
 function notationMarkup(pat) {

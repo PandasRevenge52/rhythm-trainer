@@ -2,7 +2,7 @@
 // ---------- settings ----------
 const DEFAULTS = {level:1, bpm:65, bars:2, notes:[4,2], rests:[4,2], extras:['dotted'], restChance:0.25, timing:'normal', mode:'loop',
   metronome:true, metroVol:0.8, lane:true, counts:true, hitSound:true, volume:0.7, play:'practice', songVol:0.8, calBpm:60,
-  meter:'4/4', hands:1, poly:false, gap:'off', sight:false, focus:true, freePlay:false,
+  meter:'4/4', hands:1, poly:false, polyPick:'mix', gap:'off', sight:false, focus:true, freePlay:false,
   offsets:{key:0, midi:0, mic:0}, smoothAudio:false, midi:false, mic:false, micSens:0.5,
   view:'notes', clickSound:'click', hitKit:'snare', songSource:'gen', songChart:'normal', songDrums:{kick:true, snare:true, hat:false}, songSens:0.5,
   playerName:'',
@@ -168,6 +168,25 @@ const POLY = {
   '6/8': [['x--x--x--x--', 'x-x-x-x-x-x-', '2 against 3']],
   '12/8': [['x--x--x--x--x--x--x--x--', 'x-x-x-x-x-x-x-x-x-x-x-x-', '2 against 3']],
 };
+// Every polyrhythm a:b: the left hand keeps b steady quarter beats, the right hand spreads a notes
+// evenly over the same span. b comes from the time signature (2 per half bar of 4/4, 3 in 3/4,
+// 4 in 4/4, 5 in 5/4); a runs 2-9 and shares no factor with b, so 4:2 or 6:3 aren't listed.
+const gcd = (a, b) => b ? gcd(b, a % b) : a;
+const POLY_RATIOS = [];
+for (const b of [2, 3, 4, 5]) for (let a = 2; a <= 9; a++) if (a !== b && gcd(a, b) === 1) POLY_RATIOS.push({id:`${a}:${b}`, a, b});
+const POLY_METER = {2:'4/4', 3:'3/4', 4:'4/4', 5:'5/4'};   // where each pulse count is practised
+const POLY_TIPS = {'3:2':'say “hot cup of tea”', '2:3':'say “hot cup of tea”', '4:3':'say “pass the golden butter”'};
+const polyFits = (r, m) => m.beats.every(x => x === 4) && m.len % (r.b * 4) === 0;
+// How a even notes over `span` 16ths are written: plain or dotted values when they divide evenly,
+// otherwise a tuplet "a in the time of m" (squeezed when possible, as in 5:4 or 7:6).
+function polyWriting(a, span) {
+  const d = span / a;
+  if ([16, 12, 8, 6, 4, 3, 2, 1].some(v => near(v, d))) return {w:d, tuplet:null};
+  const opts = [16, 8, 4, 2, 1].filter(v => Number.isInteger(span / v)).map(v => ({w:v, m:span / v}));
+  const o = opts.filter(x => x.m < a).sort((x, y) => y.m - x.m)[0] || opts.filter(x => x.m > a).sort((x, y) => x.m - y.m)[0];
+  const usual = 2 ** Math.floor(Math.log2(a));   // a plain "3" means 3:2, "5" and "7" mean :4, "9" means :8
+  return {w:o.w, tuplet:{m:o.m, label:o.m === usual && o.m < a ? String(a) : `${a}:${o.m}`}};
+}
 // [perfect, good, ok] windows in seconds
 const TIMING = {relaxed:[0.05, 0.1, 0.16], normal:[0.035, 0.075, 0.14], strict:[0.025, 0.05, 0.1]};
 const sameSet = (a, b) => a.length === b.length && a.every(x => b.includes(x));

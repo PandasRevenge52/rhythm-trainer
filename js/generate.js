@@ -8,7 +8,7 @@ function genCtx() {
   // songs follow the music's beat, so only meters with even beats work there
   let meter = meterOf(S.meter);
   if (S.play === 'song' && !meter.beats.every(b => b === meter.beats[0])) meter = METERS['4/4'];
-  return {L, meter, bars:S.bars, hands:S.hands, poly:S.poly && S.hands === 2, focus:S.focus && !game};
+  return {L, meter, bars:S.bars, hands:S.hands, poly:S.poly && S.hands === 2, polyPick:S.polyPick || 'mix', focus:S.focus && !game};
 }
 // How much more often to pick a cell you keep getting wrong (weak-spot focus).
 function focusWeight(pat) {
@@ -102,14 +102,38 @@ function genCustomBar(m) {
   }
   return m.starts.map(pos => ({pos, dur:4, rest:false}));
 }
+// One bar of a:b. Each span of b beats: the left hand plays the b beats, the right hand a even notes.
+function polyBar(r, m) {
+  const span = r.b * 4, wr = polyWriting(r.a, span), R = [], Lh = [];
+  for (let p0 = 0; p0 < m.len; p0 += span) {
+    const id = `${p0}-poly-${rand()}`;
+    for (let k = 0; k < r.a; k++) {
+      const e = {pos:p0 + k*span/r.a, dur:span/r.a, rest:false, poly:r.id};
+      if (wr.tuplet) e.tup = {id, kind:'n', k, w:wr.w, label:wr.tuplet.label};
+      else if ([3, 6, 12].some(v => near(v, wr.w))) e.dot = true;
+      R.push(e);
+    }
+    for (let k = 0; k < r.b; k++) Lh.push({pos:p0 + k*4, dur:4, rest:false});
+  }
+  return [R, Lh];
+}
 // Returns [rightHand, leftHand|null] events for one bar.
 function genBar(g) {
   const m = g.meter, L = g.L;
-  if (g.hands === 2 && g.poly && POLY[m.id] && rand() < 0.45) {
-    const [rh, lh, name] = POLY[m.id][Math.floor(rand() * POLY[m.id].length)];
-    const R = parseCell(rh, 0).evs, Lh = parseCell(lh, 0).evs;
-    R.forEach(e => e.poly = name);
-    return [R, Lh];
+  if (g.hands === 2 && g.poly) {
+    // a picked ratio fills every bar; the mix drops one in now and then, the simpler ones more often
+    const pick = POLY_RATIOS.find(r => r.id === g.polyPick);
+    if (pick && polyFits(pick, m)) return polyBar(pick, m);
+    const opts = pick ? [] : [...(POLY[m.id] || []).map(t => ({t, w:3})), ...POLY_RATIOS.filter(r => polyFits(r, m)).map(r => ({r, w:r.a + r.b <= 7 ? 3 : 1}))];
+    if (opts.length && rand() < 0.45) {
+      let x = rand() * opts.reduce((a, o) => a + o.w, 0), o = opts[opts.length - 1];
+      for (const c of opts) if ((x -= c.w) < 0) { o = c; break; }
+      if (o.r) return polyBar(o.r, m);
+      const [rh, lh, name] = o.t;
+      const R = parseCell(rh, 0).evs, Lh = parseCell(lh, 0).evs;
+      R.forEach(e => e.poly = name);
+      return [R, Lh];
+    }
   }
   const rh = L ? genCellBar({c4:L.cellList, c6:L.c6List}, m, g.focus) : genCustomBar(m);
   if (g.hands !== 2) return [rh, null];
@@ -138,6 +162,7 @@ function countLabel(e, svgText) {
   const amp = svgText ? '&amp;' : '&', off = e.beatOff ?? (e.pos % 4), bl = e.beatLen ?? 4, n = (e.beatIdx ?? Math.floor(e.pos / 4)) + 1;
   if (near(off, 0) || off < 1e-6) return String(n);
   if (bl === 6) { const k = Math.round(off); return {2:'la', 4:'li'}[k] || 'ta'; }
+  if (e.tup && e.tup.kind === 'n') return '';   // polyrhythm notes: count the left hand's beats
   const f = Math.round(off * 3);   // twelfths of a beat
   if (e.tup && e.tup.kind === 't16') return {2:'la', 4:'li', 6:amp, 8:'la', 10:'li'}[f] || '';
   // quarter triplets can cross into the next beat
