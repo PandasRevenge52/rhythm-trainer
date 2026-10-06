@@ -31,7 +31,7 @@ function laneRest(g, x, y, dur, c, k) {
 }
 function drawLane(now) {
   if (!S.lane) return;
-  const dpr = window.devicePixelRatio || 1, W = lane.clientWidth, H = lane.clientHeight;
+  const dpr = window.devicePixelRatio || 1, [W, H] = sizeOf(lane);
   if (!W) return;
   if (lane.width !== Math.round(W*dpr) || lane.height !== Math.round(H*dpr)) { lane.width = Math.round(W*dpr); lane.height = Math.round(H*dpr); }
   const g = lg; g.setTransform(dpr, 0, 0, dpr, 0, 0);

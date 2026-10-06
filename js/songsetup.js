@@ -72,7 +72,7 @@ function syncSetup() {
 }
 function drawSetup(playT) {
   const cv = $('#ssCanvas'); if (!cv) return;
-  const dpr = devicePixelRatio || 1, W = cv.clientWidth, H = 190;
+  const dpr = devicePixelRatio || 1, W = sizeOf(cv)[0], H = 190;
   if (cv.width !== Math.round(W * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
   const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0);
   g.fillStyle = col.lane; g.fillRect(0, 0, W, H);

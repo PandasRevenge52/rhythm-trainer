@@ -189,7 +189,6 @@ function fillSlot(slot, pat) {
   slot.pat = pat; slot.marked = false;
   if (slot === slots[act]) { $('#newBtn').classList.remove('pending'); $('#newBtn').title = 'New rhythm (N)'; }
   let {s, W, H, perRow} = notationMarkup(pat);
-  s += `<rect class="ph" x="0" y="0" width="3" height="${pat.twoHand ? 110 : 80}" rx="1.5" visibility="hidden"/>`;
   slot.svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
   slot.svg.style.maxWidth = Math.round(W * 1.25) + 'px';
   slot.svg.innerHTML = s;
@@ -197,7 +196,11 @@ function fillSlot(slot, pat) {
   slot.evEls = [];
   slot.svg.querySelectorAll('.ev').forEach(el => slot.evEls[+el.dataset.i] = el);
   slot.barEls = [...slot.svg.querySelectorAll('.barg')];
-  slot.ph = slot.svg.querySelector('.ph');
+  // The playhead is its own layer on top of the staff, moved with a transform: moving it inside the
+  // SVG made the browser lay out and repaint the whole staff on every frame.
+  if (!slot.phEl) { slot.phEl = document.createElement('div'); slot.phEl.className = 'ph'; slot.phEl.setAttribute('aria-hidden', 'true'); slot.wrap.appendChild(slot.phEl); }
+  slot.phEl.classList.remove('on');
+  slot.ph = slot.phEl; slot.vbW = W; slot.phH = pat.twoHand ? 110 : 80;
   slot.lay = {perRow};
   slot.svg.classList.remove('fill'); slot.svg.getBoundingClientRect(); slot.svg.classList.add('fill');
 }
@@ -242,12 +245,14 @@ function setCur(idx) {
   shown.cur = idx;
 }
 function movePlayhead(pat, t16) {
-  if (t16 == null || t16 < 0) { ph.setAttribute('visibility', 'hidden'); setCur(-1); return; }
+  if (t16 == null || t16 < 0) { ph.classList.remove('on'); setCur(-1); return; }
   t16 = Math.min(t16, pat.bars*pat.barLen - 0.001);
   const bar = Math.floor(t16/pat.barLen), row = Math.floor(bar/lay.perRow), col = bar % lay.perRow;
   const x = HEAD + col*barW(pat) + (t16 - bar*pat.barLen + 0.5)*U, T = row*rowH(pat) + STAFF_TOP;
-  ph.setAttribute('x', (x - 1.5).toFixed(2)); ph.setAttribute('y', T - (pat.twoHand ? 36 : 28));
-  ph.setAttribute('visibility', 'visible');
+  // staff units to pixels: the SVG is scaled to fit and centred in its line
+  const sl = slots[act], [sw] = sizeOf(sl.svg), [ww] = sizeOf(sl.wrap), k = sw / sl.vbW;
+  ph.style.transform = `translate(${((ww - sw) / 2 + (x - 1.5) * k).toFixed(2)}px,${((T - (pat.twoHand ? 36 : 28)) * k).toFixed(2)}px) scale(${(3 * k).toFixed(3)},${(sl.phH * k).toFixed(3)})`;
+  if (!ph.classList.contains('on')) ph.classList.add('on');
   const ev = pat.events.find(e => e.voice === 0 && t16 >= e.t16 && t16 < e.t16 + e.dur);
   setCur(ev ? ev.idx : -1);
   sightMask(t16);

@@ -28,7 +28,7 @@ function checkAch(silent) { for (const a of ACH) if (a.get && !P.ach[a.id] && a.
 function renderPlayer() {
   const {L, into, next} = levelInfo(P.xp);
   $('#pLvl').textContent = L; $('#pTitle').textContent = titleFor(L);
-  $('#pXp').style.width = (into / next * 100).toFixed(1) + '%';
+  $('#pXp').style.transform = `scaleX(${(into / next).toFixed(4)})`;
   $('#profBtn').title = `Level ${L} · ${into} / ${next} XP to level ${L + 1} (P)`;
 }
 

@@ -581,6 +581,22 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[c]));
 const fmtTime = s => `${Math.floor(s/60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 const near = (a, b) => Math.abs(a - b) < 1e-6;
+// An element's [width, height] for drawing every frame. Reading clientWidth inside an animation frame
+// right after the page changed forces the browser to lay the page out again, every frame; a
+// ResizeObserver keeps the size up to date instead (and redraws the lane when it changes).
+const sizeOf = (() => {
+  const sizes = new WeakMap();
+  const ro = typeof ResizeObserver === 'function' && new ResizeObserver(es => {
+    for (const e of es) sizes.set(e.target, [e.target.clientWidth, e.target.clientHeight]);
+    if (typeof kick === 'function') kick();
+  });
+  return el => {
+    if (!ro) return [el.clientWidth, el.clientHeight];
+    let s = sizes.get(el);
+    if (!s) { s = [el.clientWidth, el.clientHeight]; sizes.set(el, s); ro.observe(el); }
+    return s;
+  };
+})();
 const median = a => { const s = a.slice().sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m-1] + s[m]) / 2; };
 // small seeded generator (mulberry32) for the daily challenge
 function seeded(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
