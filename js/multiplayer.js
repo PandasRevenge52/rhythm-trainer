@@ -427,7 +427,7 @@ const MP = {
         this.link.send({t:'myping', ms:this.ping});
         break;
       }
-      case 'roster': this.players = d.players; this.phase = d.phase; this.renderLobby(); this.renderResults(); break;
+      case 'roster': if (!Array.isArray(d.players)) break; this.players = d.players; this.phase = d.phase; this.renderLobby(); this.renderResults(); break;
       case 'chat': this.addChat(d.name, d.text); break;
       case 'song': this.gotSong(d.song); break;
       case 'chunk': this.gotChunk(d); break;
@@ -438,7 +438,7 @@ const MP = {
     }
   },
   gotStart(d) {
-    if (this.inGame || d.at === this.startedAt) return;   // already playing, or this start was already used
+    if (!d || !Number.isFinite(d.at) || this.inGame || d.at === this.startedAt) return;   // already playing, or this start was already used
     if (!this.song || d.key !== this.song.key || this.haveKey !== d.key) { this.pendingStart = d; return; }   // as soon as the song is ready
     this.pendingStart = null; this.startedAt = d.at;
     this.begin(d.at - this.offset);
@@ -450,6 +450,7 @@ const MP = {
     this.pingT = setInterval(() => { if (this.link) this.link.send({t:'ping', a:nowE()}); }, this.inGame ? 5000 : 2500);
   },
   async gotSong(song) {
+    song = cleanSong(song); if (!song) return;
     this.song = song; this.renderLobby();
     if (this.haveKey === song.key) { this.link.sendR({t:'have', key:song.key}); this.songReady(); return; }
     this.haveKey = null; this.incoming = null;
@@ -486,6 +487,7 @@ const MP = {
   },
   async gotChunk(d) {
     const inc = this.incoming; if (!inc || inc.key !== d.key) return;
+    if (!Number.isInteger(d.i) || !Number.isInteger(d.n) || d.i < 0 || d.n < 1 || d.i >= d.n || d.n > 100000) return;
     if (!inc.parts[d.i]) { inc.parts[d.i] = d.d; inc.got++; inc.n = d.n; }
     this.askMissingLater(inc);
     const pct = Math.floor(inc.got / d.n * 100);
@@ -558,7 +560,8 @@ const MP = {
   gotJs(id, js) {
     const L = this.live.get(id); if (!L) return;
     const now = performance.now();
-    for (const [nid, j] of js || []) { L.js.set(nid, j); const n = chart[nid]; if (n && L.flash.length < 12) L.flash.push({lane:n.lane, j, t:now}); }
+    if (!Array.isArray(js)) return;
+    for (const e of js.slice(0, 2000)) { if (!Array.isArray(e)) continue; const nid = e[0] | 0, j = Math.min(5, Math.max(0, e[1] | 0)); const n = chart[nid]; if (!n) continue; L.js.set(nid, j); if (L.flash.length < 12) L.flash.push({lane:n.lane, j, t:now}); }
   },
   // your song is over: share your results and wait for everyone else's
   finished(res) {
@@ -811,6 +814,25 @@ function cleanRes(r) {
     counts: {Sick: num(c.Sick, 0, 1e7), Good: num(c.Good, 0, 1e7), Bad: num(c.Bad, 0, 1e7), Shit: num(c.Shit, 0, 1e7), Miss: num(c.Miss, 0, 1e7)},
     mean: num(r.mean, -1e5, 1e5), maxSick: num(r.maxSick, 0, 1e7), holdsOK: num(r.holdsOK, 0, 1e7),
     minHealth: num(r.minHealth, 0, 100), notes: num(r.notes, 0, 1e7), xp: num(r.xp, 0, 1e9),
+  };
+}
+// M1: a received song is validated and normalized so a malformed one can't crash the lobby, the
+// results screen (ADIFF[diff]) or the match (chart destructuring).
+const MAX_CHART = 50000;
+function cleanSong(o) {
+  if (!o || typeof o !== 'object') return null;
+  const diff = (typeof ADIFF !== 'undefined' && ADIFF[o.diff]) ? o.diff : 'normal';
+  const src = (typeof srcKey === 'function') ? srcKey(srcParts(o.src)) : 'drums';
+  const beats = Array.isArray(o.beats) ? o.beats.filter(b => Number.isFinite(b)).slice(0, 200000) : [];
+  if (beats.length < 2) return null;
+  const chart = Array.isArray(o.chart) ? o.chart.slice(0, MAX_CHART).filter(n => Array.isArray(n) && Number.isFinite(n[0]) && n[1] >= 0 && n[1] < 4)
+    .map(n => n.length > 2 && Number.isFinite(n[2]) ? [+n[0], n[1] | 0, Math.min(600, Math.max(0, +n[2]))] : [+n[0], n[1] | 0]) : [];
+  if (!chart.length) return null;
+  return {
+    key: String(o.key == null ? '' : o.key).slice(0, 200), name: String(o.name == null ? 'Song' : o.name).slice(0, 120),
+    kind: o.kind === 'random' ? 'random' : 'file', seed: num(o.seed, 0, 2 ** 31), size: num(o.size, 0, 1e9),
+    dur: num(o.dur, 0.1, 36000, 0.1), bpm: num(o.bpm, 20, 400, 120), first: num(o.first, 0, 36000),
+    beats, src, diff, hq: !!o.hq, stars: num(o.stars, 0, 10), chart,
   };
 }
 function myName() { const v = ($('#mpName') && $('#mpName').value.trim()) || S.playerName || ''; return v.slice(0, 16) || 'Player'; }
