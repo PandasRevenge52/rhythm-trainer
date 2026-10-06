@@ -7,6 +7,7 @@
 // on every broker below; a guest uses the first one that answers.
 // best first: EMQX drops messages that come in quickly, so it's the last resort
 const RELAY_URLS = ['wss://broker.hivemq.com:8884/mqtt', 'wss://test.mosquitto.org:8081/mqtt', 'wss://broker.emqx.io:8084/mqtt'];
+const RELAY_MAX_PEERS = 8;   // M2: cap distinct relay senders so an attacker can't spawn unbounded connections
 const RELAY_BASE = code => `rhythm-trainer/arcade1/${code}/`;
 
 // The smallest MQTT 3.1.1 client that does the job: connect, subscribe, publish (QoS 0), keep alive.
@@ -124,6 +125,7 @@ const Relay = {
           if (rc && c === rc.client) { rc.got(o.m); return; }
           if (o.m.t !== 'hello') return;
           if (rc) { rc.close(true); this.conns.delete(o.f); }   // they came back on another broker
+          if (!this.pending.has(o.f) && (this.conns.size + this.pending.size) >= RELAY_MAX_PEERS) return;   // lobby's worth already; drop extras
           // a guest says hello on every broker: wait a moment and answer on the best one it reached
           const p = this.pending.get(o.f) || {clients:[], m:o.m};
           p.clients.push(c);

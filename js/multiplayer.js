@@ -27,7 +27,7 @@ const myPid = () => { try { let p = sessionStorage.getItem('mpPid'); if (!p) ses
 // it until the other side confirms it, in order, even across a reconnect.
 class Link {
   constructor(onMsg, onDown, onAlive) {
-    Object.assign(this, {onMsg, onDown, onAlive, c:null, out:0, unacked:new Map(), inLast:0, held:new Map(), seen:0, epoch:Math.random().toString(36).slice(2, 10), peerEpoch:null});
+    Object.assign(this, {onMsg, onDown, onAlive, c:null, out:0, unacked:new Map(), inLast:0, held:new Map(), seen:0, _rateT:0, _rateN:0, epoch:Math.random().toString(36).slice(2, 10), peerEpoch:null});
     this.tickT = setInterval(() => this.tick(), 1500);
   }
   get up() { return !!(this.c && this.c.open); }
@@ -50,7 +50,10 @@ class Link {
   flush(all) { const t = Date.now(); for (const u of this.unacked.values()) if (all || t - u.at > 2500) { u.at = t; this.raw(u.m); } }
   recv(m) {
     if (MP.cut) return;
-    this.seen = Date.now();
+    const now = Date.now();
+    if (now - this._rateT > 1000) { this._rateT = now; this._rateN = 0; }
+    if (++this._rateN > 400) return;   // M2: far above an honest client (~10/s); drop the rest
+    this.seen = now;
     if (this.onAlive) this.onAlive();
     if (m.t === '_hb') return;
     if (m.t === '_ack') { for (const s of [...this.unacked.keys()]) if (s <= m.s) this.unacked.delete(s); return; }
@@ -315,16 +318,29 @@ const MP = {
   fromGuest(id, d) {
     const p = this.players.find(x => x.id === id), L = this.links.get(id);
     if (!p || !L) return;
+    const now = Date.now();
     switch (d.t) {
       case 'hello': if (L.c) this.onHello(L.c, d); break;   // came back on the same relay connection
       case 'bye': this.removePlayer(id, '{name} left.'); break;
       case 'ping': L.send({t:'pong', a:d.a, h:nowE()}); break;
       case 'myping': p.ping = num(d.ms, 0, 99999); this.pushRoster(true); break;
-      case 'need': if (this.song && d.key === this.song.key) this.sendFile(id, this.song.key, d.missing); break;
+      case 'need': {
+        if (!this.song || d.key !== this.song.key) break;
+        const missing = Array.isArray(d.missing) ? d.missing.filter(Number.isInteger).slice(0, 400) : null;
+        // a full-file (re)send: only start one if none is already running for this player (M2)
+        if (!missing && L.fileJob) break;
+        if (now - (L._needAt || 0) < 500) break; L._needAt = now;
+        this.sendFile(id, this.song.key, missing);
+        break;
+      }
       case 'prog': p.pct = num(d.pct, 0, 100); this.pushRoster(true); break;
       case 'have': if (this.song && d.key === this.song.key) { p.have = true; p.pct = 100; this.pushRoster(); } break;
       case 'ready': p.ready = !!d.on; this.pushRoster(); break;
-      case 'chat': this.chat(p.name, d.text); break;
+      case 'chat': {
+        if (!p._chat || now - p._chat.t > 3000) p._chat = {t:now, n:0};
+        if (++p._chat.n > 6) break;   // M2: at most 6 messages per 3 s per player
+        this.chat(p.name, d.text); break;
+      }
       case 'st': this.gotLive(id, d); this.broadcast({...d, t:'live', id}, id); break;
       case 'js': this.gotJs(id, d.js); this.broadcast({t:'ljs', id, js:d.js}, id, true); break;
       case 'res': {
@@ -371,6 +387,7 @@ const MP = {
   // only: just these pieces again (some went missing, or the connection dropped mid-way)
   async sendFile(id, key, only) {
     if (!tr.file) return;
+    if (only && !Array.isArray(only)) only = null;
     const L = this.links.get(id); if (!L) return;
     const job = {}; L.fileJob = job;   // a newer request replaces this one
     const buf = await tr.file.arrayBuffer(), CH = L.relayed ? 96000 : 16000, n = Math.ceil(buf.byteLength / CH), limit = L.relayed ? 6e5 : 2e6;
