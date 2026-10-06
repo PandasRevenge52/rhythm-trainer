@@ -335,5 +335,9 @@ if (S.mic) { S.mic = false; syncControls(); }   // the browser needs a click bef
 // Installable, offline-capable app when served over http(s) (service workers don't run from file://).
 if (location.protocol.startsWith('http') && 'serviceWorker' in navigator) {
   const l = document.createElement('link'); l.rel = 'manifest'; l.href = 'manifest.webmanifest'; document.head.appendChild(l);
-  navigator.serviceWorker.register('sw.js').catch(() => {});
+  // Installing downloads the whole app for offline use, so it waits until the page has loaded and the
+  // browser is idle instead of competing with the fonts and scripts this page needs first.
+  const register = () => navigator.serviceWorker.register('sw.js').catch(() => {});
+  const whenIdle = () => 'requestIdleCallback' in window ? requestIdleCallback(register, {timeout:5000}) : setTimeout(register, 1000);
+  if (document.readyState === 'complete') whenIdle(); else addEventListener('load', whenIdle, {once:true});
 }
