@@ -387,6 +387,11 @@ details.more[open]>:not(summary){animation:reveal var(--dur-2) var(--ease-out)}
 #newBtn:active svg{transform:rotate(-120deg)}
 .lives i.on{transition:color var(--dur-3)}
 .stage{transition:box-shadow var(--dur-3)}
+/* U8: moving between the trainer and the Arcade cross-fades instead of flashing blank (same-site View Transitions;
+   browsers without them just navigate as before) */
+@view-transition{navigation:auto}
+::view-transition-old(root),::view-transition-new(root){animation-duration:var(--dur-2);animation-timing-function:var(--ease-out)}
+@media (prefers-reduced-motion: reduce){ @view-transition{navigation:none} }
 /* Reduced motion: nothing moves, scales or bounces. Plain fades that only change opacity (dialogs, the "Up next"
    line, sight-reading bars) stay as a short fade so changes are still easy to follow. 1 ms rather than 0 so code
    that waits for an animation or transition to end still hears about it. */
