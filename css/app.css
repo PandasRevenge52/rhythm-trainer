@@ -327,10 +327,6 @@ select,.tempo,.num{border:1px solid var(--line)}
 /* below the header, so the Settings toggle stays visible and clickable */
 @media (min-width:641px){ .side{top:72px;border-top:1px solid var(--line);border-top-left-radius:14px} .side-head{border-top-left-radius:14px} }
 @media (max-width:1099px){ .side{box-shadow:-16px 0 40px rgba(0,0,0,.5)} }
-/* The difficulty menu sizes itself to its widest option, and the locked ones start with 🔒, which only gets its
-   real width when the emoji font arrives: the menu grew, the toolbar re-wrapped and the staff jumped. A minimum
-   just above its final width keeps it still (and it can still grow for a longer name). */
-@media (min-width:641px){ #level{min-width:13em} }
 @media (max-width:640px){
   main{padding:12px 12px 24px}
   .stage{padding:12px;border-radius:14px}
