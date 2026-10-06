@@ -313,17 +313,19 @@ const MP = {
       case 'hello': if (L.c) this.onHello(L.c, d); break;   // came back on the same relay connection
       case 'bye': this.removePlayer(id, '{name} left.'); break;
       case 'ping': L.send({t:'pong', a:d.a, h:nowE()}); break;
-      case 'myping': p.ping = d.ms; this.pushRoster(true); break;
+      case 'myping': p.ping = num(d.ms, 0, 99999); this.pushRoster(true); break;
       case 'need': if (this.song && d.key === this.song.key) this.sendFile(id, this.song.key, d.missing); break;
-      case 'prog': p.pct = d.pct; this.pushRoster(true); break;
+      case 'prog': p.pct = num(d.pct, 0, 100); this.pushRoster(true); break;
       case 'have': if (this.song && d.key === this.song.key) { p.have = true; p.pct = 100; this.pushRoster(); } break;
       case 'ready': p.ready = !!d.on; this.pushRoster(); break;
       case 'chat': this.chat(p.name, d.text); break;
       case 'st': this.gotLive(id, d); this.broadcast({...d, t:'live', id}, id); break;
       case 'js': this.gotJs(id, d.js); this.broadcast({t:'ljs', id, js:d.js}, id, true); break;
-      case 'res':
+      case 'res': {
         if (this.results.has(id)) break;
-        p.state = 'done'; this.gotResult(id, d.res); this.broadcast({t:'res', id, res:d.res}, id, true); this.pushRoster(); break;
+        const res = cleanRes(d.res);
+        p.state = 'done'; this.gotResult(id, res); this.broadcast({t:'res', id, res}, id, true); this.pushRoster(); break;
+      }
     }
   },
   pushRoster(soft) {
@@ -425,7 +427,7 @@ const MP = {
       case 'start': this.gotStart(d); break;
       case 'live': this.gotLive(d.id, d); break;
       case 'ljs': this.gotJs(d.id, d.js); break;
-      case 'res': this.gotResult(d.id, d.res); break;
+      case 'res': this.gotResult(d.id, cleanRes(d.res)); break;
     }
   },
   gotStart(d) {
@@ -542,7 +544,8 @@ const MP = {
   },
   gotLive(id, d) {
     const L = this.live.get(id); if (!L) return;
-    Object.assign(L, {s:d.s, c:d.c, mc:d.mc, a:d.a, hp:d.hp, d:d.d, p:d.p});
+    // untrusted: live score/combo/accuracy/health/keys/progress reach the podium and the opponent field
+    Object.assign(L, {s:num(d.s, 0, 1e12), c:num(d.c, 0, 1e7), mc:num(d.mc, 0, 1e7), a:num(d.a, 0, 100), hp:num(d.hp, 0, 100), d:num(d.d, 0, 15) & 15, p:num(d.p, 0, 1)});
     if (state === 'results') this.renderResults();
   },
   gotJs(id, js) {
@@ -697,11 +700,11 @@ const MP = {
     }
     const me = this.players.find(p => p.id === this.me);
     $('#mpPlayers').innerHTML = this.players.map(p => {
-      const st = p.net === 'lost' ? 'reconnecting…' : p.state === 'playing' ? 'playing' : p.host ? 'host' : !p.have ? (p.pct ? `downloading ${p.pct}%` : this.song ? 'getting the song…' : 'here') : p.ready ? 'ready' : 'not ready';
+      const st = p.net === 'lost' ? 'reconnecting…' : p.state === 'playing' ? 'playing' : p.host ? 'host' : !p.have ? (p.pct ? `downloading ${num(p.pct, 0, 100)}%` : this.song ? 'getting the song…' : 'here') : p.ready ? 'ready' : 'not ready';
       const cls = p.net === 'lost' ? 'bad' : p.host || p.ready ? 'ok' : '';
       return `<li class="${p.id === this.me ? 'me' : ''}"><span class="mpav" style="background:${avatarCol(p.name)}">${esc(p.name[0] || '?').toUpperCase()}</span>` +
         `<b>${esc(p.name)}${p.host ? ' <i title="Host">👑</i>' : ''}${p.id === this.me ? ' <small>(you)</small>' : ''}</b>` +
-        `<span class="mpst ${cls}">${st}</span>${p.relay ? '<small class="mpping" title="Connected through the backup relay: the direct connection was blocked">relay</small>' : ''}${!p.host && p.ping && p.net !== 'lost' ? `<small class="mpping ${p.ping > 400 ? 'slow' : ''}">${p.ping} ms</small>` : ''}` +
+        `<span class="mpst ${cls}">${st}</span>${p.relay ? '<small class="mpping" title="Connected through the backup relay: the direct connection was blocked">relay</small>' : ''}${!p.host && p.ping && p.net !== 'lost' ? `<small class="mpping ${p.ping > 400 ? 'slow' : ''}">${num(p.ping, 0, 99999)} ms</small>` : ''}` +
         (this.host && !p.host ? `<button class="ghost mpkick" data-kick="${esc(p.id)}" title="Remove from the lobby">✕</button>` : '') + `</li>`;
     }).join('') + (this.players.length < MP_MAX ? `<li class="mpempty">${MP_MAX - this.players.length} more can join</li>` : '');
     const ready = $('#mpReady'), start = $('#mpStartBtn');
@@ -787,6 +790,22 @@ const MP = {
     checkStats(); saveP();
   },
 };
+// H2/M1: everything another player's browser sends is untrusted. num() forces a value into a real,
+// range-checked number; cleanRes() rebuilds the results object field by field with known keys only,
+// so a hostile client can't inject HTML into the page or break the lobby/results screen.
+const num = (v, lo, hi, dflt = lo) => { v = typeof v === 'number' ? v : parseFloat(v); return Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : dflt; };
+const MP_GRADES = ['S+', 'S', 'A', 'B', 'C', 'D', 'F'];
+function cleanRes(r) {
+  r = r || {}; const c = r.counts || {};
+  return {
+    name: String(r.name == null ? 'Player' : r.name).slice(0, 16),
+    score: num(r.score, 0, 1e12), acc: num(r.acc, 0, 100), maxCombo: num(r.maxCombo, 0, 1e7),
+    grade: MP_GRADES.includes(r.grade) ? r.grade : 'F', fc: !!r.fc, rating: String(r.rating == null ? '' : r.rating).slice(0, 24),
+    counts: {Sick: num(c.Sick, 0, 1e7), Good: num(c.Good, 0, 1e7), Bad: num(c.Bad, 0, 1e7), Shit: num(c.Shit, 0, 1e7), Miss: num(c.Miss, 0, 1e7)},
+    mean: num(r.mean, -1e5, 1e5), maxSick: num(r.maxSick, 0, 1e7), holdsOK: num(r.holdsOK, 0, 1e7),
+    minHealth: num(r.minHealth, 0, 100), notes: num(r.notes, 0, 1e7), xp: num(r.xp, 0, 1e9),
+  };
+}
 function myName() { const v = ($('#mpName') && $('#mpName').value.trim()) || S.playerName || ''; return v.slice(0, 16) || 'Player'; }
 function uniqueName(name, players) { let n = name, i = 2; while (players.some(p => p.name === n)) n = `${name} ${i++}`; return n; }
 function avatarCol(name) { let h = 0; for (const c of String(name)) h = (h * 31 + c.charCodeAt(0)) % 360; return `hsl(${h} 55% 52%)`; }
