@@ -113,7 +113,19 @@ async function pickFile(file) {
 }
 
 // ---------- charts ----------
+// A chart depends only on the song and the difficulty / part, yet the menu asks for every difficulty (for
+// the star ratings) on each setting change. So charts are made once per song and handed out as fresh
+// copies, since a game marks its notes as it goes.
+const chartCache = {drums:null, bpm:null, first:null, beats:null, map:new Map()};
 function buildChart(diff = A$.diff, src = A$.src) {
+  const c = chartCache;
+  if (c.drums !== tr.drums || c.bpm !== tr.bpm || c.first !== tr.first || c.beats !== tr.beats)
+    Object.assign(c, {drums:tr.drums, bpm:tr.bpm, first:tr.first, beats:tr.beats, map:new Map()});
+  const k = diff + '|' + src;
+  if (!c.map.has(k)) c.map.set(k, makeChart(diff, src));
+  return c.map.get(k).map(n => ({...n, j:null, held:false, done:false}));
+}
+function makeChart(diff, src) {
   if (!tr.drums) return [];
   const cfg = ADIFF[diff], p = 60 / tr.bpm;
   // Notes snap to 16ths (8ths on Easy) between the song's tracked beats, which follow the band as
