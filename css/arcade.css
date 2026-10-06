@@ -44,6 +44,9 @@ button:disabled{opacity:.45;cursor:not-allowed;filter:none}
 #results h2,#results .muted{text-align:center}
 .rnote{font-size:14px;margin:14px 0 0}
 @media (max-width:520px){ .aset{flex-direction:column;align-items:flex-start} .seg{width:100%} .seg button{flex:1;justify-content:center} .diffs button{min-width:0} }
+/* Narrow screens: the song's buttons go under its details instead of squeezing them into a one-word-wide column,
+   and the details keep room for two lines, so the panel doesn't jump when "Writing a new song…" becomes the song's info. */
+@media (max-width:520px){ .asong{flex-direction:column;align-items:stretch} .asong .abtns{justify-content:flex-start} #aSongInfo{min-height:2.9em} }
 
 /* leaderboard + results rank */
 .linkish{background:none;border:0;padding:0;color:var(--accent);font-weight:600;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
