@@ -94,7 +94,11 @@ function loadRandom() {
   if (tr.loading) return Promise.resolve(false);
   tr.loading = true; $('#aPlay').disabled = true;
   info('Writing a new song…');
-  return writing = randomSong().then(r => { Object.assign(tr, r, {random:true, fresh:true, file:null}); renderMenu(); return true; },
+  // U9: how far it's got, in the song card (text only when the whole percent changes)
+  const bar = $('#aSongProg'); let shown = -1;
+  bar.style.transform = 'scaleX(0)'; bar.classList.add('on');
+  const progress = f => { const pct = Math.round(f * 100); if (pct === shown) return; shown = pct; info(`Writing a new song… ${pct}%`); bar.style.transform = `scaleX(${f.toFixed(3)})`; };
+  return writing = randomSong(undefined, progress).finally(() => bar.classList.remove('on')).then(r => { Object.assign(tr, r, {random:true, fresh:true, file:null}); renderMenu(); return true; },
     e => { console.error(e); info("Couldn't make a random song in this browser."); return false; })
     .finally(() => { tr.loading = false; writing = null; });
 }
