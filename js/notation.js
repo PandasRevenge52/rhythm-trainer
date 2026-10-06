@@ -222,8 +222,14 @@ function renderPreview(pat) {
   const o = slots[1 - act];
   pat = flowNew() && !sightOn() ? pat : null;
   o.wrap.classList.toggle('hide', !pat);
+  o.pending = pat;
   if (!pat) o.pat = null;
-  else if (pat !== o.pat) fillSlot(o, pat);
+  else if (pat !== o.pat) {
+    // While playing this happens on a downbeat, right where key presses land, so the new "Up next" line is
+    // drawn in a task of its own just after that frame (it fades in anyway). Idle, it's drawn at once.
+    if (!run) fillSlot(o, pat);
+    else setTimeout(() => { if (o.pending === pat && o.pat !== pat) fillSlot(o, pat); });
+  }
 }
 // Sight-reading: bars stay hidden until a beat before you reach them.
 const sightOn = () => S.sight && S.play !== 'song';

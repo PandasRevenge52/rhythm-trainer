@@ -1,17 +1,23 @@
 'use strict';
 // ---------- audio + smooth clock ----------
 let ctx = null, master = null, noiseBuf = null, clockOff = null;
+// The sound engine is slow to create (a quarter of a second on some systems), which made the first Start
+// feel stuck. The trainer makes it while the page is idle (it stays suspended until a click or key, as
+// browsers require), so pressing Start only has to resume it.
+function prepareAudio() { if (!ctx) makeAudio(); }
 function ensureAudio() {
-  if (!ctx) {
-    // "Smooth audio" asks for bigger sound buffers: a little more delay (the clock below measures and
-    // allows for it), but no crackling or static on systems that can't keep up with tiny buffers
-    ctx = new (window.AudioContext || window.webkitAudioContext)({latencyHint:S.smoothAudio ? 'playback' : 'interactive'});
-    master = ctx.createGain(); master.connect(ctx.destination);
-    noiseBuf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.5), ctx.sampleRate);
-    const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random()*2 - 1;
-  }
+  if (!ctx) makeAudio();
   if (ctx.state !== 'running') ctx.resume().catch(() => {});
   master.gain.value = S.volume;
+}
+function makeAudio() {
+  // "Smooth audio" asks for bigger sound buffers: a little more delay (the clock below measures and
+  // allows for it), but no crackling or static on systems that can't keep up with tiny buffers
+  ctx = new (window.AudioContext || window.webkitAudioContext)({latencyHint:S.smoothAudio ? 'playback' : 'interactive'});
+  master = ctx.createGain(); master.connect(ctx.destination);
+  master.gain.value = S.volume;
+  noiseBuf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.5), ctx.sampleRate);
+  const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random()*2 - 1;
 }
 // ctx.currentTime only advances in audio-buffer-sized jumps, which makes animation stutter.
 // Instead map the smooth performance.now() clock onto "what the speakers are playing right now",

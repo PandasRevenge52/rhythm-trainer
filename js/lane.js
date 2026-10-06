@@ -29,6 +29,18 @@ function laneRest(g, x, y, dur, c, k) {
   if (dotted) { g.beginPath(); g.arc(12, -4, 2.6, 0, Math.PI * 2); g.fill(); }
   g.restore();
 }
+// Each note's count label under the lane, worked out once per rhythm instead of every frame: null where it's
+// hidden (a left-hand note sharing its spot with a right-hand onset; the right hand's label is shown).
+const laneLabelCache = new WeakMap();
+function laneLabels(pat) {
+  let L = laneLabelCache.get(pat);
+  if (!L) {
+    const rh = pat.events.filter(o => o.voice === 0 && !o.rest);
+    L = pat.events.map(ev => ev.voice === 0 || !rh.some(o => Math.abs(o.t16 - ev.t16) < 0.7) ? countLabel(ev) : null);
+    laneLabelCache.set(pat, L);
+  }
+  return L;
+}
 function drawLane(now) {
   if (!S.lane) return;
   const dpr = window.devicePixelRatio || 1, [W, H] = sizeOf(lane);
@@ -66,6 +78,8 @@ function drawLane(now) {
       m.starts.forEach((st, i) => { const x = X(s.start + st * s.s16); if (x > -10 && x < W + 10) g.fillText(i + 1, x, mid + 5); });
       continue;
     }
+    const labels = laneLabels(s.pat);
+    g.font = '600 11.5px system-ui,sans-serif';   // the count labels' font, set once (setting it per note costs every frame)
     for (const ev of s.pat.events) {
       const x = X(s.start + ev.t16*s.s16), w = ev.dur*PX16, y = rowY(ev.voice);
       if (x + w < -12 || x > W + 12 || x > ahead) continue;
@@ -86,10 +100,11 @@ function drawLane(now) {
         if (j === 'miss') { g.strokeStyle = c; g.lineWidth = 2; g.stroke(); } else g.fill();
         g.globalAlpha = 1;
       }
-      if (S.counts && s.view !== 'count' && (ev.voice === 0 || !s.pat.events.some(o => o.voice === 0 && !o.rest && Math.abs(o.t16 - ev.t16) < 0.7))) {
-        g.fillStyle = col.muted; g.font = '600 11.5px system-ui,sans-serif'; g.globalAlpha = ev.rest ? 0.45 : 0.9;
+      const lab = labels[ev.idx];
+      if (S.counts && s.view !== 'count' && lab != null) {
+        g.fillStyle = col.muted; g.globalAlpha = ev.rest ? 0.45 : 0.9;
         if (!(two && ev.rest)) {
-          const lab = countLabel(ev); g.fillText(lab, x, labelY);
+          g.fillText(lab, x, labelY);
           if (lab === '&') g.fillRect(x - 3.5, labelY + (g.textBaseline === 'middle' ? 8 : 4), 7, 1.5);   // small dash under every "&"
         }
         g.globalAlpha = 1;

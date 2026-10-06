@@ -333,6 +333,9 @@ renderIdle();
 if (S.play === 'song') restoreSong();
 if (S.midi) enableMidi(true);
 if (S.mic) { S.mic = false; syncControls(); }   // the browser needs a click before it will open the mic again
+// make the sound engine ahead of the first Start (see prepareAudio)
+{ const prep = () => 'requestIdleCallback' in window ? requestIdleCallback(prepareAudio, {timeout:1000}) : setTimeout(prepareAudio, 300);
+  if (document.readyState === 'complete') prep(); else addEventListener('load', prep, {once:true}); }
 // Installable, offline-capable app when served over http(s) (service workers don't run from file://).
 if (location.protocol.startsWith('http') && 'serviceWorker' in navigator) {
   const l = document.createElement('link'); l.rel = 'manifest'; l.href = 'manifest.webmanifest'; document.head.appendChild(l);
