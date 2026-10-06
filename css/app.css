@@ -327,6 +327,10 @@ select,.tempo,.num{border:1px solid var(--line)}
 /* below the header, so the Settings toggle stays visible and clickable */
 @media (min-width:641px){ .side{top:72px;border-top:1px solid var(--line);border-top-left-radius:14px} .side-head{border-top-left-radius:14px} }
 @media (max-width:1099px){ .side{box-shadow:-16px 0 40px rgba(0,0,0,.5)} }
+/* Wider screens: the setup controls always get their own row. They're filled in by JavaScript, and before that
+   the whole toolbar fitted on one line, so it went from one row to two after the first paint and pushed the
+   staff down (most of the trainer's desktop layout shift). At normal widths it already wrapped like this. */
+@media (min-width:641px){ .toolbar>.group+.group{flex-basis:100%} }
 @media (max-width:640px){
   main{padding:12px 12px 24px}
   .stage{padding:12px;border-radius:14px}
