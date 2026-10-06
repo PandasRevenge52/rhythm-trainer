@@ -291,7 +291,7 @@ async function randomSong(seed = (Math.random() * 2 ** 31) | 0, onProgress = nul
   const steps = jobs.length + Math.ceil(out.length / CLIP);
   let sliceStart = performance.now();
   const breathe = async done => {
-    if (performance.now() - sliceStart < 25) return;
+    if (performance.now() - sliceStart < 8) return;   // short enough to stay under 50 ms even on a phone 4x slower
     if (onProgress) onProgress(done / steps);
     await yieldToPage();
     sliceStart = performance.now();
