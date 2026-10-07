@@ -13,7 +13,24 @@ let S = (() => { try { return Object.assign({}, DEFAULTS, JSON.parse(localStorag
 // older saves kept one latency offset for everything
 if (S.offsetMs != null) { S.offsets = {...DEFAULTS.offsets, key:S.offsetMs, midi:S.offsetMs}; delete S.offsetMs; }
 S.offsets = {...DEFAULTS.offsets, ...S.offsets};
-const save = () => { try { localStorage.setItem('rhythm-trainer', JSON.stringify(S)); } catch (e) {} };
+// Settings that belong to this device (its latency, mic, MIDI, speakers): never copied to another one.
+const DEVICE_ONLY = ['offsets', 'midi', 'mic', 'micSens', 'smoothAudio', 'volume', 'metroVol', 'songVol', 'arcade.musicVol'];
+// When each setting last changed (ms), so combining settings from two devices keeps the newer of each.
+// 'arcade.x' for the Arcade's own. Counting starts once the page has loaded, so start-up tidying
+// (filling in defaults) isn't mistaken for a change.
+const SET_AT = 'rhythm-trainer-at';
+const setFlat = () => { const o = {}; for (const k in S) if (k !== 'arcade') o[k] = JSON.stringify(S[k]); for (const k in S.arcade) o['arcade.' + k] = JSON.stringify(S.arcade[k]); return o; };
+let setSnap = null;
+addEventListener('load', () => { setSnap = setFlat(); });
+const save = () => {
+  try {
+    if (setSnap) {
+      const now = setFlat(), changed = Object.keys(now).filter(k => now[k] !== setSnap[k]);
+      if (changed.length) { const at = JSON.parse(localStorage.getItem(SET_AT) || '{}'), t = Date.now(); for (const k of changed) at[k] = t; localStorage.setItem(SET_AT, JSON.stringify(at)); setSnap = now; }
+    }
+    localStorage.setItem('rhythm-trainer', JSON.stringify(S));
+  } catch (e) {}
+};
 
 // ---------- time signatures ----------
 // `beats` lists each beat's length in 16ths: 4 = a quarter-note beat, 6 = a dotted-quarter beat.
