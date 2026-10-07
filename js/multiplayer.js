@@ -648,8 +648,8 @@ const MP = {
     if (!this.host && this.lostAt) {
       const txt = 'Connection lost · reconnecting… your game keeps going', y = v.dir < 0 ? 56 : v.H - 50;
       g.font = '600 13px "Figtree", system-ui, sans-serif'; const w = g.measureText(txt).width + 28;
-      g.fillStyle = '#2a1d18ee'; g.beginPath(); g.roundRect(v.x0 + v.fw / 2 - w / 2, y - 17, w, 26, 13); g.fill();
-      g.fillStyle = '#ffb199'; g.textAlign = 'center'; g.fillText(txt, v.x0 + v.fw / 2, y);
+      g.fillStyle = CHIP + 'ee'; g.beginPath(); g.roundRect(v.x0 + v.fw / 2 - w / 2, y - 17, w, 26, 13); g.fill();
+      g.fillStyle = WARN; g.textAlign = 'center'; g.fillText(txt, v.x0 + v.fw / 2, y);
     }
     if (!this.lay.on) return;
     const {mw} = this.lay, others = this.others(), lw = mw / 4, size = lw * 0.36, tt = v.t - 0.15;   // a little behind, so their hits arrive before their notes reach the line
@@ -668,7 +668,7 @@ const MP = {
           gr.addColorStop(0, LANE_COL[i] + '33'); gr.addColorStop(1, LANE_COL[i] + '00');
           g.fillStyle = gr; g.fillRect(mx + lw * i + 1, Math.min(v.recY, v.recY + v.dir * 160), lw - 1, 160);
         }
-        arrow(lx(i), v.recY, size, i, down ? LANE_COL[i] + '44' : '#221e1a', down ? LANE_COL[i] : '#5a5249');
+        arrow(lx(i), v.recY, size, i, down ? LANE_COL[i] + '44' : CHIP, down ? LANE_COL[i] : RECEPTOR);
       }
       for (const n of chart) {
         const j = L.js.get(n.id), y = v.recY + v.dir * (n.t - tt) * v.pps;
@@ -682,7 +682,7 @@ const MP = {
         if (n.t < tt - 0.25) continue;               // well past the target
         if (v.dir < 0 ? y > v.H + 40 : y < -40) continue;
         if (n.len) { const y2 = v.recY + v.dir * (n.t + n.len - tt) * v.pps; g.fillStyle = LANE_COL[n.lane] + '66'; g.fillRect(lx(n.lane) - lw * 0.12, Math.min(y, y2), lw * 0.24, Math.abs(y2 - y)); }
-        if (j === 4) arrow(lx(n.lane), y, size, n.lane, '#4a403866', '#6b5f55', 0.6); else noteArrow(lx(n.lane), y, size, n.lane);
+        if (j === 4) arrow(lx(n.lane), y, size, n.lane, RECEPTOR + '66', REST, 0.6); else noteArrow(lx(n.lane), y, size, n.lane);
       }
       L.flash = L.flash.filter(f => v.now - f.t < 300);
       for (const f of L.flash) { const a = 1 - (v.now - f.t) / 300; arrow(lx(f.lane), v.recY, size * (1.05 + (1 - a) * 0.4), f.lane, null, JCOL[f.j], a); }
@@ -694,8 +694,8 @@ const MP = {
       g.font = '700 17px "Fraunces", Georgia, serif'; g.fillText((r ? r.score : L.s).toLocaleString(), mx + 4, hy + 40);
       g.fillStyle = MUTED; g.font = '600 11.5px "Figtree", system-ui, sans-serif';
       g.fillText(`${(r ? r.acc : L.a).toFixed(1)}% · ${L.c}×`, mx + 4, hy + 57);
-      g.fillStyle = '#2a2521'; g.fillRect(mx + 4, hy + 64, mw - 8, 4);
-      g.fillStyle = L.hp < 25 ? '#ff7a6b' : '#ef5b3a'; g.fillRect(mx + 4, hy + 64, Math.max(2, (mw - 8) * L.hp / 100), 4);
+      g.fillStyle = CHIP; g.fillRect(mx + 4, hy + 64, mw - 8, 4);
+      g.fillStyle = L.hp < 25 ? MISS_COL : ACCENT; g.fillRect(mx + 4, hy + 64, Math.max(2, (mw - 8) * L.hp / 100), 4);
       if (p.state === 'left' || r || p.net === 'lost') {
         g.fillStyle = BG + (r || p.state === 'left' ? 'b3' : '80'); g.fillRect(mx, 0, mw, v.H);
         g.fillStyle = r ? INK : MUTED; g.textAlign = 'center'; g.font = 'italic 700 18px "Fraunces", Georgia, serif';
@@ -710,7 +710,7 @@ const MP = {
     g.textAlign = 'left'; g.fillStyle = MUTED; g.font = '700 11.5px "Figtree", system-ui, sans-serif'; g.fillText('STANDINGS', px, y);
     rows.forEach((r, i) => {
       const yy = y + 24 + i * 22;
-      g.fillStyle = r.mine ? '#ef5b3a' : r.left ? '#6b635a' : INK; g.font = `${r.mine ? 700 : 600} 14px "Figtree", system-ui, sans-serif`;
+      g.fillStyle = r.mine ? ACCENT : r.left ? REST : INK; g.font = `${r.mine ? 700 : 600} 14px "Figtree", system-ui, sans-serif`;
       g.fillText(`${i + 1}`, px, yy); g.fillText(clip(g, r.name, 100), px + 18, yy);
       g.textAlign = 'right'; g.fillText(r.left ? 'left' : (r.lost ? '⚠ ' : '') + r.score.toLocaleString(), px + 200, yy); g.textAlign = 'left';
     });

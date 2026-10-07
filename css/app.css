@@ -1,10 +1,14 @@
-/* Warm charcoal, like a practice room after dark: one vermilion accent; green/blue/amber/red
-   only ever mean timing feedback. Headings in Fraunces, everything else in Figtree. */
+/* Mono ("Stage lights"): white on graphite with no accent hue, so green/blue/amber/red are the only colours
+   on screen and only ever mean timing feedback. Every colour on both pages, the canvases included, comes from here. */
 :root{
   color-scheme:dark;
-  --bg:#141210; --panel:#1b1815; --paper:#1b1815; --raise:#25211d; --ink:#efe8dd; --muted:#a39a8e; --line:#302a25;
-  --accent:#ef5b3a; --perfect:#7fd88f; --good:#6cb8f0; --ok:#e8c35a; --miss:#ff7a6b; --rest:#6b635a;
-  --lane:#171411; --chip:#231f1b; --shadow:none; --focus:#ef5b3a;
+  --bg:#0b0c0d; --panel:#121315; --paper:#121315; --raise:#1d1f22; --ink:#f2f3f5; --muted:#93969c; --line:#26282c;
+  --accent:#f2f3f5; --on-accent:#0b0c0d; --perfect:#5fe08a; --good:#55b6ff; --ok:#ffc94d; --miss:#ff6b6b; --rest:#4a4d52;
+  --lane:#0e0f11; --chip:#17181b; --shadow:none; --focus:#f2f3f5;
+  --edge:#303236; --kbd:#1d1f22; --kbd-edge:#36383d; --overlay:rgba(8,9,10,.78);
+  --gold:#ffd479; --warn:#ffb199;
+  /* Arcade: lane arrows, receptors and the field's bar lines */
+  --lane-0:#e4e6ea; --lane-1:#e4e6ea; --lane-2:#e4e6ea; --lane-3:#e4e6ea; --receptor:#4a4d52; --field-bar:#2a2c30;
   --serif:"Fraunces", "Twemoji", Georgia, "Times New Roman", serif; --sans:"Figtree", "Figtree Fallback", "Twemoji", system-ui, -apple-system, "Segoe UI", sans-serif;
   --early:#3f8aef; --late:#ec6430;
   /* motion and shape tokens: every transition and corner on the site uses these */
@@ -23,7 +27,7 @@ button{background:var(--chip);border:1px solid transparent;border-radius:var(--r
 button:hover{border-color:var(--line)}
 button:active{transform:scale(.97)}
 button svg{width:15px;height:15px;flex:none}
-button.primary{background:var(--accent);color:#fff;font-weight:600;min-width:98px;justify-content:center}
+button.primary{background:var(--accent);color:var(--on-accent);font-weight:600;min-width:98px;justify-content:center}
 button.ghost{background:transparent}
 button.ghost:hover{background:var(--chip)}
 button[hidden]{display:none}
@@ -38,7 +42,7 @@ h1{font-size:17px;margin:0;font-weight:650;letter-spacing:-.01em}
 .modes button.on{background:var(--raise);color:var(--ink);box-shadow:inset 0 0 0 1px var(--line)}
 .hright{display:flex;align-items:center;gap:4px}
 .player{padding:5px 12px 5px 5px}
-.player .lvl{width:30px;height:30px;border-radius:50%;background:var(--accent);color:#fff;font-weight:800;display:grid;place-items:center;font-size:14px;font-variant-numeric:tabular-nums}
+.player .lvl{width:30px;height:30px;border-radius:50%;background:var(--accent);color:var(--on-accent);font-weight:800;display:grid;place-items:center;font-size:14px;font-variant-numeric:tabular-nums}
 .player .pinfo{display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-width:96px}
 .player .pinfo b{font-size:13px;line-height:1}
 .xpbar{height:5px;border-radius:var(--r-pill);background:var(--line);overflow:hidden;width:100%}
@@ -88,7 +92,8 @@ details.more[open]{padding-bottom:6px}
 input[type=range]{width:100%;accent-color:var(--accent)}
 .toggle{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:9px 0;font-size:14px;cursor:pointer}
 .toggle input{appearance:none;width:34px;height:20px;border-radius:var(--r-pill);background:var(--line);position:relative;cursor:pointer;transition:background var(--dur-2);flex:none;margin:0}
-.toggle input::after{content:"";position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:#fff;transition:transform var(--dur-2)}
+.toggle input::after{content:"";position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:var(--ink);transition:transform var(--dur-2),background var(--dur-2)}
+.toggle input:checked::after{background:var(--on-accent)}
 .toggle input:checked{background:var(--accent)}
 .toggle input:checked::after{transform:translateX(14px)}
 .inline{display:flex;align-items:center;gap:8px}
@@ -203,7 +208,7 @@ kbd{font:600 11px ui-monospace,monospace;background:var(--chip);border-radius:5p
 .tile b{display:block;font-size:19px;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tile span{font-size:12px;color:var(--muted)}
 .bigscore{font-size:52px;font-weight:900;text-align:center;letter-spacing:-.02em;font-variant-numeric:tabular-nums;margin:10px 0 0;line-height:1.1}
-.badge{display:inline-block;background:var(--accent);color:#1b0d08;border-radius:var(--r-pill);padding:3px 11px;font-size:12px;font-weight:700}
+.badge{display:inline-block;background:var(--accent);color:var(--on-accent);border-radius:var(--r-pill);padding:3px 11px;font-size:12px;font-weight:700}
 .center{text-align:center}
 .xpline{display:flex;align-items:center;gap:10px;margin-top:10px;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
 .xpline .xpbar{height:8px;flex:1}
@@ -338,9 +343,9 @@ summary{cursor:pointer;color:var(--muted)}
 
 /* ---- redesign: quieter surfaces, phone layout, reduced motion ---- */
 button{border-radius:var(--r-md)}
-button.primary{min-width:104px;color:#111}
+button.primary{min-width:104px;color:var(--on-accent)}
 select,.tempo,.num{border:1px solid var(--line)}
-.player .lvl{color:#111}
+.player .lvl{color:var(--on-accent)}
 .card{box-shadow:0 24px 64px rgba(0,0,0,.5)}
 /* below the header, so the Settings toggle stays visible and clickable */
 @media (min-width:641px){ .side{top:72px;border-top:1px solid var(--line);border-top-left-radius:14px} .side-head{border-top-left-radius:14px} }
@@ -470,11 +475,11 @@ h1,h2,.card h2,.side-head h2,.atitle{font-family:var(--serif);font-weight:600;le
 .card h3{font:italic 500 16px var(--serif);text-transform:none;letter-spacing:0;color:var(--ink)}
 /* controls with a little weight to them */
 button{border-radius:var(--r-sm)}
-button.primary{background:var(--accent);color:#1b0d08;box-shadow:inset 0 1px 0 rgba(255,255,255,.22),0 1px 0 rgba(0,0,0,.4)}
+button.primary{background:var(--accent);color:var(--on-accent);box-shadow:inset 0 1px 0 rgba(255,255,255,.22),0 1px 0 rgba(0,0,0,.4)}
 button.primary:hover{border-color:transparent;filter:brightness(1.06)}
-kbd{font:600 12px var(--sans);background:#2a2521;border:1px solid #3b342e;border-bottom-width:2px;border-radius:5px;padding:0 6px;color:var(--ink)}
-.stage{border-top-color:#3a332d}
-.player .lvl{font-family:var(--serif);font-weight:700;color:#1b0d08}
+kbd{font:600 12px var(--sans);background:var(--kbd);border:1px solid var(--kbd-edge);border-bottom-width:2px;border-radius:5px;padding:0 6px;color:var(--ink)}
+.stage{border-top-color:var(--edge)}
+.player .lvl{font-family:var(--serif);font-weight:700;color:var(--on-accent)}
 footer .sig{margin:10px 0 0;font:italic 14px var(--serif);color:var(--muted)}
 .seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--line);border-radius:var(--r-md);padding:3px;gap:2px;background:var(--bg)}
 .seg button{background:transparent;padding:7px 14px;border-radius:var(--r-sm);color:var(--muted)}
@@ -484,7 +489,7 @@ footer .sig{margin:10px 0 0;font:italic 14px var(--serif);color:var(--muted)}
 
 /* achievement pop-ups */
 #achStack{position:fixed;top:16px;right:16px;z-index:60;display:flex;flex-direction:column;gap:8px;pointer-events:none}
-.achpop{display:flex;align-items:center;gap:12px;background:var(--raise);border:1px solid #4a3f36;border-left:3px solid var(--ok);border-radius:var(--r-lg);
+.achpop{display:flex;align-items:center;gap:12px;background:var(--raise);border:1px solid var(--kbd-edge);border-left:3px solid var(--ok);border-radius:var(--r-lg);
   padding:12px 16px 12px 12px;min-width:290px;max-width:360px;box-shadow:0 14px 40px rgba(0,0,0,.45);transform:translateX(24px);opacity:0;transition:transform var(--dur-3) var(--ease-out),opacity var(--dur-3) var(--ease-out)}
 .achpop.in{transform:none;opacity:1}
 .achpop.out{transform:translateX(24px);opacity:0}

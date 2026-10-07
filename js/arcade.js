@@ -20,7 +20,10 @@ const buildKeys = () => { KEYS = {ArrowLeft:0, ArrowDown:1, ArrowUp:2, ArrowRigh
 buildKeys();
 const RESERVED = ['Escape', 'Enter', 'NumpadEnter', 'Space', 'Tab'];   // pause, start and skip keep their keys
 const DIRS = [-90, 180, 0, 90];   // arrow rotation per lane: ← ↓ ↑ →
-const LANE_COL = ['#b69cff', '#5cc8f5', '#7fdc8a', '#ff8a8a'];
+// Every colour drawn on the field comes from the page's colour tokens (css/app.css), so the canvas always matches the menus.
+const TOK = (() => { const cs = getComputedStyle(document.documentElement); return n => cs.getPropertyValue('--' + n).trim(); })();
+const withA = (hex, a) => hex + Math.round(Math.max(0, Math.min(1, a)) * 255).toString(16).padStart(2, '0');   // #rrggbb + alpha
+const LANE_COL = [0, 1, 2, 3].map(i => TOK('lane-' + i));
 // timing windows in seconds, points, health change (out of 100) and accuracy weight
 const JUDGE = [
   {name:'Sick', win:0.045, pts:350, hp:2.3, acc:1,    col:'#ffd479'},
@@ -536,7 +539,7 @@ function miss(n, text = 'Miss') {
   G.counts.Miss++; G.judged++; G.combo = 0; G.sickRun = 0;
   G.jlog.push([n.id, 4]);
   G.health += MISS_HP;
-  G.pop = {text, t:performance.now(), col:'#ff7a6b'};
+  G.pop = {text, t:performance.now(), col:MISS_COL};
 }
 function onLane(lane, ts) {
   G.down[lane] = true; G.press[lane] = performance.now();
@@ -699,11 +702,12 @@ function noteArrow(x, y, size, lane) {
     const gr = g.createLinearGradient(0, -0.95, 0, 0.9);
     gr.addColorStop(0, '#fff6ea'); gr.addColorStop(0.35, LANE_COL[lane]); gr.addColorStop(1, LANE_COL[lane]);
     return gr;
-  }, '#141210');
+  }, BG);
 }
 // where the lanes start: centred, or further left in a match to make room for the other players
 const fieldX0 = (W, fw) => (W - fw) / 2 - (mpOn() ? MP.shift(W, fw) : 0);
-const BG = '#141210', FIELD = '#1b1815', LINE = '#2c2723', INK = '#efe8dd', MUTED = '#a39a8e';
+const BG = TOK('bg'), FIELD = TOK('panel'), LINE = TOK('line'), INK = TOK('ink'), MUTED = TOK('muted'), CHIP = TOK('chip'), ACCENT = TOK('accent'),
+  MISS_COL = TOK('miss'), REST = TOK('rest'), RECEPTOR = TOK('receptor'), BAR = TOK('field-bar'), WARN = TOK('warn');
 function draw() {
   const dpr = devicePixelRatio || 1, W = innerWidth, H = innerHeight;
   if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
@@ -718,7 +722,7 @@ function draw() {
   let bIdx = 0; while (bIdx < tr.beats.length - 1 && tr.beats[bIdx + 1] <= t) bIdx++;
   const barPh = (bIdx % 4) + Math.max(0, t - tr.beats[bIdx]) / G.beat, pulse = state === 'play' ? Math.exp(-barPh * 3) * 0.5 : 0;
   g.fillStyle = FIELD; g.fillRect(x0, 0, fw, H);
-  g.fillStyle = `rgba(239,91,58,${0.05 + pulse * 0.1})`; g.fillRect(x0 - 2, 0, 2, H); g.fillRect(x0 + fw, 0, 2, H);
+  g.fillStyle = withA(ACCENT, 0.05 + pulse * 0.1); g.fillRect(x0 - 2, 0, 2, H); g.fillRect(x0 + fw, 0, 2, H);
   g.fillStyle = LINE; for (let i = 1; i < LANES; i++) g.fillRect(x0 + laneW * i, 0, 1, H);
   // lane flash while a key is down
   for (let i = 0; i < LANES; i++) {
@@ -732,12 +736,12 @@ function draw() {
     const bt = tr.beats[b], y = recY + dir * (bt - t) * pps;
     if (A$.down ? y < -10 : y > H + 10) break;
     if (A$.down ? y > H + 10 : y < -10) continue;
-    g.fillStyle = b % 4 === 0 ? '#342e29' : '#231f1b'; g.fillRect(x0, y, fw, b % 4 === 0 ? 2 : 1);
+    g.fillStyle = b % 4 === 0 ? BAR : CHIP; g.fillRect(x0, y, fw, b % 4 === 0 ? 2 : 1);
   }
   // receptors
   for (let i = 0; i < LANES; i++) {
     const pressed = G.down[i], age = now - G.press[i];
-    arrow(lx(i), recY, size * (pressed ? 0.9 : 1), i, pressed ? LANE_COL[i] + '44' : '#221e1a', pressed ? LANE_COL[i] : '#5a5249');
+    arrow(lx(i), recY, size * (pressed ? 0.9 : 1), i, pressed ? LANE_COL[i] + '44' : CHIP, pressed ? LANE_COL[i] : RECEPTOR);
     if (age < 120) arrow(lx(i), recY, size * 1.04, i, null, LANE_COL[i], 1 - age / 120);
   }
   // holds, then notes
@@ -761,7 +765,7 @@ function draw() {
   for (const s of G.splash) { const k = (now - s.t) / 260; arrow(lx(s.lane), recY, size * (1 + k * 0.6), s.lane, null, LANE_COL[s.lane], 1 - k); }
   // hit error meter: where your last hits landed, early to the left, late to the right
   const emY = recY - dir * (size + 26), emW = Math.min(fw - 20, 220), emX = x0 + fw / 2;
-  g.fillStyle = '#2c272388'; g.fillRect(emX - emW / 2, emY - 1, emW, 2);
+  g.fillStyle = LINE + '88'; g.fillRect(emX - emW / 2, emY - 1, emW, 2);
   g.fillStyle = '#ffd47955'; g.fillRect(emX - emW / 2 * (0.045 / 0.166), emY - 3, emW * (0.045 / 0.166), 6);
   g.fillStyle = INK; g.fillRect(emX - 1, emY - 7, 2, 14);
   for (const e of G.errs) { const age = now - e.t; if (age > 4000) continue; g.globalAlpha = Math.max(0.15, 1 - age / 4000); g.fillStyle = e.col; g.fillRect(emX + e.dt / 0.166 * emW / 2 - 1, emY - 6, 2, 12); }
@@ -772,8 +776,8 @@ function draw() {
   g.fillStyle = gr; g.fillRect(0, A$.down ? 0 : H - fadeH, W, fadeH);
   // health bar along the edge away from the targets
   const hbW = Math.min(360, W - 40), hbY = A$.down ? 22 : H - 32, hbX = Math.max(20, x0 + fw / 2 - hbW / 2);
-  g.fillStyle = '#2a2521'; g.beginPath(); g.roundRect(hbX, hbY, hbW, 10, 5); g.fill();
-  g.fillStyle = G.health < 25 ? '#ff7a6b' : '#ef5b3a'; g.beginPath(); g.roundRect(hbX, hbY, Math.max(4, hbW * G.health / 100), 10, 5); g.fill();
+  g.fillStyle = CHIP; g.beginPath(); g.roundRect(hbX, hbY, hbW, 10, 5); g.fill();
+  g.fillStyle = G.health < 25 ? MISS_COL : ACCENT; g.beginPath(); g.roundRect(hbX, hbY, Math.max(4, hbW * G.health / 100), 10, 5); g.fill();
   const prog = Math.max(0, Math.min(1, t / tr.buf.duration)), acc = G.judged ? (G.accSum / G.judged * 100).toFixed(2) + '%' : '–';
   const time = `${fmtTime(Math.max(0, t))} / ${fmtTime(tr.buf.duration)}`;
   if (W > fw + 400) {
@@ -796,13 +800,13 @@ function draw() {
     label('ACCURACY', py + 146); g.fillStyle = INK; g.font = '700 22px "Figtree", system-ui, sans-serif'; g.fillText(acc, px, py + 174);
     if (G.judged) { g.fillStyle = MUTED; g.font = '600 13px "Figtree", system-ui, sans-serif'; g.fillText(ratingOf(), px, py + 194); }
     label('SONG', py + 232); g.fillStyle = INK; g.font = '600 16px "Figtree", system-ui, sans-serif'; g.fillText(time, px, py + 256);
-    g.fillStyle = '#3a332d'; g.beginPath(); g.roundRect(px, py + 266, 150, 5, 2.5); g.fill();
+    g.fillStyle = LINE; g.beginPath(); g.roundRect(px, py + 266, 150, 5, 2.5); g.fill();
     g.fillStyle = MUTED; g.beginPath(); g.roundRect(px, py + 266, Math.max(3, 150 * prog), 5, 2.5); g.fill();
     g.fillStyle = MUTED; g.font = '600 12.5px "Figtree", system-ui, sans-serif'; g.fillText(`${Math.round(prog * 100)}%`, px + 158, py + 272);
     // tally
     g.textAlign = 'right'; g.font = '600 15px "Figtree", system-ui, sans-serif';
     let yy = py + 20;
-    for (const J of [...JUDGE, {name:'Miss', col:'#ff7a6b'}]) { g.fillStyle = J.col; g.fillText(`${J.name}  ${G.counts[J.name]}`, x0 - 32, yy); yy += 26; }
+    for (const J of [...JUDGE, {name:'Miss', col:MISS_COL}]) { g.fillStyle = J.col; g.fillText(`${J.name}  ${G.counts[J.name]}`, x0 - 32, yy); yy += 26; }
     g.textAlign = 'center';
     if (mpOn()) MP.drawStandings(g, px, py + 310);
   } else {

@@ -1,9 +1,9 @@
 /* Arcade page: a full-screen canvas with overlays for song select, pause and results */
 body.arcade{overflow:hidden;height:100vh}
 #field{position:fixed;inset:0;width:100vw;height:100vh;display:block;touch-action:none}
-.aov{position:fixed;inset:0;display:none;align-items:center;justify-content:center;padding:16px;background:rgba(12,10,9,.74);z-index:10}
+.aov{position:fixed;inset:0;display:none;align-items:center;justify-content:center;padding:16px;background:var(--overlay);z-index:10}
 .aov.show{display:flex}
-.apanel{background:var(--panel);border:1px solid var(--line);border-top-color:#3a332d;border-radius:var(--r-xl);padding:22px 26px 20px;width:min(560px,100%);max-height:calc(100vh - 32px);overflow:auto;box-shadow:0 24px 64px rgba(0,0,0,.5)}
+.apanel{background:var(--panel);border:1px solid var(--line);border-top-color:var(--edge);border-radius:var(--r-xl);padding:22px 26px 20px;width:min(560px,100%);max-height:calc(100vh - 32px);overflow:auto;box-shadow:0 24px 64px rgba(0,0,0,.5)}
 .apanel.small{width:min(360px,100%);display:flex;flex-direction:column;gap:10px}
 .apanel.small h2{margin:0 0 4px;text-align:center;font-size:26px}
 .apanel.small button{justify-content:center}
@@ -75,7 +75,7 @@ table.lb{width:100%;border-collapse:collapse;margin-top:10px;font-size:14px}
 /* U2: on phones and short landscape screens the menu reaches the top of the screen, under the fixed Home button,
    so the overlay leaves room for the button above it */
 @media (max-width:520px), (max-height:620px){ .aov{padding-top:64px} .apanel{max-height:calc(100vh - 80px)} }
-.homebtn:hover{border-color:#4a3f36}
+.homebtn:hover{border-color:var(--kbd-edge)}
 body.playing .homebtn{opacity:.3}
 body.playing .homebtn:hover{opacity:1}
 
@@ -137,7 +137,7 @@ body.playing .homebtn:hover{opacity:1}
 .mpplayers li b i{font-style:normal}
 .mpplayers li small{color:var(--muted);font-weight:500}
 .mpplayers .mpempty{justify-content:center;color:var(--muted);font-size:13px;border-style:dashed;background:transparent}
-.mpav{width:28px;height:28px;border-radius:50%;display:inline-grid;place-items:center;font-weight:700;color:#14110f;font-size:14px;flex:none}
+.mpav{width:28px;height:28px;border-radius:50%;display:inline-grid;place-items:center;font-weight:700;color:var(--on-accent);font-size:14px;flex:none}
 .mpst{font-size:13px;color:var(--muted)}
 .mpst.ok{color:var(--ok)}
 .mpping{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
@@ -158,16 +158,16 @@ body.playing .homebtn:hover{opacity:1}
 .mppod{list-style:none;padding:0;margin:16px 0;display:flex;flex-direction:column;gap:6px}
 .mppod li{display:grid;grid-template-columns:26px 30px 1fr auto;grid-template-rows:auto auto;column-gap:10px;align-items:center;background:var(--bg);border:1px solid var(--line);border-radius:var(--r-lg);padding:9px 14px;animation:tilein var(--dur-3) var(--ease-out) both}
 .mppod li:nth-child(2){animation-delay:.06s} .mppod li:nth-child(3){animation-delay:.12s} .mppod li:nth-child(4){animation-delay:.18s}
-.mppod li.won{border-color:#ffd479;background:color-mix(in srgb,#ffd479 9%,var(--bg))}
+.mppod li.won{border-color:var(--gold);background:color-mix(in srgb,var(--gold) 9%,var(--bg))}
 .mppod li.me b{color:var(--accent)}
 .mpplace{grid-row:span 2;font:700 22px "Fraunces",Georgia,serif;color:var(--muted)}
-.mppod li.won .mpplace{color:#ffd479}
+.mppod li.won .mpplace{color:var(--gold)}
 .mppod .mpav{grid-row:span 2}
 .mppod b{font-size:16px}
 .mpsc{grid-row:span 2;font:700 22px "Fraunces",Georgia,serif;font-variant-numeric:tabular-nums}
 .mppod small{color:var(--muted);font-size:12.5px}
 .mptablewrap{overflow-x:auto}
-.mptable td.best{color:#ffd479;font-weight:700}
+.mptable td.best{color:var(--gold);font-weight:700}
 .mpawards{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-top:14px}
 .mpawards div{background:var(--bg);border:1px solid var(--line);border-radius:var(--r-lg);padding:10px;display:flex;flex-direction:column;animation:tilein var(--dur-3) var(--ease-out) both}
 .mpawards span{font-size:22px}
@@ -180,8 +180,8 @@ body.playing .homebtn:hover{opacity:1}
 .mptable td,.mptable th{padding:5px 8px}
 .mptable{font-size:13.5px}
 .mpres .mppod li{padding:7px 14px}
-.mpst.bad{color:#ffb199}
-.mpping.slow{color:#ffb199}
-.mpwarn{color:#ffb199;font-size:13.5px;margin:6px 0 0}
+.mpst.bad{color:var(--warn)}
+.mpping.slow{color:var(--warn)}
+.mpwarn{color:var(--warn);font-size:13.5px;margin:6px 0 0}
 
 .mpsharenote{font-size:12px;margin:6px 0 0;line-height:1.4}
