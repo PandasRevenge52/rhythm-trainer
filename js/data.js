@@ -603,12 +603,12 @@ const sizeOf = (() => {
 // ---------- drawing helpers shared by the trainer lane and the Arcade field (hit feedback) ----------
 // Glows are soft ovals drawn once per colour and size into a small canvas and reused, never blur filters per frame.
 const eOut = x => 1 - (1 - x) ** 3, backOut = x => 1 + 2.7 * (x - 1) ** 3 + 1.7 * (x - 1) ** 2;
-const spaced = (g, px) => { if ('letterSpacing' in g) g.letterSpacing = px + 'px'; };
 const rgba = (hex, a) => { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${n >> 8 & 255},${n & 255},${a})`; };
 const ovals = new Map();
 function softOval(c, rx, ry, peak) {
   const key = `${c}|${rx}|${ry}|${peak}`; let o = ovals.get(key); if (o) return o;
-  const k = 2, cv = document.createElement('canvas'); cv.width = Math.ceil(rx * 2 * k); cv.height = Math.ceil(ry * 2 * k);
+  // made at the screen's pixel density, so drawing it is a straight copy rather than a rescale (cheaper every frame)
+  const k = Math.min(3, Math.max(1, Math.round(devicePixelRatio || 1))), cv = document.createElement('canvas'); cv.width = Math.ceil(rx * 2 * k); cv.height = Math.ceil(ry * 2 * k);
   const g = cv.getContext('2d'); g.scale(k, k * ry / rx);
   const gr = g.createRadialGradient(rx, rx, 0, rx, rx, rx);
   gr.addColorStop(0, rgba(c, peak)); gr.addColorStop(0.45, rgba(c, peak * 0.4)); gr.addColorStop(1, rgba(c, 0));
@@ -616,6 +616,18 @@ function softOval(c, rx, ry, peak) {
   o = {cv, w: rx * 2, h: ry * 2}; ovals.set(key, o); return o;
 }
 function drawOval(g, o, x, y, a) { if (a <= 0) return; g.globalAlpha = Math.min(1, a); g.drawImage(o.cv, x - o.w / 2, y - o.h / 2, o.w, o.h); g.globalAlpha = 1; }
+const texts = new Map();
+function textSprite(text, font, color) {
+  const key = `${text}|${font}|${color}`; let t = texts.get(key); if (t) return t;
+  if (texts.size > 300) texts.clear();
+  const k = Math.min(3, Math.max(1, Math.round(devicePixelRatio || 1))), m = document.createElement('canvas').getContext('2d');
+  m.font = font; const mt = m.measureText(text), asc = Math.ceil(mt.actualBoundingBoxAscent) + 2, desc = Math.ceil(mt.actualBoundingBoxDescent) + 2, w = Math.ceil(mt.width) + 2;
+  const cv = document.createElement('canvas'); cv.width = w * k; cv.height = (asc + desc) * k;
+  const g = cv.getContext('2d'); g.scale(k, k); g.font = font; g.fillStyle = color; g.textBaseline = 'alphabetic'; g.fillText(text, 1, asc);
+  t = {cv, w, h: asc + desc, asc}; texts.set(key, t); return t;
+}
+// draws a text sprite with its baseline at y; align 'left' or 'right' at x
+function drawText(g, t, x, y, align = 'left', a = 1) { if (a <= 0) return; g.globalAlpha = Math.min(1, a); g.drawImage(t.cv, align === 'right' ? x - t.w : x, y - t.asc, t.w, t.h); g.globalAlpha = 1; }
 // a miss: soft red light just inside a box's edges (the gradients are cached per box, so it's four fills a frame)
 const edgeCaches = new Map();
 function edgeLight(g, x, y, w, h, c, a) {
