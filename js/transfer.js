@@ -6,6 +6,8 @@
 // combined until the player says so, and Undo puts this device back for a day afterwards.
 const Xfer = (() => {
   const arcade = document.body.classList.contains('arcade');
+  // its own styles, waited for before the panel first draws
+  const styled = new Promise(res => { const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = 'css/transfer.css'; l.onload = l.onerror = res; document.head.appendChild(l); });
   let back = null;   // what had focus before the panel opened
   const msg = (text, bad) => { const m = $('#xfMsg'); if (m) { m.textContent = text || ''; m.classList.toggle('bad', !!bad); } };
   const when = t => new Date(t).toLocaleDateString(undefined, {day:'numeric', month:'short', year:'numeric'});
@@ -40,12 +42,14 @@ const Xfer = (() => {
     if (wire) wire();
   }
   // code: arrived through a "send to my other device" link (#xfer=CODE), so connect straight away
-  function open(code) {
+  async function open(code) {
+    if (!arcade && run) stop(true);   // a practice run stops, as for any dialog
     back = document.activeElement;
+    await styled;
     if (typeof code === 'string') join(code); else home();
   }
   function close() {
-    stop();
+    hangUp();
     if (arcade) { if ($('#xfer')) $('#xfer').classList.remove('show'); toMenu(); }
     else if (modalKind === 'xfer') closeModal();
     if (back && back.isConnected) back.focus({preventScroll:true});
@@ -53,7 +57,7 @@ const Xfer = (() => {
 
   // ---- the main view ----
   function home() {
-    stop();
+    hangUp();
     render(`<h2 id="xfTitle">Back up or move progress</h2>
       <p class="muted">Your progress saves in this browser. Take it to another device, or keep a copy in case this one gets lost or cleared.</p>
       <section class="xsec"><h3>Send to your other device</h3>
@@ -218,7 +222,7 @@ const Xfer = (() => {
   // this device shows the code and waits
   async function host() {
     const why = ready(); if (why) { msg(why, true); return; }
-    stop();
+    hangUp();
     $('#xfShow').disabled = true;
     const a = new Uint8Array(10); crypto.getRandomValues(a);
     const code = Array.from(a, b => CODE_CHARS[b % CODE_CHARS.length]).join('');
@@ -248,7 +252,7 @@ const Xfer = (() => {
     const code = cleanCode(text);
     if (code.length !== 10) { msg('Codes are 10 letters and numbers, like ABCDE-FGHJK.', true); return; }
     const why = ready(); if (why) { home(); msg(why, true); return; }
-    stop();
+    hangUp();
     render(`<h2 id="xfTitle">Connecting to your other device</h2>
       <p class="muted">Code ${fmt(code)}. Keep the code showing on your other device.</p>
       <p class="xmsg" id="xfMsg" role="status">Connecting…</p>
@@ -309,13 +313,13 @@ const Xfer = (() => {
     send(p, {t:'got'});
     if (pair === p) review(p.theirs, 'device');
   }
-  function fail(p, text) { if (pair !== p) return; msg(text, true); stop(); }
-  function stop() {
+  function fail(p, text) { if (pair !== p) return; msg(text, true); hangUp(); }
+  function hangUp() {
     const p = pair; pair = null; if (!p) return;
     for (const t of p.timers) { clearTimeout(t); clearInterval(t); }
     // the other side may still be waiting for our save: give it a moment to arrive before hanging up
     const end = () => { try { if (p.conn) p.conn.close(); } catch (e) {} try { if (p.peer) p.peer.destroy(); } catch (e) {} if (typeof Relay !== 'undefined' && !pair) Relay.stop(); };   // unless a new pairing has taken the relay over
     if (p.conn && p.parts && !p.acked) setTimeout(end, 4000); else end();
   }
-  return {open, close, review, stop};
+  return {open, close, review, stop:hangUp};
 })();

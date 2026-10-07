@@ -10,6 +10,8 @@ const Saves = (() => {
   const GRADES = ['S+', 'S', 'A', 'B', 'C', 'D', 'F'], RATINGS = ['Perfect FC', 'Good FC', 'FC', 'SDCB', 'Clear', 'Failed'];
   const DIFFS = ['easy', 'normal', 'hard', 'expert', 'insane'], SRC = /^(mix|(drums|vocals|guitar)(\+(drums|vocals|guitar)){0,2})$/;
   const ACH_IDS = new Set(ACH.map(a => a.id));
+  // settings that belong to one device (its latency, mic, MIDI, speakers): never copied to another
+  const DEVICE_ONLY = ['offsets', 'midi', 'mic', 'micSens', 'smoothAudio', 'volume', 'metroVol', 'songVol', 'arcade.musicVol'];
   const bad = k => k === '__proto__' || k === 'constructor' || k === 'prototype';
   const isObj = o => !!o && typeof o === 'object' && !Array.isArray(o);
   // a real, finite number inside [lo, hi], or undefined (dropped)
@@ -39,6 +41,53 @@ const Saves = (() => {
     if (!isObj(e) || n(e.score, 0, 1e12) === undefined || n(e.date, 0, until()) === undefined || !DIFFS.includes(e.diff) || !SRC.test(e.src)) return undefined;
     return {name:str(e.name, 16) || 'Player', score:n(e.score, 0, 1e12), acc:n(e.acc, 0, 100) || 0, grade:GRADES.includes(e.grade) ? e.grade : 'F',
       fc:e.fc === true, rating:RATINGS.includes(e.rating) ? e.rating : 'Clear', src:e.src, diff:e.diff, date:n(e.date, 0, until())};
+  }
+
+  // ---- combining another device's progress into this one ----
+  // The same rules as mergeProfile (data.js, which merges this browser's own tabs), hardened for data from
+  // outside: keys that would change how an object behaves (__proto__ and co.) are never copied, leaderboards
+  // are trimmed back to the top 10, songs' cleared difficulties are combined per song, daily stats stay capped,
+  // ties are settled by content (so two devices that combine each other's copies end up identical), and a reset
+  // there never wipes progress here (it only cleared that device). Nothing ever goes down.
+  const ents = o => Object.entries(o || {}).filter(([k]) => !bad(k));
+  function trimBoard(list) {   // the best 10 per part + difficulty, as the Arcade keeps them (addScore)
+    const by = {};
+    for (const e of [...list].sort((a, b) => b.score - a.score)) { const g = by[e.src + '|' + e.diff] = by[e.src + '|' + e.diff] || []; if (g.length < 10) g.push(e); }
+    const keep = new Set(Object.values(by).flat());
+    return list.filter(e => keep.has(e));
+  }
+  const outranks = (e, m, key) => !m || e[key] > m[key] || (e[key] === m[key] && JSON.stringify(e) > JSON.stringify(m));
+  function combine(into, other) {
+    for (const [k, v] of ents(other)) {
+      const mine = into[k];
+      if (k === 'resetAt') continue;
+      if (typeof v === 'number') into[k] = Math.max(typeof mine === 'number' ? mine : 0, v);
+      else if (k === 'ach') { into.ach = into.ach || {}; for (const [id, t] of ents(v)) into.ach[id] = into.ach[id] ? Math.min(into.ach[id], t) : t; }
+      else if (k === 'days') into.days = [...new Set([...(mine || []), ...v])].sort();
+      else if (k === 'leaderboard') {
+        into.leaderboard = into.leaderboard || {};
+        for (const [song, list] of ents(v)) {
+          const have = into.leaderboard[song] || [], key = e => `${e.date}|${e.score}|${e.src}|${e.diff}`, seen = new Set(have.map(key));
+          into.leaderboard[song] = trimBoard([...have, ...list.filter(e => !seen.has(key(e)))]);
+        }
+      }
+      else if (k === 'arcade' || k === 'dailies') { into[k] = into[k] || {}; for (const [id, e] of ents(v)) if (outranks(e, into[k][id], 'score')) into[k][id] = e; }
+      else if (k === 'path') { into.path = into.path || {}; for (const [i, e] of ents(v)) { const m = into.path[i]; into.path[i] = !m ? e : {passes:Math.max(m.passes, e.passes), best:Math.max(m.best, e.best)}; } }
+      else if (k === 'cells') { into.cells = into.cells || {}; for (const [c, e] of ents(v)) if (outranks(e, into.cells[c], 'n')) into.cells[c] = e; }
+      else if (k === 'daily') {
+        into.daily = into.daily || {};
+        for (const [d, e] of ents(v)) if (outranks(e, into.daily[d], 'p')) into.daily[d] = e;
+        const days = Object.keys(into.daily).sort(); while (days.length > 120) delete into.daily[days.shift()];   // as judge.js keeps it
+      }
+      else if (k === 'arcadeCleared') { into.arcadeCleared = into.arcadeCleared || {}; for (const [song, d] of ents(v)) into.arcadeCleared[song] = {...Object.fromEntries(ents(d)), ...into.arcadeCleared[song]}; }
+      else if (v && typeof v === 'object' && !Array.isArray(v)) {   // "seen" sets and per-key counters
+        const m = {...Object.fromEntries(ents(v)), ...(mine || {})};
+        for (const [id, n] of ents(v)) if (typeof n === 'number' && typeof m[id] === 'number') m[id] = Math.max(m[id], n);
+        into[k] = m;
+      }
+      else if (mine == null) into[k] = v;
+    }
+    return into;
   }
   // ---- the profile ----
   const SEEN = ['diffSeen', 'metersSeen', 'inputsSeen', 'arcadeSongs', 'arcadeSrcs', 'arcadeDiffs', 'arcadeFCs', 'arcadePFCs', 'arcadeCombos', 'arcadeDiffN', 'arcadePartN', 'arcadePlays'];
@@ -124,7 +173,7 @@ const Saves = (() => {
   }
   // what combining would change here, without changing anything
   function preview(inc) {
-    const before = JSON.parse(JSON.stringify(P)), after = mergeProfile(JSON.parse(JSON.stringify(P)), JSON.parse(JSON.stringify(inc.profile)), true);
+    const before = JSON.parse(JSON.stringify(P)), after = combine(JSON.parse(JSON.stringify(P)), JSON.parse(JSON.stringify(inc.profile)));
     const bests = better(before.arcade, after.arcade, 'score') + better(before.dailies, after.dailies, 'score') + better(before.path, after.path, 'best') +
       (after.endlessBest > before.endlessBest ? 1 : 0);
     const rows = [['Level', level(before), level(after)], ['XP', Math.floor(before.xp), Math.floor(after.xp)], ['Achievements', achN(before), achN(after)],
@@ -136,7 +185,7 @@ const Saves = (() => {
   function apply(inc) {
     // a copy of how things were, for Undo
     try { localStorage.setItem(UNDO, JSON.stringify({at:Date.now(), p:localStorage.getItem(PROFILE_KEY), s:localStorage.getItem('rhythm-trainer'), a:localStorage.getItem(SET_AT)})); } catch (e) {}
-    mergeProfile(P, JSON.parse(JSON.stringify(inc.profile)), true);
+    combine(P, JSON.parse(JSON.stringify(inc.profile)));
     saveP();
     const win = newerSettings(inc), at = readAt();
     for (const [k, v] of Object.entries(win)) { if (k.startsWith('arcade.')) S.arcade[k.slice(7)] = v; else S[k] = v; at[k] = inc.at[k] || Date.now(); }
@@ -187,5 +236,5 @@ const Saves = (() => {
     let text; try { text = await gunzip(bytes); } catch (e) { if (e instanceof SaveError) throw e; throw new SaveError("That save code isn't complete. Copy all of it and try again."); }
     return parse(text);
   }
-  return {VERSION, MAX, SaveError, pack, check, parse, preview, apply, canUndo, undo, toCode, fromCode, gzip, gunzip, zipOK, cleanProfile, cleanSettings};
+  return {VERSION, MAX, SaveError, pack, check, parse, combine, trimBoard, preview, apply, canUndo, undo, toCode, fromCode, gzip, gunzip, zipOK, cleanProfile, cleanSettings};
 })();
