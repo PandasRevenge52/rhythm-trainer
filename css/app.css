@@ -7,8 +7,9 @@
   --lane:#0e0f11; --chip:#17181b; --shadow:none; --focus:#f2f3f5;
   --edge:#303236; --kbd:#1d1f22; --kbd-edge:#36383d; --overlay:rgba(8,9,10,.78);
   --gold:#ffd479; --warn:#ffb199;
-  /* Arcade: lane arrows, receptors and the field's bar lines */
-  --lane-0:#e4e6ea; --lane-1:#e4e6ea; --lane-2:#e4e6ea; --lane-3:#e4e6ea; --receptor:#4a4d52; --field-bar:#2a2c30;
+  /* Arcade: lane arrows (violet, cyan, blue, pink: hues clear of the Arcade's grade colours, Sick gold, Good green,
+     Shit/Miss red, and of the trainer's sky-blue Good), receptors and the field's bar lines */
+  --lane-0:#b48cff; --lane-1:#4fd8e0; --lane-2:#7b9bff; --lane-3:#ff7fd1; --receptor:#4a4d52; --field-bar:#2a2c30;
   --serif:"Figtree", "Figtree Fallback", "Twemoji", system-ui, -apple-system, "Segoe UI", sans-serif;   /* one typeface (Mono); kept as a name so old rules still resolve */ --sans:"Figtree", "Figtree Fallback", "Twemoji", system-ui, -apple-system, "Segoe UI", sans-serif;
   --early:#3f8aef; --late:#ec6430;
   /* motion and shape tokens: every transition and corner on the site uses these */
