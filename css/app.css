@@ -118,6 +118,8 @@ select{background:var(--chip);border:1px solid transparent;border-radius:var(--r
 .dailyinfo b{color:var(--ink)}
 .stage[data-play=daily] .dailyinfo{display:flex}
 .stage[data-play=daily] :is(#level,#meter,#barsSel,.tempo,#pathBtn,#newBtn){display:none}
+/* D4: Endless picks every rhythm itself, so New has nothing to do there */
+.stage[data-play=endless] #newBtn{display:none}
 
 /* song bar */
 .songbar{display:none;flex-wrap:wrap;align-items:center;gap:8px 16px;background:var(--chip);border-radius:var(--r-lg);padding:9px 11px 11px;margin:4px 0 8px;position:relative;overflow:hidden;font-size:13.5px}
@@ -430,6 +432,7 @@ details.more[open]>:not(summary){animation:reveal var(--dur-2) var(--ease-out)}
   .stage[data-play=daily] .setupsum{display:none}
   .stage[data-play=daily] .dailyinfo{grid-column:span 6;order:4}
   .stage[data-play=daily] #listenBtn{grid-column:span 6}
+  .stage[data-play=endless] :is(#listenBtn,#pathBtn){grid-column:span 3}
 }
 
 /* song setup */
