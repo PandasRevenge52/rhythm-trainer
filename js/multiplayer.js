@@ -691,14 +691,14 @@ const MP = {
       g.fillStyle = BG + 'e6'; g.fillRect(mx, hy, mw, 74);
       g.textAlign = 'left'; g.fillStyle = INK; g.font = '700 13px "Figtree", system-ui, sans-serif';
       g.fillText(clip(g, (lead && lead.id === p.id && lead.score > 0 ? '👑 ' : '') + p.name, mw - 8), mx + 4, hy + 18);
-      g.font = '700 17px "Fraunces", Georgia, serif'; g.fillText((r ? r.score : L.s).toLocaleString(), mx + 4, hy + 40);
+      g.font = '800 17px "Figtree", system-ui, sans-serif'; g.fillText((r ? r.score : L.s).toLocaleString(), mx + 4, hy + 40);
       g.fillStyle = MUTED; g.font = '600 11.5px "Figtree", system-ui, sans-serif';
       g.fillText(`${(r ? r.acc : L.a).toFixed(1)}% · ${L.c}×`, mx + 4, hy + 57);
       g.fillStyle = CHIP; g.fillRect(mx + 4, hy + 64, mw - 8, 4);
       g.fillStyle = L.hp < 25 ? MISS_COL : ACCENT; g.fillRect(mx + 4, hy + 64, Math.max(2, (mw - 8) * L.hp / 100), 4);
       if (p.state === 'left' || r || p.net === 'lost') {
         g.fillStyle = BG + (r || p.state === 'left' ? 'b3' : '80'); g.fillRect(mx, 0, mw, v.H);
-        g.fillStyle = r ? INK : MUTED; g.textAlign = 'center'; g.font = 'italic 700 18px "Fraunces", Georgia, serif';
+        g.fillStyle = r ? INK : MUTED; g.textAlign = 'center'; g.font = '800 18px "Figtree", system-ui, sans-serif';
         g.fillText(r ? 'Finished' : p.state === 'left' ? 'Left' : 'Reconnecting…', mx + mw / 2, v.H / 2);
       }
       g.textAlign = 'center';

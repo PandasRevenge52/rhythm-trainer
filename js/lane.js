@@ -144,7 +144,7 @@ function drawLane(now) {
       const x = Math.min(1, p * 3), back = 1 + 2.7 * (x - 1) ** 3 + 1.7 * (x - 1) ** 2;   // ease-out-back: a small overshoot
       const k = (reducedMotion.matches ? 1 : 0.8 + 0.2 * back) * (1 - 0.35 * out);
       g.save(); g.globalAlpha = (1 - out) * (0.4 + 0.6 * Math.max(0, 1 - p)); g.fillStyle = col.accent;
-      g.font = `700 ${Math.round(H * 0.6)}px Fraunces, Georgia, serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.font = `800 ${Math.round(H * 0.6)}px Figtree, system-ui, sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
       g.translate(W / 2, mid + 2); g.scale(k, k); g.fillText(n, 0, 0); g.restore();
     }
   }

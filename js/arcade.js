@@ -786,14 +786,14 @@ function draw() {
     const px = x0 + fw + 40, py = A$.down ? H * 0.42 : H * 0.18;
     const label = (txt, y) => { g.fillStyle = MUTED; g.font = '700 11.5px "Figtree", system-ui, sans-serif'; g.fillText(txt, px, y); };
     g.textAlign = 'left';
-    label('SCORE', py); g.fillStyle = INK; let ss = 30; g.font = `700 ${ss}px "Fraunces", Georgia, serif`;
-    while (ss > 20 && g.measureText(G.score.toLocaleString()).width > 228) { ss -= 2; g.font = `700 ${ss}px "Fraunces", Georgia, serif`; }
+    label('SCORE', py); g.fillStyle = INK; let ss = 30; g.font = `800 ${ss}px "Figtree", system-ui, sans-serif`;
+    while (ss > 20 && g.measureText(G.score.toLocaleString()).width > 228) { ss -= 2; g.font = `800 ${ss}px "Figtree", system-ui, sans-serif`; }
     g.fillText(G.score.toLocaleString(), px, py + 32);
     // the combo shrinks a little if it and its best wouldn't fit the panel (big combos, other players beside it)
     label('COMBO', py + 70);
     g.font = '600 13px "Figtree", system-ui, sans-serif'; const bw = g.measureText(`best ${G.maxCombo}`).width;
-    let cs = 38; g.font = `700 ${cs}px "Fraunces", Georgia, serif`;
-    while (cs > 22 && g.measureText(String(G.combo)).width + 12 + bw > 228) { cs -= 2; g.font = `700 ${cs}px "Fraunces", Georgia, serif`; }
+    let cs = 38; g.font = `800 ${cs}px "Figtree", system-ui, sans-serif`;
+    while (cs > 22 && g.measureText(String(G.combo)).width + 12 + bw > 228) { cs -= 2; g.font = `800 ${cs}px "Figtree", system-ui, sans-serif`; }
     g.fillStyle = G.combo >= 5 ? INK : MUTED; g.fillText(G.combo, px, py + 108);
     const cw = g.measureText(String(G.combo)).width;
     g.fillStyle = MUTED; g.font = '600 13px "Figtree", system-ui, sans-serif'; g.fillText(`best ${G.maxCombo}`, px + cw + 12, py + 106);
@@ -821,7 +821,7 @@ function draw() {
     const age = now - G.pop.t;
     if (age < 600) {
       g.globalAlpha = age < 450 ? 1 : 1 - (age - 450) / 150;
-      g.fillStyle = G.pop.col; g.font = `italic 700 ${Math.round(30 - Math.min(age, 80) / 16)}px "Fraunces", Georgia, serif`;
+      g.fillStyle = G.pop.col; g.font = `800 ${Math.round(30 - Math.min(age, 80) / 16)}px "Figtree", system-ui, sans-serif`;
       g.fillText(G.pop.text, x0 + fw / 2, midY);
       if (G.pop.dt != null && G.pop.text !== 'Sick') { g.font = '600 13px "Figtree", system-ui, sans-serif'; g.fillStyle = MUTED; g.fillText(`${G.pop.dt < 0 ? 'early' : 'late'} ${Math.round(Math.abs(G.pop.dt) * 1000)} ms`, x0 + fw / 2, midY + 22); }
       g.globalAlpha = 1;
@@ -830,7 +830,7 @@ function draw() {
   // count-in and intro skip
   if (state === 'play') {
     const k = Math.floor((audioNow() - G.countFrom) / G.beat);
-    if (k >= 0 && k < 4) { g.fillStyle = INK; g.font = 'italic 700 76px "Fraunces", Georgia, serif'; g.fillText(k < 3 ? String(3 - k) : 'Go', x0 + fw / 2, H / 2); }
+    if (k >= 0 && k < 4) { g.fillStyle = INK; g.font = '800 76px "Figtree", system-ui, sans-serif'; g.fillText(k < 3 ? String(3 - k) : 'Go', x0 + fw / 2, H / 2); }
     if (canSkip()) { g.fillStyle = MUTED; g.font = '600 14px "Figtree", system-ui, sans-serif'; g.fillText('Space to skip the intro', W / 2, A$.down ? H - 30 : 40); }
   }
 }

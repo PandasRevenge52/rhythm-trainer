@@ -1,6 +1,5 @@
-/* Fraunces and Figtree (SIL Open Font License), latin subset, served locally so the site looks the same offline.
-   Fraunces is cut down to what the headings use: weights 500-700, optical sizes 14-72, Latin-1 letters and the
-   punctuation and arrows found in the site's text (fontTools; 145 KB -> 100 KB). Anything else falls back to Georgia. */
+/* Figtree (SIL Open Font License), latin subset, served locally so the site looks the same offline. It is the
+   site's only typeface (Mono design, 2026-10); Fraunces was removed with it (-100 KB per first visit). */
 @font-face {
   font-family: 'Figtree';
   font-style: normal;
@@ -18,22 +17,6 @@
   ascent-override: 96.36%;
   descent-override: 25.36%;
   line-gap-override: 0%;
-}
-@font-face {
-  font-family: 'Fraunces';
-  font-style: italic;
-  font-weight: 500 700;
-  font-display: swap;
-  src: url(fraunces-italic.woff2) format('woff2');
-  unicode-range: U+0020-007E, U+00A0, U+00A9, U+00B1, U+00B7, U+00BD, U+00C0-00FF, U+2013-2014, U+2018-2019, U+201C-201D, U+2022, U+2026, U+2039-203A, U+2190-2193, U+2212, U+25A0, U+25B6, U+25B8, U+25C2;
-}
-@font-face {
-  font-family: 'Fraunces';
-  font-style: normal;
-  font-weight: 500 700;
-  font-display: swap;
-  src: url(fraunces-normal.woff2) format('woff2');
-  unicode-range: U+0020-007E, U+00A0, U+00A9, U+00B1, U+00B7, U+00BD, U+00C0-00FF, U+2013-2014, U+2018-2019, U+201C-201D, U+2022, U+2026, U+2039-203A, U+2190-2193, U+2212, U+25A0, U+25B6, U+25B8, U+25C2;
 }
 /* Twemoji (graphics CC-BY 4.0 by Twitter, https://github.com/twitter/twemoji; COLR font by Mozilla), subset to the emoji the site uses,
    so they show on computers without a color emoji font instead of empty boxes. Rebuild after adding new emoji. */

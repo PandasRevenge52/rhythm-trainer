@@ -11,7 +11,7 @@ body.arcade{overflow:hidden;height:100vh}
 .back{color:var(--muted);text-decoration:none;font-size:14px}
 .back:hover{color:var(--ink)}
 .atitle{font-size:34px;margin:4px 0 2px;line-height:1.1}
-.asub{margin:0 0 14px;color:var(--muted);font:italic 15px var(--serif)}
+.asub{margin:0 0 14px;color:var(--muted);font:500 15px var(--sans)}
 .asong{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--bg);border:1px solid var(--line);border-radius:var(--r-lg);padding:12px 14px;margin-bottom:16px}
 .asong>div{display:flex;flex-direction:column;min-width:0}
 .asong b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:16px}
@@ -41,7 +41,7 @@ button.big{width:100%;justify-content:center;padding:13px;font-size:16px;margin-
 button:disabled{opacity:.45;cursor:not-allowed;filter:none}
 .keys{text-align:center;color:var(--muted);font-size:13px;margin:12px 0 0;line-height:2}
 .grade{display:flex;align-items:center;justify-content:center;gap:16px;margin:10px 0 6px}
-.grade b{font:italic 700 72px/1 var(--serif)}
+.grade b{font:800 72px/1 var(--sans);letter-spacing:-.03em}
 .grade span{font-size:22px;color:var(--ink);font-variant-numeric:tabular-nums;line-height:1.2}
 .grade small{font-size:14px;color:var(--muted)}
 .grade .badge{font-style:normal}
@@ -126,7 +126,7 @@ body.playing .homebtn:hover{opacity:1}
 .mpmsg{min-height:20px;margin:12px 0 0;color:var(--muted);font-size:14px}
 .mphead{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px}
 .mphead .lbl{display:block;font-size:12.5px;color:var(--muted)}
-.mpcode{font:700 34px/1.1 "Fraunces",Georgia,serif;letter-spacing:.14em;color:var(--accent)}
+.mpcode{font:800 34px/1.1 var(--sans);font-variant-numeric:tabular-nums;letter-spacing:.14em;color:var(--accent)}
 .mpshare{display:flex;gap:8px}
 .mpsong{flex-direction:column;align-items:flex-start;gap:2px;margin-bottom:10px}
 .mpsongbtns{display:flex;gap:8px}
@@ -160,11 +160,11 @@ body.playing .homebtn:hover{opacity:1}
 .mppod li:nth-child(2){animation-delay:.06s} .mppod li:nth-child(3){animation-delay:.12s} .mppod li:nth-child(4){animation-delay:.18s}
 .mppod li.won{border-color:var(--gold);background:color-mix(in srgb,var(--gold) 9%,var(--bg))}
 .mppod li.me b{color:var(--accent)}
-.mpplace{grid-row:span 2;font:700 22px "Fraunces",Georgia,serif;color:var(--muted)}
+.mpplace{grid-row:span 2;font:800 22px var(--sans);color:var(--muted)}
 .mppod li.won .mpplace{color:var(--gold)}
 .mppod .mpav{grid-row:span 2}
 .mppod b{font-size:16px}
-.mpsc{grid-row:span 2;font:700 22px "Fraunces",Georgia,serif;font-variant-numeric:tabular-nums}
+.mpsc{grid-row:span 2;font:800 22px var(--sans);font-variant-numeric:tabular-nums}
 .mppod small{color:var(--muted);font-size:12.5px}
 .mptablewrap{overflow-x:auto}
 .mptable td.best{color:var(--gold);font-weight:700}
