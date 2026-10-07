@@ -839,7 +839,7 @@ function draw() {
       const k = calm ? 1 : 1 + 0.12 * Math.max(0, 1 - (now - G.comboT) / 120);
       g.save(); g.translate(px, py + 108); g.scale(k, k); g.fillStyle = G.combo >= 5 ? INK : MUTED; g.fillText(G.combo, 0, 0); g.restore();
     }
-    const cw = g.measureText(String(G.combo)).width;
+    const dropping = G.drop && now - G.drop.t < 450, cw = g.measureText(String(dropping ? G.drop.n : G.combo)).width;   // place "best" after the number actually drawn
     g.fillStyle = MUTED; g.font = '600 13px "Figtree", system-ui, sans-serif'; g.fillText(`best ${G.maxCombo}`, px + cw + 12, py + 106);
     label('ACCURACY', py + 146); g.fillStyle = INK; g.font = '700 22px "Figtree", system-ui, sans-serif'; g.fillText(acc, px, py + 174);
     if (G.judged) { g.fillStyle = MUTED; g.font = '600 13px "Figtree", system-ui, sans-serif'; g.fillText(ratingOf(), px, py + 194); }
