@@ -399,7 +399,7 @@ details.more[open]>:not(summary){animation:reveal var(--dur-2) var(--ease-out)}
   *,*::before,*::after{transition-duration:1ms !important;transition-delay:0s !important;animation-duration:1ms !important;animation-delay:0s !important;animation-iteration-count:1 !important;scroll-behavior:auto !important}
   .modal,.sheet,.sheet .tag,.barg{transition-duration:var(--dur-2) !important}
 }
-.toggle[hidden],.row[hidden]{display:none}
+.toggle[hidden],.row[hidden],.chips[hidden]{display:none}
 
 /* count reading */
 .csyl{fill:currentColor;font:700 21px system-ui,sans-serif;text-anchor:middle;font-variant-numeric:tabular-nums}
