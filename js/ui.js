@@ -15,7 +15,7 @@ function updateButtons() {
 function refreshIdle() {
   if (run) { renderPreview(shown.seg && shown.seg.nextPat); return; }
   if (S.play === 'daily') {
-    if (!daily || daily.date !== todayStr()) buildDaily();
+    if (!daily || daily.date !== todayStr()) { buildDaily(); renderDailyInfo(); }
     pattern = daily.pats[0]; queued = daily.pats[1];
   } else if (!pattern || pattern.meter.id !== genCtx().meter.id || pattern.twoHand !== (genCtx().hands === 2)) { pattern = newPattern(); queued = null; }
   renderNotation(pattern);
@@ -90,6 +90,7 @@ function syncControls() {
   $('#polyPickRow').hidden = S.hands !== 2 || !S.poly;
   $('#polySel').value = S.polyPick || 'mix';
   syncLevelOptions(); renderInputStatus(); renderSetupSum();
+  if (S.play === 'daily') renderDailyInfo();
 }
 // U7: the mode tabs' underline slides to the chosen tab. Placed without sliding the first time (and after a resize).
 function placeModeBar(instant) {
@@ -106,6 +107,11 @@ if (document.fonts) document.fonts.ready.then(() => placeModeBar(true));   // th
 function renderSetupSum() {
   const lv = $('#level'), name = (lv.options[lv.selectedIndex] || {}).text || '';
   $('#setupSumText').textContent = [name.replace(/^🔒\s*/, ''), S.meter, `${S.bars} bar${S.bars > 1 ? 's' : ''}`, `${S.bpm} BPM`].join(' · ');
+}
+// D3: Daily's level, time signature and tempo, read-only, in the row where the setup controls usually are
+function renderDailyInfo() {
+  const sp = dailySpec();
+  $('#dailyInfo').innerHTML = `Today: <b>${esc(LEVELS[sp.level].name)}</b> · ${sp.meter} · <b>${sp.bpm}</b> BPM`;
 }
 function setSetupOpen(open) { $('.toolbar').classList.toggle('setup-open', open); $('#setupSum').setAttribute('aria-expanded', open); }
 $('#setupSum').addEventListener('click', () => setSetupOpen(!$('.toolbar').classList.contains('setup-open')));
@@ -124,6 +130,7 @@ function setPlay(v) {
   S.play = v; save();
   if (v !== 'daily') daily = null;
   if (v === 'song') restoreSong();
+  setSetupOpen(false);
   if (v === 'endless' && S.level == null) setLevel(2, true);
   if (v !== 'daily') { pattern = newPattern(); queued = null; }
   syncControls(); updateButtons(); refreshIdle(); renderIdle(); renderSong();

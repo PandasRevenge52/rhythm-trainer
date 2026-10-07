@@ -205,7 +205,7 @@ function idleText() {
     (P.endlessBest ? ` Best: <b>${P.endlessBest.toLocaleString()}</b>` : '');
   if (S.play === 'daily') {
     const sp = dailySpec(), done = P.dailies[sp.date];
-    return `Today: <b>${LEVELS[sp.level].name}</b> in <b>${sp.meter}</b> at ${sp.bpm} BPM, ${DAILY_PASSES} rhythms, the same for everyone. ` +
+    return `${DAILY_PASSES} rhythms, the same for everyone today. ` +
       (done ? `Your best today: <b>${done.score.toLocaleString()}</b> (${Math.round(done.acc * 100)}%). ` : '') + `Streak: <b>${dailyStreak()}</b> 🔥`;
   }
   if (S.play === 'song') return song.buf ? `Press <kbd>Enter</kbd> to play along. Use <kbd>L</kbd> to check the clicks line up with the music first.` : 'Load an MP3 to play rhythms along with it.';

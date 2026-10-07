@@ -112,6 +112,12 @@ select{background:var(--chip);border:1px solid transparent;border-radius:var(--r
 .tempo input::-webkit-inner-spin-button{display:none}
 .tempo span{font-size:12px;color:var(--muted);margin-right:4px}
 .stage[data-play=endless] .tempo,.stage[data-play=song] .tempo{display:none}
+/* D3: Daily sets its own level, time signature, bars and tempo, so those controls (and New, Path) go;
+   a read-only line takes their row instead, so the toolbar keeps its height and Daily's real tempo stays on screen */
+.dailyinfo{display:none;align-items:center;gap:6px;background:var(--chip);border-radius:var(--r-md);padding:9px 12px;font-size:14px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dailyinfo b{color:var(--ink)}
+.stage[data-play=daily] .dailyinfo{display:flex}
+.stage[data-play=daily] :is(#level,#meter,#barsSel,.tempo,#pathBtn,#newBtn){display:none}
 
 /* song bar */
 .songbar{display:none;flex-wrap:wrap;align-items:center;gap:8px 16px;background:var(--chip);border-radius:var(--r-lg);padding:9px 11px 11px;margin:4px 0 8px;position:relative;overflow:hidden;font-size:13.5px}
@@ -421,6 +427,9 @@ details.more[open]>:not(summary){animation:reveal var(--dur-2) var(--ease-out)}
   .toolbar.setup-open .setupsum .chev{transform:rotate(180deg)}
   .toolbar:not(.setup-open) :is(#level,#meter,#barsSel,.tempo,.chip-in){display:none}
   .toolbar.setup-open :is(#level,#meter,#barsSel,.tempo,.chip-in){animation:reveal var(--dur-2) var(--ease-out) both}
+  .stage[data-play=daily] .setupsum{display:none}
+  .stage[data-play=daily] .dailyinfo{grid-column:span 6;order:4}
+  .stage[data-play=daily] #listenBtn{grid-column:span 6}
 }
 
 /* song setup */
