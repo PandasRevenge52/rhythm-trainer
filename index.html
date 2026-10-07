@@ -65,8 +65,9 @@
         <label class="toggle">Two hands <input type="checkbox" id="handsT"></label>
         <label class="toggle" id="polyRow">Polyrhythms <input type="checkbox" id="polyT"></label>
         <div class="row" id="polyPickRow"><span class="lbl">Which one</span><select id="polySel" aria-label="Which polyrhythm"></select></div>
-        <details class="more"><summary><span>Custom figures</span><span class="val" id="sumCustom"></span></summary>
+        <details class="more"><summary><span>Custom difficulty</span><span class="val" id="sumCustom"></span></summary>
           <p class="hint">Changing these switches the difficulty to Custom.</p>
+          <div class="field"><div class="name">Timing tolerance</div><div class="chips" id="timingSeg"><button data-v="relaxed">Relaxed</button><button data-v="normal">Normal</button><button data-v="strict">Strict</button></div></div>
           <div class="field"><div class="name">Notes</div><div class="chips" id="noteChips"></div></div>
           <div class="field"><div class="name">Rests</div><div class="chips" id="restChips"></div></div>
           <div class="field"><div class="name">Extra figures</div><div class="chips" id="extraChips"></div></div>
@@ -75,7 +76,6 @@
       </section>
       <section class="grp" id="grpPractice" aria-labelledby="hPractice">
         <h3 id="hPractice">Practice</h3>
-        <div class="row col"><span class="lbl">Timing tolerance</span><div class="chips" id="timingSeg"><button data-v="relaxed">Relaxed</button><button data-v="normal">Normal</button><button data-v="strict">Strict</button></div></div>
         <div class="row col"><span class="lbl">Metronome gaps</span><div class="chips" id="gapSeg"></div></div>
         <label class="toggle">Metronome while playing <input type="checkbox" id="metronome"></label>
         <label class="toggle">Sight-reading <input type="checkbox" id="sightT"></label>
