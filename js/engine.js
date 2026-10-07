@@ -113,7 +113,7 @@ function start(opts = {}) {
   if (run) stop(true);
   const listen = !!opts.listen;
   if (S.play === 'song' && !song.buf) { toast(song.loading ? 'Still loading the song…' : 'Load an MP3 first'); if (!song.loading) $('#songFile').click(); return; }
-  if (S.play === 'practice' && !listen && S.level != null && !levelUnlocked(S.level)) { toast(`🔒 Pass ${LEVELS[S.level - 1].name} first, or turn on Free play in Settings`); openPath(); return; }
+  if (S.play === 'practice' && !listen && S.level != null && !levelUnlocked(S.level)) { toast(`🔒 Pass ${LEVELS[S.level - 1].name} first, or turn on Free play at the bottom of the path`); openPath(); return; }
   closeModal();
   ensureAudio(); syncClock();
   const bus = ctx.createGain(); bus.connect(master);

@@ -78,7 +78,7 @@ function syncControls() {
   lane.classList.toggle('two', S.hands === 2);
   // one-line summaries on the collapsed parts of the settings sheet
   $('#sumCustom').textContent = S.level == null ? 'Custom' : `from ${LEVELS[S.level].name}`;
-  $('#sumDisplay').textContent = [S.lane && 'Lane', S.counts && 'Counting', S.freePlay && 'Free play'].filter(Boolean).join(' · ') || 'All off';
+  $('#sumDisplay').textContent = [S.lane && 'Lane', S.counts && 'Counting'].filter(Boolean).join(' · ') || 'All off';
   $('#sumSounds').textContent = `${CLICK_NAMES[S.clickSound]} · ${KITS[S.hitKit].name}`;
   $('#sumOffsets').textContent = `Keys ${S.offsets.key} · MIDI ${S.offsets.midi} · Mic ${S.offsets.mic} ms`;
   $('#level').value = S.level == null ? 'custom' : String(S.level);
@@ -232,7 +232,7 @@ function setCounts(on) {
 }
 // [checkbox id, setting]
 const TOGGLES = [['metronome', 'metronome'], ['laneT', 'lane'], ['counts', 'counts'], ['hitSound', 'hitSound'], ['sightT', 'sight'], ['focusT', 'focus'],
-  ['handsT', 'hands'], ['polyT', 'poly'], ['midiT', 'midi'], ['micT', 'mic'], ['freeT2', 'freePlay'], ['smoothT', 'smoothAudio']];
+  ['handsT', 'hands'], ['polyT', 'poly'], ['midiT', 'midi'], ['micT', 'mic'], ['smoothT', 'smoothAudio']];
 for (const [id, key] of TOGGLES) $('#' + id).addEventListener('change', e => {
   const on = e.target.checked;
   if (key === 'counts') return setCounts(on);
