@@ -398,7 +398,11 @@ addEventListener('drop', e => {
   const f = [...(e.dataTransfer?.files || [])].find(f => f.type.startsWith('audio') || /\.(mp3|wav|ogg|m4a|aac|flac)$/i.test(f.name));
   if (f && state === 'menu') pickFile(f);
 });
-function show(id) { $('#menu').classList.remove('boot'); for (const o of ['menu', 'pause', 'results', 'board', 'cal', 'mp', 'mpRes']) $('#' + o).classList.toggle('show', o === id); document.body.classList.toggle('playing', !id); }
+function show(id) { $('#menu').classList.remove('boot'); for (const o of ['menu', 'pause', 'results', 'board', 'cal', 'mp', 'mpRes']) $('#' + o).classList.toggle('show', o === id); document.body.classList.toggle('playing', !id); measureHome(); }
+// The Home button floats over the top-left corner. The health bar starts right of it when it would otherwise run
+// underneath (narrow screens). Its edge is measured here, when play starts or the window resizes, never per frame.
+let homeRight = 0;
+function measureHome() { const r = $('#homeBtn').getBoundingClientRect(); homeRight = r.bottom > 0 ? r.right : 0; }
 
 // ---------- a run ----------
 function startAudio(fromPos, lead) {
@@ -814,7 +818,9 @@ function draw() {
   gr.addColorStop(0, BG); gr.addColorStop(0.6, BG + 'e6'); gr.addColorStop(1, BG + '00');
   g.fillStyle = gr; g.fillRect(0, A$.down ? 0 : H - fadeH, W, fadeH);
   // health bar along the edge away from the targets
-  const hbW = Math.min(360, W - 40), hbY = A$.down ? 22 : H - 32, hbX = Math.max(20, x0 + fw / 2 - hbW / 2);
+  let hbW = Math.min(360, W - 40), hbX = Math.max(20, x0 + fw / 2 - hbW / 2);
+  const hbY = A$.down ? 22 : H - 32;
+  if (A$.down && hbX < homeRight + 12) { hbX = homeRight + 12; hbW = Math.min(hbW, W - hbX - 20); }   // clear of the Home button
   g.fillStyle = CHIP; g.beginPath(); g.roundRect(hbX, hbY, hbW, 10, 5); g.fill();
   g.fillStyle = G.health < 25 ? MISS_COL : ACCENT; g.beginPath(); g.roundRect(hbX, hbY, Math.max(4, hbW * G.health / 100), 10, 5); g.fill();
   const prog = Math.max(0, Math.min(1, t / tr.buf.duration)), acc = G.judged ? (G.accSum / G.judged * 100).toFixed(2) + '%' : '–';
@@ -856,7 +862,7 @@ function draw() {
   } else {
     // narrow screens: one compact line next to the health bar
     g.fillStyle = INK; g.font = '600 14px "Figtree", system-ui, sans-serif'; g.textAlign = 'center';
-    g.fillText(`${G.score.toLocaleString()}  ·  ${G.combo}×  ·  ${acc}  ·  ${Math.round(prog * 100)}%`, W / 2, hbY + (A$.down ? 32 : -12));
+    g.fillText(`${G.score.toLocaleString()}  ·  ${G.combo}×  ·  ${acc}  ·  ${Math.round(prog * 100)}%`, hbX + hbW / 2, hbY + (A$.down ? 32 : -12));
   }
   if (mpOn()) MP.draw(g, {t, pps, recY, dir, W, H, x0, fw, now});
   // judgement popup (the combo lives in the side panel now, not in the middle of the notes)
@@ -1027,7 +1033,7 @@ addEventListener('keydown', e => {
 addEventListener('keyup', e => { if (state === 'play' && e.code in KEYS) offLane(KEYS[e.code]); });
 addEventListener('blur', () => pause('Paused because the window lost focus.'));
 document.addEventListener('visibilitychange', () => { if (document.hidden) { pause('Paused while the tab was hidden.'); if (state === 'cal' && AC.on) acStop(); } });
-addEventListener('resize', () => draw());
+addEventListener('resize', () => { measureHome(); draw(); });
 $('#aPlay').addEventListener('click', e => { e.currentTarget.blur(); play(); });
 $('#aResume').addEventListener('click', resume);
 $('#aRestart').addEventListener('click', () => { stopAudio(); play(); });

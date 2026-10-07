@@ -78,6 +78,8 @@ table.lb{width:100%;border-collapse:collapse;margin-top:10px;font-size:14px}
 .homebtn:hover{border-color:var(--kbd-edge)}
 body.playing .homebtn{opacity:.3}
 body.playing .homebtn:hover{opacity:1}
+/* narrow screens during play: just the house icon (a 44 px target), so the health bar beside it keeps its width */
+@media (max-width:579px){ body.playing .homebtn{min-width:44px;min-height:44px;justify-content:center;padding:8px;gap:0} body.playing .homebtn span{display:none} }
 
 /* keybinds */
 .keysrow{flex-wrap:wrap}
