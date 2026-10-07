@@ -866,7 +866,8 @@ function draw() {
   }
   if (mpOn()) MP.draw(g, {t, pps, recY, dir, W, H, x0, fw, now});
   // judgement popup (the combo lives in the side panel now, not in the middle of the notes)
-  const midY = A$.down ? recY - 190 : recY + 190;
+  // kept clear of the score line at the top (or bottom) on short screens, such as phones in landscape
+  const midY = A$.down ? Math.max(recY - 190, 100) : Math.min(recY + 190, H - 100);
   if (G.pop) {
     const age = now - G.pop.t;
     if (age < 600) {
