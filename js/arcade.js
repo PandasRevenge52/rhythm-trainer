@@ -24,6 +24,7 @@ const DIRS = [-90, 180, 0, 90];   // arrow rotation per lane: ← ↓ ↑ →
 const TOK = (() => { const cs = getComputedStyle(document.documentElement); return n => cs.getPropertyValue('--' + n).trim(); })();
 const withA = (hex, a) => hex + Math.round(Math.max(0, Math.min(1, a)) * 255).toString(16).padStart(2, '0');   // #rrggbb + alpha
 const LANE_COL = [0, 1, 2, 3].map(i => TOK('lane-' + i));
+const calmMQ = matchMedia('(prefers-reduced-motion: reduce)');   // reduced motion: hit feedback is colour + text only
 // timing windows in seconds, points, health change (out of 100) and accuracy weight
 const JUDGE = [
   {name:'Sick', win:0.045, pts:350, hp:2.3, acc:1,    col:'#ffd479'},
@@ -424,7 +425,7 @@ function play(fromPos = 0, keep = null, opts = {}) {
   for (let i = 1; i <= 4; i++) { const ct = au.when + (firstBeat - fromPos) - i * p; if (ct > ctx.currentTime) click(au.bus, ct, i === 4); }
   G = keep ? Object.assign(keep, au, {pos0:fromPos}) : {...au, pos0:fromPos, score:0, combo:0, maxCombo:0, health:50,
     counts:{Sick:0, Good:0, Bad:0, Shit:0, Miss:0}, accSum:0, judged:0, pop:null, press:[0, 0, 0, 0], down:[false, false, false, false],
-    splash:[], errs:[], offs:[], failed:false, minHealth:100, jlog:[]};
+    hits:[], errs:[], offs:[], failed:false, minHealth:100, jlog:[], comboT:0, mileT:0, drop:null, missT:0};
   G.countFrom = au.when + (firstBeat - fromPos) - 4 * p; G.beat = p;
   G.firstNote = chart.length ? chart[0].t : 0;
   stall = {song:-9, wall:performance.now()}; G.startedAt = performance.now();
@@ -530,12 +531,15 @@ function judge(n, jIdx, dt) {
   G.pop = {text:J.name, t:performance.now(), dt, col:J.col};
   G.errs.push({dt, col:J.col, t:performance.now()}); if (G.errs.length > 30) G.errs.shift();
   G.offs.push(dt);
-  if (jIdx === 0) G.splash.push({lane:n.lane, t:performance.now()});
+  const now = performance.now();
+  G.hits.push({lane:n.lane, j:jIdx, t:now, seed:Math.random() * 6.28}); G.comboT = now;
+  if (G.combo === 25 || G.combo % 50 === 0) G.mileT = now;
   G.sickRun = jIdx === 0 ? (G.sickRun || 0) + 1 : 0; G.maxSick = Math.max(G.maxSick || 0, G.sickRun);
   if (A$.hitSound) rim(G.bus, ctx.currentTime, 0.35);
 }
 function miss(n, text = 'Miss') {
   n.j = 'Miss'; n.done = true; n.held = false;
+  const now = performance.now(); G.missT = now; if (G.combo >= 5) G.drop = {n:G.combo, t:now};
   G.counts.Miss++; G.judged++; G.combo = 0; G.sickRun = 0;
   G.jlog.push([n.id, 4]);
   G.health += MISS_HP;
@@ -555,7 +559,7 @@ function offLane(lane) {
   const t = songNow();
   for (const n of chart) if (n.lane === lane && n.held) {
     n.held = false; n.done = true;
-    if (t < n.t + n.len - 0.1) { G.health += HOLD_BREAK_HP; G.combo = 0; G.dropped = true; G.jlog.push([n.id, 5]); G.pop = {text:'Dropped', t:performance.now(), col:'#ff9b8a'}; }
+    if (t < n.t + n.len - 0.1) { if (G.combo >= 5) G.drop = {n:G.combo, t:performance.now()}; G.health += HOLD_BREAK_HP; G.combo = 0; G.dropped = true; G.jlog.push([n.id, 5]); G.pop = {text:'Dropped', t:performance.now(), col:'#ff9b8a'}; }
     else { G.score += 100; G.health = Math.min(100, G.health + HOLD_HP); G.holdsOK = (G.holdsOK || 0) + 1; }
   }
 }
@@ -720,13 +724,13 @@ function draw() {
   const lx = i => x0 + laneW * (i + 0.5), now = performance.now();
   // playfield, with a soft pulse on each bar's downbeat
   let bIdx = 0; while (bIdx < tr.beats.length - 1 && tr.beats[bIdx + 1] <= t) bIdx++;
-  const barPh = (bIdx % 4) + Math.max(0, t - tr.beats[bIdx]) / G.beat, pulse = state === 'play' ? Math.exp(-barPh * 3) * 0.5 : 0;
+  const barPh = (bIdx % 4) + Math.max(0, t - tr.beats[bIdx]) / G.beat, calm = calmMQ.matches, pulse = state === 'play' && !calm ? Math.exp(-barPh * 3) * 0.5 : 0;
   g.fillStyle = FIELD; g.fillRect(x0, 0, fw, H);
   g.fillStyle = withA(ACCENT, 0.05 + pulse * 0.1); g.fillRect(x0 - 2, 0, 2, H); g.fillRect(x0 + fw, 0, 2, H);
   g.fillStyle = LINE; for (let i = 1; i < LANES; i++) g.fillRect(x0 + laneW * i, 0, 1, H);
   // lane flash while a key is down
   for (let i = 0; i < LANES; i++) {
-    const age = now - G.press[i]; if (!G.down[i] && age > 160) continue;
+    const age = now - G.press[i]; if (!G.down[i] && (age > 160 || calm)) continue;   // reduced motion: only while the key is held
     const a = G.down[i] ? 0.16 : 0.16 * (1 - age / 160), gr = g.createLinearGradient(0, recY, 0, recY + dir * H * 0.55);
     gr.addColorStop(0, LANE_COL[i] + Math.round(a * 255).toString(16).padStart(2, '0')); gr.addColorStop(1, LANE_COL[i] + '00');
     g.fillStyle = gr; g.fillRect(x0 + laneW * i + 1, Math.min(recY, recY + dir * H * 0.55), laneW - 1, H * 0.55);
@@ -742,7 +746,7 @@ function draw() {
   for (let i = 0; i < LANES; i++) {
     const pressed = G.down[i], age = now - G.press[i];
     arrow(lx(i), recY, size * (pressed ? 0.9 : 1), i, pressed ? LANE_COL[i] + '44' : CHIP, pressed ? LANE_COL[i] : RECEPTOR);
-    if (age < 120) arrow(lx(i), recY, size * 1.04, i, null, LANE_COL[i], 1 - age / 120);
+    if (age < 120 && !calm) arrow(lx(i), recY, size * 1.04, i, null, LANE_COL[i], 1 - age / 120);
   }
   // holds, then notes
   for (const n of chart) {
@@ -760,9 +764,30 @@ function draw() {
     if (A$.down ? y > H + laneW : y < -laneW) continue;
     noteArrow(lx(n.lane), y, size, n.lane);
   }
-  // splashes on Sick hits
-  G.splash = G.splash.filter(s => now - s.t < 260);
-  for (const s of G.splash) { const k = (now - s.t) / 260; arrow(lx(s.lane), recY, size * (1 + k * 0.6), s.lane, null, LANE_COL[s.lane], 1 - k); }
+  // hit feedback: each judgement has its own look, not just its own colour, so they read apart in fast passages.
+  // Sick = light rising from the receptor, a ring and sparks; Good = a ring; Bad/Shit = the receptor lights up
+  // briefly; Miss = no light, a soft red light inside the field's edges. All of it is clipped to its own lane.
+  // Reduced motion: none of this, only the colours and the judgement text.
+  G.hits = G.hits.filter(h => now - h.t < 340);
+  if (!calm) for (const h of G.hits) {
+    const age = now - h.t, p = age / 340, c = JUDGE[h.j].col, x = lx(h.lane);
+    g.save(); g.beginPath(); g.rect(x0 + laneW * h.lane + 1, 0, laneW - 2, H); g.clip();
+    if (h.j === 0) {
+      drawOval(g, softOval(c, Math.round(laneW * 0.36), 130, 0.42), x, recY + dir * 90, 1 - p);
+      // the ring never grows past the lane (47% of its width), so the clip never has anything to cut
+      const r0 = size * 1.02, r1 = Math.max(r0, laneW * 0.47);
+      g.globalAlpha = 1 - p; g.strokeStyle = c; g.lineWidth = 2.5 * (1 - p) + 1; g.beginPath(); g.arc(x, recY, r0 + (r1 - r0) * eOut(p), 0, Math.PI * 2); g.stroke();
+      // sparks fly up the lane in a narrow cone instead of sideways into the walls
+      for (let k = 0; k < 8; k++) { const a = (k / 7 - 0.5) * 0.85 + Math.sin(h.seed + k) * 0.08, d = size * 0.9 + laneW * 0.8 * eOut(p);
+        g.fillStyle = k % 2 ? c : INK; g.fillRect(x + Math.sin(a) * d * 0.45 - 1.5, recY + dir * Math.cos(a) * d - 1.5, 3, 3); }
+    } else if (h.j === 1) {
+      if (age < 280) { const q = age / 280, r0 = size * 1.02, r1 = Math.max(r0, laneW * 0.47); g.globalAlpha = 1 - q; g.strokeStyle = c; g.lineWidth = 2; g.beginPath(); g.arc(x, recY, r0 + (r1 - r0) * eOut(q), 0, Math.PI * 2); g.stroke(); }
+    } else if (age < 200) { arrow(x, recY, size, h.lane, c, null, 0.45 * (1 - age / 200)); }
+    g.restore(); g.globalAlpha = 1;
+  }
+  if (!calm && now - G.missT < 400) edgeLight(g, Math.round(x0), 0, Math.round(fw), H, MISS_COL, 0.3 * (1 - (now - G.missT) / 400));
+  // a milestone (25, 50, every 50 after): a soft band of light runs up the field once
+  if (!calm && now - G.mileT < 600) { const p = (now - G.mileT) / 600; g.save(); g.beginPath(); g.rect(x0, 0, fw, H); g.clip(); drawOval(g, softOval(ACCENT, Math.round(fw * 0.5), 90, 0.16), x0 + fw / 2, recY - dir * p * (H + 120), 1 - p); g.restore(); }
   // hit error meter: where your last hits landed, early to the left, late to the right
   const emY = recY - dir * (size + 26), emW = Math.min(fw - 20, 220), emX = x0 + fw / 2;
   g.fillStyle = LINE + '88'; g.fillRect(emX - emW / 2, emY - 1, emW, 2);
@@ -794,7 +819,12 @@ function draw() {
     g.font = '600 13px "Figtree", system-ui, sans-serif'; const bw = g.measureText(`best ${G.maxCombo}`).width;
     let cs = 38; g.font = `800 ${cs}px "Figtree", system-ui, sans-serif`;
     while (cs > 22 && g.measureText(String(G.combo)).width + 12 + bw > 228) { cs -= 2; g.font = `800 ${cs}px "Figtree", system-ui, sans-serif`; }
-    g.fillStyle = G.combo >= 5 ? INK : MUTED; g.fillText(G.combo, px, py + 108);
+    if (G.drop && now - G.drop.t < 450) {   // a miss: the old count turns red and drops away
+      const p = (now - G.drop.t) / 450; g.globalAlpha = 1 - p; g.fillStyle = MISS_COL; g.fillText(G.drop.n, px, py + 108 + (calm ? 0 : 10 * eOut(p))); g.globalAlpha = 1;
+    } else {   // nudges up on each hit
+      const k = calm ? 1 : 1 + 0.12 * Math.max(0, 1 - (now - G.comboT) / 120);
+      g.save(); g.translate(px, py + 108); g.scale(k, k); g.fillStyle = G.combo >= 5 ? INK : MUTED; g.fillText(G.combo, 0, 0); g.restore();
+    }
     const cw = g.measureText(String(G.combo)).width;
     g.fillStyle = MUTED; g.font = '600 13px "Figtree", system-ui, sans-serif'; g.fillText(`best ${G.maxCombo}`, px + cw + 12, py + 106);
     label('ACCURACY', py + 146); g.fillStyle = INK; g.font = '700 22px "Figtree", system-ui, sans-serif'; g.fillText(acc, px, py + 174);
@@ -821,7 +851,7 @@ function draw() {
     const age = now - G.pop.t;
     if (age < 600) {
       g.globalAlpha = age < 450 ? 1 : 1 - (age - 450) / 150;
-      g.fillStyle = G.pop.col; g.font = `800 ${Math.round(30 - Math.min(age, 80) / 16)}px "Figtree", system-ui, sans-serif`;
+      g.fillStyle = G.pop.col; g.font = `800 ${calm ? 28 : Math.round(30 - Math.min(age, 80) / 16)}px "Figtree", system-ui, sans-serif`;
       g.fillText(G.pop.text, x0 + fw / 2, midY);
       if (G.pop.dt != null && G.pop.text !== 'Sick') { g.font = '600 13px "Figtree", system-ui, sans-serif'; g.fillStyle = MUTED; g.fillText(`${G.pop.dt < 0 ? 'early' : 'late'} ${Math.round(Math.abs(G.pop.dt) * 1000)} ms`, x0 + fw / 2, midY + 22); }
       g.globalAlpha = 1;
