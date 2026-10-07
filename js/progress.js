@@ -65,6 +65,7 @@ function closeModal() {
   if (!modalOpen()) return;
   if (modalKind === 'cal') calCancel();
   if (modalKind === 'songsetup') stopSongPreview();
+  if (modalKind === 'xfer') Xfer.stop();
   stopDemo();
   modal.classList.remove('show'); modal.inert = true; modalKind = null;
 }

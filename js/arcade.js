@@ -79,9 +79,8 @@ const mpOn = () => typeof MP !== 'undefined' && MP.inGame;
 let mpLoading = null;
 function loadMultiplayer() {
   if (typeof MP !== 'undefined') return Promise.resolve();
-  return mpLoading = mpLoading || ['js/vendor/peerjs.min.js', 'js/relay.js', 'js/multiplayer.js'].reduce((chain, src) => chain.then(() => new Promise((resolve, reject) => {
-    const s = document.createElement('script'); s.src = src; s.onload = resolve; s.onerror = () => reject(new Error(src)); document.head.appendChild(s);
-  })), Promise.resolve()).catch(e => { mpLoading = null; throw e; });
+  // through loadAll (data.js), which loads each file once: "send to my other device" uses PeerJS and relay.js too
+  return mpLoading = mpLoading || loadAll(['js/vendor/peerjs.min.js', 'js/relay.js', 'js/multiplayer.js']).catch(e => { mpLoading = null; throw e; });
 }
 $('#aMulti').addEventListener('click', e => {
   if (typeof MP !== 'undefined') return;   // loaded: multiplayer.js handles the button itself

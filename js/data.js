@@ -631,7 +631,7 @@ const loadJS = src => loaded[src] || (loaded[src] = new Promise((res, rej) => {
 const loadCSS = href => loaded[href] || (loaded[href] = new Promise(res => { const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = href; l.onload = l.onerror = res; document.head.appendChild(l); }));
 const loadAll = list => list.reduce((p, src) => p.then(() => loadJS(src)), Promise.resolve());
 // "Back up or move progress" (js/transfer.js)
-const openTransfer = () => Promise.all([loadCSS('css/transfer.css'), loadAll(['js/sync.js', 'js/transfer.js'])]).then(() => Xfer.open());
+const openTransfer = code => Promise.all([loadCSS('css/transfer.css'), loadAll(['js/sync.js', 'js/transfer.js'])]).then(() => Xfer.open(code));
 const fmtTime = s => `${Math.floor(s/60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 const near = (a, b) => Math.abs(a - b) < 1e-6;
 // An element's [width, height] for drawing every frame. Reading clientWidth inside an animation frame

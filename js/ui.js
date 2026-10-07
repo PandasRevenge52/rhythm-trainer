@@ -394,3 +394,13 @@ if (location.protocol.startsWith('http') && 'serviceWorker' in navigator) {
 }
 // the page's entrance (main.enter in app.css) runs once; after it the class goes, so nothing can replay it
 setTimeout(() => document.querySelector('main').classList.remove('enter'), 800);
+// "Send to my other device": its QR code opens the trainer at #xfer=CODE. The code leaves the address
+// bar straight away, so it isn't kept in the history or offered again on a reload.
+// Also when the trainer is already open in that tab (then only the # changes).
+const xferLink = () => {
+  const m = /^#xfer=([A-Za-z0-9-]{10,11})$/.exec(location.hash); if (!m) return;
+  window.history.replaceState(null, '', location.pathname + location.search);   // window.: the trainer has its own `history` (recent passes)
+  if (run) stop(true);
+  openTransfer(m[1]).catch(() => toast("Couldn't open the transfer. Check your connection and try again."));
+};
+xferLink(); addEventListener('hashchange', xferLink);

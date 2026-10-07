@@ -19,3 +19,12 @@
 .xcmp tr.up td:last-child{font-weight:700}
 .xlist{margin:10px 0 0;padding-left:20px}
 .xlist li{margin:3px 0}
+/* send to my other device: the QR code (dark on light, as phone cameras expect) and the typed code */
+.xlab{display:block;margin-top:12px;font-size:13.5px}
+.xin{flex:1 1 150px;min-width:0;max-width:220px;min-height:44px;background:var(--bg);border:1px solid var(--line);border-radius:var(--r-md);padding:8px 12px;
+  font:600 16px/1.2 ui-monospace,monospace;letter-spacing:.08em;text-transform:uppercase}
+.xin::placeholder{color:var(--muted);opacity:.6}
+.xqr{display:flex;justify-content:center;margin:16px 0 6px}
+.xqr .qr{width:min(232px,64vw);height:auto;border-radius:var(--r-md);display:block}
+.xpair{text-align:center;font:700 26px/1.2 ui-monospace,monospace;letter-spacing:.12em;margin:10px 0 0;font-variant-numeric:tabular-nums}
+.xf .xmsg{text-align:inherit}
