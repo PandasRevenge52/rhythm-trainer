@@ -184,12 +184,13 @@ function openProfile(tab) {
     <div class="xpline"><div class="xpbar"><i style="width:${into / next * 100}%"></i></div><span>${into} / ${next} XP</span></div>
     <div class="tabs" role="tablist">${tabs.map(([k, n]) => `<button role="tab" data-tab="${k}" class="${k === profTab ? 'on' : ''}">${n}</button>`).join('')}</div>
     <div id="profBody">${profTab === 'stats' ? statsHTML() : profTab === 'ach' ? achHTML() : progressHTML()}</div>
-    <div class="actions"><button class="ghost" id="resetP">Reset progress</button><span class="spacer"></span><button class="primary" data-close>Close</button></div>`, 'profile');
+    <div class="actions"><button class="ghost" id="resetP">Reset progress</button><button class="ghost" id="xferP">Back up or move…</button><span class="spacer"></span><button class="primary" data-close>Close</button></div>`, 'profile');
   modalCard.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => openProfile(b.dataset.tab)));
   $('#resetP').addEventListener('click', () => {
     if (!confirm('Reset all XP, levels, stats, high scores and achievements?')) return;
     resetProfile(); renderPlayer(); syncLevelOptions(); closeModal(); toast('Progress reset');
   });
+  $('#xferP').addEventListener('click', () => openTransfer().catch(() => toast("Couldn't open that. Check your connection and try again.")));
   if (profTab === 'stats') wireCharts();
   if (profTab === 'ach') modalCard.querySelectorAll('[data-scope]').forEach(b => b.addEventListener('click', () => { achScope = b.dataset.scope; openProfile('ach'); }));
   if (profTab === 'progress') { const b = $('#openPathBtn'); if (b) b.addEventListener('click', openPath); }

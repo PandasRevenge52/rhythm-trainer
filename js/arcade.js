@@ -398,7 +398,7 @@ addEventListener('drop', e => {
   const f = [...(e.dataTransfer?.files || [])].find(f => f.type.startsWith('audio') || /\.(mp3|wav|ogg|m4a|aac|flac)$/i.test(f.name));
   if (f && state === 'menu') pickFile(f);
 });
-function show(id) { $('#menu').classList.remove('boot'); for (const o of ['menu', 'pause', 'results', 'board', 'cal', 'mp', 'mpRes']) $('#' + o).classList.toggle('show', o === id); document.body.classList.toggle('playing', !id); measureHome(); }
+function show(id) { $('#menu').classList.remove('boot'); for (const o of ['menu', 'pause', 'results', 'board', 'cal', 'mp', 'mpRes', 'xfer']) $('#' + o)?.classList.toggle('show', o === id); document.body.classList.toggle('playing', !id); measureHome(); }
 // The Home button floats over the top-left corner. The health bar starts right of it when it would otherwise run
 // underneath (narrow screens). Its edge is measured here, when play starts or the window resizes, never per frame.
 let homeRight = 0;
@@ -531,6 +531,7 @@ $('#lbSong').addEventListener('change', e => { board.song = e.target.value; rend
 $('#lbSrc').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { board.src = togglePart(board.src, b.dataset.v); renderBoard(); } });
 $('#lbDiff').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { board.diff = b.dataset.v; renderBoard(); } });
 $('#aBoard').addEventListener('click', () => { board.src = A$.src; board.diff = A$.diff; openBoard(); });
+$('#aXfer').addEventListener('click', () => openTransfer().catch(() => info("Couldn't open that. Check your connection and try again.")));
 $('#rBoard').addEventListener('click', () => { board.src = A$.src; board.diff = A$.diff; openBoard(); });
 $('#lbBack').addEventListener('click', () => state === 'results' ? show('results') : show('menu'));
 $('#rName').addEventListener('change', e => saveName(e.target.value));

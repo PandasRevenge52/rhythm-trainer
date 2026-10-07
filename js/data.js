@@ -622,6 +622,16 @@ LEVELS.forEach((_, i) => { if (P.ach[i === MASTER ? 'master' : 'grad' + i] && !P
 // ---------- small helpers ----------
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[c]));
+// Code and styles that only some visitors need, loaded when they ask for it: plain tags (so it works from
+// file:// too), each file once, so two features sharing a file (relay.js) never load it twice.
+const loaded = {};
+const loadJS = src => loaded[src] || (loaded[src] = new Promise((res, rej) => {
+  const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => { delete loaded[src]; rej(new Error(src)); }; document.head.appendChild(s);
+}));
+const loadCSS = href => loaded[href] || (loaded[href] = new Promise(res => { const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = href; l.onload = l.onerror = res; document.head.appendChild(l); }));
+const loadAll = list => list.reduce((p, src) => p.then(() => loadJS(src)), Promise.resolve());
+// "Back up or move progress" (js/transfer.js)
+const openTransfer = () => Promise.all([loadCSS('css/transfer.css'), loadAll(['js/sync.js', 'js/transfer.js'])]).then(() => Xfer.open());
 const fmtTime = s => `${Math.floor(s/60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 const near = (a, b) => Math.abs(a - b) < 1e-6;
 // An element's [width, height] for drawing every frame. Reading clientWidth inside an animation frame

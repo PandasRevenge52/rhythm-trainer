@@ -1,0 +1,21 @@
+/* "Back up or move progress" (js/transfer.js). Loaded with it, only when someone opens it. Mono tokens only. */
+.xf h2{margin:0 0 4px;font-size:20px;outline:none}
+.apanel.xf h2{font-size:26px}
+.xf h3{margin:0 0 4px;font-size:11.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:650}
+.xf p{margin:6px 0}
+.xsec{border-top:1px solid var(--line);padding:14px 0 4px;margin-top:14px}
+.xrow{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.xrow button{min-height:44px;justify-content:center}
+.xf .actions button{min-height:44px}
+.xnote{font-size:13px;margin-top:16px}
+.xmsg{min-height:1.5em;font-size:14px;margin:10px 0 0}
+.xmsg.bad{color:var(--warn)}
+.xcode{display:block;width:100%;margin:8px 0 0;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:var(--r-md);
+  padding:10px 12px;font:13px/1.45 ui-monospace,monospace;resize:vertical;word-break:break-all}
+.xcmp{width:100%;border-collapse:collapse;margin:14px 0 4px;font-variant-numeric:tabular-nums}
+.xcmp th,.xcmp td{text-align:right;padding:8px 10px;border-bottom:1px solid var(--line);font-weight:500}
+.xcmp th[scope=row]{text-align:left;color:var(--muted)}
+.xcmp thead th{font-size:12px;color:var(--muted);font-weight:600}
+.xcmp tr.up td:last-child{font-weight:700}
+.xlist{margin:10px 0 0;padding-left:20px}
+.xlist li{margin:3px 0}
