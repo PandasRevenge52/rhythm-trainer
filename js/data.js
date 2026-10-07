@@ -628,13 +628,15 @@ function textSprite(text, font, color) {
 }
 // draws a text sprite with its baseline at y; align 'left' or 'right' at x
 function drawText(g, t, x, y, align = 'left', a = 1) { if (a <= 0) return; g.globalAlpha = Math.min(1, a); g.drawImage(t.cv, align === 'right' ? x - t.w : x, y - t.asc, t.w, t.h); g.globalAlpha = 1; }
-// a miss: soft red light just inside a box's edges (the gradients are cached per box, so it's four fills a frame)
+// a miss: soft red light just inside a box's edges, d px deep, on the edges listed (l r t b); the gradients are
+// cached per box, so it's a few fills a frame. Keep the box small: it's blended every frame for the whole flash.
 const edgeCaches = new Map();
-function edgeLight(g, x, y, w, h, c, a) {
-  const key = `${x}|${y}|${w}|${h}|${c}`; let parts = edgeCaches.get(key);
+function edgeLight(g, x, y, w, h, c, a, d = 16, edges = 'lrtb') {
+  const key = `${x}|${y}|${w}|${h}|${c}|${d}|${edges}`; let parts = edgeCaches.get(key);
   if (!parts) {
-    const d = 16, mk = (x0, y0, x1, y1) => { const gr = g.createLinearGradient(x0, y0, x1, y1); gr.addColorStop(0, rgba(c, 1)); gr.addColorStop(1, rgba(c, 0)); return gr; };
-    parts = [[mk(x, 0, x + d, 0), x, y, d, h], [mk(x + w, 0, x + w - d, 0), x + w - d, y, d, h], [mk(0, y, 0, y + d), x, y, w, d], [mk(0, y + h, 0, y + h - d), x, y + h - d, w, d]];
+    const mk = (x0, y0, x1, y1) => { const gr = g.createLinearGradient(x0, y0, x1, y1); gr.addColorStop(0, rgba(c, 1)); gr.addColorStop(1, rgba(c, 0)); return gr; };
+    const all = {l:[mk(x, 0, x + d, 0), x, y, d, h], r:[mk(x + w, 0, x + w - d, 0), x + w - d, y, d, h], t:[mk(0, y, 0, y + d), x, y, w, d], b:[mk(0, y + h, 0, y + h - d), x, y + h - d, w, d]};
+    parts = [...edges].map(e => all[e]);
     if (edgeCaches.size > 8) edgeCaches.clear();
     edgeCaches.set(key, parts);
   }

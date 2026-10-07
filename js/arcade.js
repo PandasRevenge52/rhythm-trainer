@@ -27,6 +27,16 @@ const LANE_COL = [0, 1, 2, 3].map(i => TOK('lane-' + i));
 const calmMQ = matchMedia('(prefers-reduced-motion: reduce)');   // reduced motion: hit feedback is colour + text only
 let CALM = calmMQ.matches; calmMQ.addEventListener('change', e => { CALM = e.matches; });   // read once, not every frame
 const arcOvals = {};   // beam sprites per judgement and lane width
+// When a device can't hold 30 fps, the decorative layers of the hit feedback (beams, sparks, sweeps, the miss light)
+// step aside so the notes stay smooth; rings, colours and the judgement words stay. Hysteresis: lite below ~28 fps,
+// full again above ~36 fps.
+const fxRate = {last:0, avg:16.7, lite:false};
+function fxLite(now) {
+  const dt = fxRate.last ? Math.min(250, now - fxRate.last) : 16.7; fxRate.last = now;
+  fxRate.avg += (dt - fxRate.avg) * 0.08;
+  if (!fxRate.lite && fxRate.avg > 36) fxRate.lite = true; else if (fxRate.lite && fxRate.avg < 28) fxRate.lite = false;
+  return fxRate.lite;
+}
 // timing windows in seconds, points, health change (out of 100) and accuracy weight
 const JUDGE = [
   {name:'Sick', win:0.045, pts:350, hp:2.3, acc:1,    col:'#ffd479'},
@@ -772,24 +782,26 @@ function draw() {
   // lane (beam 72%, ring 94% of the lane width, sparks in a narrow upward cone), so nothing needs clipping.
   // Reduced motion: none of this, only the colours and the judgement text.
   while (G.hits.length && now - G.hits[0].t >= 280) G.hits.shift();   // oldest first; no new array every frame
+  const lite = state === 'play' && fxLite(now);
   if (!calm) for (const h of G.hits) {
     const age = now - h.t, p = age / 280, c = JUDGE[h.j].col, x = lx(h.lane);
     if (h.j === 0) {
-      const bk = h.j + '|' + laneW; drawOval(g, arcOvals[bk] || (arcOvals[bk] = softOval(c, Math.round(laneW * 0.32), 64, 0.45)), x, recY + dir * 52, 1 - p);   // a short beam: blending big areas every frame is what slows phones
+      const bk = h.j + '|' + laneW; if (!lite) drawOval(g, arcOvals[bk] || (arcOvals[bk] = softOval(c, Math.round(laneW * 0.32), 64, 0.45)), x, recY + dir * 52, 1 - p);   // a short beam: blending big areas every frame is what slows phones
       // the ring never grows past the lane (47% of its width), so the clip never has anything to cut
       const r0 = size * 1.02, r1 = Math.max(r0, laneW * 0.47);
       g.globalAlpha = 1 - p; g.strokeStyle = c; g.lineWidth = 2.5 * (1 - p) + 1; g.beginPath(); g.arc(x, recY, r0 + (r1 - r0) * eOut(p), 0, Math.PI * 2); g.stroke();
       // sparks fly up the lane in a narrow cone instead of sideways into the walls
-      g.fillStyle = c; for (let k = 0; k < 4; k++) { const a = (k / 3 - 0.5) * 0.85 + Math.sin(h.seed + k) * 0.08, d = size * 0.9 + laneW * 0.8 * eOut(p);
-        g.fillRect(x + Math.sin(a) * d * 0.45 - 1.75, recY + dir * Math.cos(a) * d - 1.75, 3.5, 3.5); }
+      if (!lite) { g.fillStyle = c; for (let k = 0; k < 4; k++) { const a = (k / 3 - 0.5) * 0.85 + Math.sin(h.seed + k) * 0.08, d = size * 0.9 + laneW * 0.8 * eOut(p);
+        g.fillRect(x + Math.sin(a) * d * 0.45 - 1.75, recY + dir * Math.cos(a) * d - 1.75, 3.5, 3.5); } }
     } else if (h.j === 1) {
       if (age < 280) { const q = age / 280, r0 = size * 1.02, r1 = Math.max(r0, laneW * 0.47); g.globalAlpha = 1 - q; g.strokeStyle = c; g.lineWidth = 2; g.beginPath(); g.arc(x, recY, r0 + (r1 - r0) * eOut(q), 0, Math.PI * 2); g.stroke(); }
     } else if (age < 200) { arrow(x, recY, size, h.lane, c, null, 0.45 * (1 - age / 200)); }
     g.globalAlpha = 1;
   }
-  if (!calm && now - G.missT < 400) edgeLight(g, Math.round(x0), 0, Math.round(fw), H, MISS_COL, 0.3 * (1 - (now - G.missT) / 400));
+  // around the receptor end of the field only (a full-height glow was the costliest thing on a phone)
+  if (!calm && !lite && now - G.missT < 400) { const eh = Math.round(H * 0.45); edgeLight(g, Math.round(x0), A$.down ? H - eh : 0, Math.round(fw), eh, MISS_COL, 0.34 * (1 - (now - G.missT) / 400), 12, A$.down ? 'lrb' : 'lrt'); }
   // a milestone (25, 50, every 50 after): a soft band of light runs up the field once
-  if (!calm && now - G.mileT < 600) { const p = (now - G.mileT) / 600; drawOval(g, softOval(ACCENT, Math.round(fw * 0.5), 90, 0.16), x0 + fw / 2, recY - dir * p * (H + 120), 1 - p); }   // as wide as the field, transparent at its edges
+  if (!calm && !lite && now - G.mileT < 600) { const p = (now - G.mileT) / 600; drawOval(g, softOval(ACCENT, Math.round(fw * 0.5), 90, 0.16), x0 + fw / 2, recY - dir * p * (H + 120), 1 - p); }   // as wide as the field, transparent at its edges
   // hit error meter: where your last hits landed, early to the left, late to the right
   const emY = recY - dir * (size + 26), emW = Math.min(fw - 20, 220), emX = x0 + fw / 2;
   g.fillStyle = LINE + '88'; g.fillRect(emX - emW / 2, emY - 1, emW, 2);
