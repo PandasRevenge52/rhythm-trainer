@@ -207,6 +207,7 @@ kbd{font:600 11px ui-monospace,monospace;background:var(--chip);border-radius:5p
 .center{text-align:center}
 .xpline{display:flex;align-items:center;gap:10px;margin-top:10px;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
 .xpline .xpbar{height:8px;flex:1}
+.achscope{margin:12px 0 6px}
 .achcat{border:1px solid var(--line);border-radius:var(--r-lg);margin:8px 0;padding:0 12px}
 .achcat>summary{display:flex;align-items:center;gap:12px;padding:11px 0;cursor:pointer;list-style:none}
 .achcat>summary::-webkit-details-marker{display:none}

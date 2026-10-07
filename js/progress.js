@@ -189,6 +189,7 @@ function openProfile(tab) {
     resetProfile(); renderPlayer(); syncLevelOptions(); closeModal(); toast('Progress reset');
   });
   if (profTab === 'stats') wireCharts();
+  if (profTab === 'ach') modalCard.querySelectorAll('[data-scope]').forEach(b => b.addEventListener('click', () => { achScope = b.dataset.scope; openProfile('ach'); }));
   if (profTab === 'progress') { const b = $('#openPathBtn'); if (b) b.addEventListener('click', openPath); }
 }
 function progressHTML() {
@@ -201,11 +202,17 @@ function progressHTML() {
 // which achievement categories are unfolded (remembered while the page is open)
 const achOpen = new Set(['Getting started']);
 document.addEventListener('toggle', e => { const d = e.target; if (d.classList && d.classList.contains('achcat')) d.open ? achOpen.add(d.dataset.cat) : achOpen.delete(d.dataset.cat); }, true);
+// D19: the trainer's and the Arcade's achievements are shown one set at a time (trainer first)
+let achScope = 'trainer';
+const arcadeCat = cat => /^(Arcade|Multiplayer)/.test(cat);
+const inScope = (a, sc) => arcadeCat(a.cat) === (sc === 'arcade');
 function achHTML() {
-  const got = ACH.filter(a => P.ach[a.id]).length;
-  return `<div class="xpline" style="margin:4px 0"><div class="xpbar"><i style="width:${got / ACH.length * 100}%"></i></div><span>${Math.round(got / ACH.length * 100)}%</span></div>
-    ${[...new Set(ACH.map(a => a.cat))].map(cat => {
-      const list = ACH.filter(a => a.cat === cat);
+  const mine = ACH.filter(a => inScope(a, achScope)), got = mine.filter(a => P.ach[a.id]).length;
+  const scopeBtn = (sc, name) => { const all = ACH.filter(a => inScope(a, sc)); return `<button data-scope="${sc}" class="${sc === achScope ? 'on' : ''}" aria-pressed="${sc === achScope}">${name} ${all.filter(a => P.ach[a.id]).length}/${all.length}</button>`; };
+  return `<div class="chips achscope" role="group" aria-label="Which achievements">${scopeBtn('trainer', 'Trainer')}${scopeBtn('arcade', 'Arcade')}</div>
+    <div class="xpline" style="margin:4px 0"><div class="xpbar"><i style="width:${got / mine.length * 100}%"></i></div><span>${Math.round(got / mine.length * 100)}%</span></div>
+    ${[...new Set(mine.map(a => a.cat))].map(cat => {
+      const list = mine.filter(a => a.cat === cat);
       // each category folds away; the ones you're partway through start open
       const n = list.filter(a => P.ach[a.id]).length;
       return `<details class="achcat"${achOpen.has(cat) ? ' open' : ''} data-cat="${cat}"><summary><b>${cat}</b><span>${n} / ${list.length}</span><i class="minibar"><i style="width:${n / list.length * 100}%"></i></i></summary><div class="ach">${list.map(a => {
