@@ -335,7 +335,7 @@ function renderMenu() {
     info(tr.random ? `${fmtTime(tr.buf.duration)} · ${tr.bpm} BPM · a new song every time you play` :
       `${tr.drums.hq ? '★ High-quality chart · ' : ''}${fmtTime(tr.buf.duration)} · ${tr.bpm.toFixed(1)} BPM · ${vox ? vox + ' sung notes' : 'no clear vocal found'}`);
     const parts = srcParts(A$.src), noInst = parts.has('guitar') && !tr.drums.inst;
-    $('#aChartInfo').textContent = noInst && parts.size === 1 ? 'Guitar charts need a high-quality chart for this song (tools/make-charts).' : chart.length ? `${noInst ? 'No guitar part for this song (it needs a high-quality chart) · ' : ''}` +  `${chart.length} notes${st.holds ? ` · ${st.holds} hold${st.holds === 1 ? '' : 's'}` : ''} · busiest ${st.peak.toFixed(1)} notes/s` :
+    $('#aChartInfo').textContent = noInst && parts.size === 1 ? 'No guitar part for this song. Pick Drums or Vocals instead.' : chart.length ? `${noInst ? 'No guitar part for this song · ' : ''}` +  `${chart.length} notes${st.holds ? ` · ${st.holds} hold${st.holds === 1 ? '' : 's'}` : ''} · busiest ${st.peak.toFixed(1)} notes/s` :
       A$.src === 'vocals' ? "This song doesn't have a clear enough lead vocal. Add Drums or Guitar." : 'Not enough to build a chart from. Try another chart type.';
     renderStars();
   } else { $('#aChartInfo').textContent = ''; document.querySelectorAll('#aDiff small').forEach(el => el.textContent = ''); }
