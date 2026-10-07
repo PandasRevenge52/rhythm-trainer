@@ -127,9 +127,8 @@ select{background:var(--chip);border:1px solid transparent;border-radius:var(--r
 .songbar{display:none;flex-wrap:wrap;align-items:center;gap:8px 16px;background:var(--chip);border-radius:var(--r-lg);padding:9px 11px 11px;margin:4px 0 8px;position:relative;overflow:hidden;font-size:13.5px}
 .stage[data-play=song] .songbar{display:flex}
 .songbar button{background:var(--panel);padding:5px 9px;font-size:13px;border-radius:var(--r-sm)}
-.songbar .num{background:var(--panel);width:70px;-moz-appearance:textfield}
-.songbar .num::-webkit-inner-spin-button{display:none}
 .sgroup{display:flex;align-items:center;gap:4px}
+#songSetupBtn{white-space:nowrap}
 .sgroup.grow{flex:1;min-width:170px}
 .lab{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;margin-right:3px}
 .songName{display:flex;flex-direction:column;min-width:0;max-width:260px}
@@ -441,6 +440,8 @@ details.more[open]>:not(summary){animation:reveal var(--dur-2) var(--ease-out)}
 #ssCanvas{width:100%;height:190px;display:block;border-radius:var(--r-md);margin:12px 0 8px;border:1px solid var(--line)}
 .ss-bar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:10px}
 .ss-bar button{padding:6px 10px}
+.ss-bar .num{width:76px;font-variant-numeric:tabular-nums;-moz-appearance:textfield}
+.ss-bar .num::-webkit-inner-spin-button{display:none}
 .ss-bar .lab{margin-left:8px}
 .ss-bar .lab:first-child{margin-left:0}
 .ss-bar input[type=range]{flex:1;min-width:140px}

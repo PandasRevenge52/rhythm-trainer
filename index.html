@@ -162,14 +162,7 @@
       <div class="songName"><b id="songName">No song loaded</b><span id="songInfo">or drop an audio file on the page</span></div>
       <div class="sgroup"><span class="lab">Notes</span><div class="chips" id="songSrcSeg"><button data-v="gen">Generated</button><button data-v="song">From the song</button></div>
         <div class="chips" id="chartSeg"><button data-v="easy">Easy</button><button data-v="normal">Normal</button><button data-v="hard">Hard</button></div>
-        <button id="songSetupBtn" title="Check the beat grid and detected drums">Setup…</button></div>
-      <div class="sgroup" title="Song tempo. Use ½ / ×2 if the detected tempo is off by double, or tap along">
-        <span class="lab">BPM</span><button id="sBpmDown" aria-label="Slower">−</button><input type="number" id="sBpm" class="num" step="0.01" min="40" max="240" aria-label="Song tempo"><button id="sBpmUp" aria-label="Faster">+</button>
-        <button id="sHalf" title="Half tempo">½</button><button id="sDouble" title="Double tempo">×2</button><button id="sTap" title="Tap along to the song's beat to set the tempo">Tap</button>
-      </div>
-      <div class="sgroup" title="Shift the beat grid so the clicks land on the music's beat">
-        <span class="lab">Beat</span><button id="sNudgeL" aria-label="Earlier">◂</button><span id="sFirst" class="mono">0 ms</span><button id="sNudgeR" aria-label="Later">▸</button><button id="sHalfBeat" title="Shift by half a beat">+½</button>
-      </div>
+        <button id="songSetupBtn" title="Song tempo and beat grid (and, with notes from the song, which drums become notes)">Tempo &amp; beat…</button></div>
       <div class="sgroup grow"><span class="lab">Start</span><input type="range" id="sStart" min="0" max="0" step="0.5" value="0"><span id="sStartRead" class="mono">0:00</span></div>
       <div class="sgroup"><span class="lab">Song vol</span><input type="range" id="sVol" min="0" max="1" step="0.05" style="width:80px"></div>
       <div class="songprog"><i id="songProg"></i></div>
