@@ -225,30 +225,53 @@ const P = (() => { try { return Object.assign(freshProfile(), JSON.parse(localSt
 // So a save first merges in whatever is already stored (nothing ever goes backwards), and every
 // tab picks up the others' saves as they happen.
 const PROFILE_KEY = 'rhythm-trainer-profile';
-function mergeProfile(into, other) {
+// Keys that would change how an object behaves rather than add data (prototype pollution): never copied.
+const ents = o => Object.entries(o || {}).filter(([k]) => k !== '__proto__' && k !== 'constructor' && k !== 'prototype');
+// the Arcade keeps the best 10 scores per song for each part + difficulty (see addScore)
+function trimBoard(list) {
+  const by = {};
+  for (const e of [...list].sort((a, b) => b.score - a.score)) { const g = by[e.src + '|' + e.diff] = by[e.src + '|' + e.diff] || []; if (g.length < 10) g.push(e); }
+  const keep = new Set(Object.values(by).flat());
+  return list.filter(e => keep.has(e));
+}
+// does entry e beat m on `key`? Equal ones are settled by their contents, so two devices that combine
+// each other's copies end up with exactly the same thing
+const outranks = (e, m, key) => !m || e[key] > m[key] || (e[key] === m[key] && JSON.stringify(e) > JSON.stringify(m));
+// outside: `other` is another device's copy (a save file, a save code, the other device). A reset there
+// only cleared that device, so it never wipes this one; between this browser's own tabs a reset wins.
+function mergeProfile(into, other, outside) {
   if (!other) return into;
-  // a reset wins over anything saved before it (in either direction)
-  if ((other.resetAt || 0) > (into.resetAt || 0)) { for (const k of Object.keys(into)) delete into[k]; return Object.assign(into, freshProfile(), other); }
-  if ((into.resetAt || 0) > (other.resetAt || 0)) return into;
-  for (const [k, v] of Object.entries(other)) {
+  if (!outside) {
+    // a reset wins over anything saved before it (in either direction)
+    if ((other.resetAt || 0) > (into.resetAt || 0)) { for (const k of Object.keys(into)) delete into[k]; return Object.assign(into, freshProfile(), Object.fromEntries(ents(other))); }
+    if ((into.resetAt || 0) > (other.resetAt || 0)) return into;
+  }
+  for (const [k, v] of ents(other)) {
     const mine = into[k];
+    if (k === 'resetAt' && outside) continue;
     if (typeof v === 'number') into[k] = Math.max(typeof mine === 'number' ? mine : 0, v);
-    else if (k === 'ach') { into.ach = into.ach || {}; for (const [id, t] of Object.entries(v)) into.ach[id] = into.ach[id] ? Math.min(into.ach[id], t) : t; }
+    else if (k === 'ach') { into.ach = into.ach || {}; for (const [id, t] of ents(v)) into.ach[id] = into.ach[id] ? Math.min(into.ach[id], t) : t; }
     else if (k === 'days') into.days = [...new Set([...(mine || []), ...v])].sort();
     else if (k === 'leaderboard') {
       into.leaderboard = into.leaderboard || {};
-      for (const [song, list] of Object.entries(v)) {
+      for (const [song, list] of ents(v)) {
         const have = into.leaderboard[song] || [], key = e => `${e.date}|${e.score}|${e.src}|${e.diff}`, seen = new Set(have.map(key));
-        into.leaderboard[song] = [...have, ...list.filter(e => !seen.has(key(e)))];
+        into.leaderboard[song] = trimBoard([...have, ...list.filter(e => !seen.has(key(e)))]);
       }
     }
-    else if (k === 'arcade' || k === 'dailies') { into[k] = into[k] || {}; for (const [id, e] of Object.entries(v)) if (!into[k][id] || e.score > into[k][id].score) into[k][id] = e; }
-    else if (k === 'path') { into.path = into.path || {}; for (const [i, e] of Object.entries(v)) { const m = into.path[i]; into.path[i] = !m ? e : {passes:Math.max(m.passes, e.passes), best:Math.max(m.best, e.best)}; } }
-    else if (k === 'cells') { into.cells = into.cells || {}; for (const [c, e] of Object.entries(v)) if (!into.cells[c] || e.n > into.cells[c].n) into.cells[c] = e; }
-    else if (k === 'daily') { into.daily = into.daily || {}; for (const [d, e] of Object.entries(v)) if (!into.daily[d] || e.p > into.daily[d].p) into.daily[d] = e; }
+    else if (k === 'arcade' || k === 'dailies') { into[k] = into[k] || {}; for (const [id, e] of ents(v)) if (outranks(e, into[k][id], 'score')) into[k][id] = e; }
+    else if (k === 'path') { into.path = into.path || {}; for (const [i, e] of ents(v)) { const m = into.path[i]; into.path[i] = !m ? e : {passes:Math.max(m.passes, e.passes), best:Math.max(m.best, e.best)}; } }
+    else if (k === 'cells') { into.cells = into.cells || {}; for (const [c, e] of ents(v)) if (outranks(e, into.cells[c], 'n')) into.cells[c] = e; }
+    else if (k === 'daily') {
+      into.daily = into.daily || {};
+      for (const [d, e] of ents(v)) if (outranks(e, into.daily[d], 'p')) into.daily[d] = e;
+      const days = Object.keys(into.daily).sort(); while (days.length > 120) delete into.daily[days.shift()];   // as judge.js keeps it
+    }
+    // songs: the difficulties cleared on each song, combined per song
+    else if (k === 'arcadeCleared') { into.arcadeCleared = into.arcadeCleared || {}; for (const [song, d] of ents(v)) into.arcadeCleared[song] = {...Object.fromEntries(ents(d)), ...into.arcadeCleared[song]}; }
     else if (v && typeof v === 'object' && !Array.isArray(v)) {   // "seen" sets and per-key counters
-      const m = {...v, ...(mine || {})};
-      for (const [id, n] of Object.entries(v)) if (typeof n === 'number' && typeof m[id] === 'number') m[id] = Math.max(m[id], n);
+      const m = {...Object.fromEntries(ents(v)), ...(mine || {})};
+      for (const [id, n] of ents(v)) if (typeof n === 'number' && typeof m[id] === 'number') m[id] = Math.max(m[id], n);
       into[k] = m;
     }
     else if (mine == null) into[k] = v;
