@@ -59,6 +59,7 @@ function showModal(html, kind = 'info') {
   modal.inert = false;
   modal.classList.add('show');
   modalCard.scrollTop = 0;
+  countUp(modalCard);
 }
 function closeModal() {
   if (!modalOpen()) return;
@@ -71,7 +72,8 @@ modal.addEventListener('click', e => {
   if (e.target === modal || e.target.closest('[data-close]')) closeModal();
   else if (e.target.closest('[data-again]')) { closeModal(); start(); }
 });
-const tile = (label, v) => `<div class="tile"><b>${v}</b><span>${label}</span></div>`;
+// n: count the number up to n when the card opens (see countUp)
+const tile = (label, v, n) => `<div class="tile"><b${n != null ? ` data-count="${n}"` : ''}>${v}</b><span>${label}</span></div>`;
 function showGameOver(g, r) {
   const acc = r.stat.n ? Math.round(r.stat.w / r.stat.n * 100) + '%' : '–';
   const isBest = g.score > P.endlessBest;
@@ -79,9 +81,9 @@ function showGameOver(g, r) {
   P.endlessRound = Math.max(P.endlessRound, g.view.round); P.endlessRuns++; saveP(); checkAch();
   showModal(`<h2>${g.lives <= 0 ? 'Game over' : 'Run ended'}</h2>
     <p class="muted">Endless · started at ${LEVELS[g.startDiff].name}</p>
-    <div class="bigscore">${g.score.toLocaleString()}</div>
+    <div class="bigscore" data-count="${g.score}">${g.score.toLocaleString()}</div>
     <p class="center">${isBest && g.score > 0 ? '<span class="badge">New high score!</span>' : `<span class="muted">Best ${P.endlessBest.toLocaleString()}</span>`}</p>
-    <div class="tiles">${tile('Round reached', g.view.round)}${tile('Stage', LEVELS[g.view.diff].name)}${tile('Best combo', r.stat.best)}${tile('Accuracy', acc)}${tile('XP earned', '+' + Math.round(r.stat.xp))}</div>
+    <div class="tiles">${tile('Round reached', g.view.round)}${tile('Stage', LEVELS[g.view.diff].name)}${tile('Best combo', r.stat.best, r.stat.best)}${tile('Accuracy', acc)}${tile('XP earned', '+' + Math.round(r.stat.xp))}</div>
     <div class="actions"><button class="ghost" data-close>Close</button><button class="primary" data-again>Play again</button></div>`);
   renderIdle();
 }
@@ -91,8 +93,8 @@ function showSongEnd(r) {
   if (r.chartBeat0 != null) unlock('chart');
   const acc = r.stat.n ? Math.round(r.stat.w / r.stat.n * 100) + '%' : '–';
   showModal(`<h2>Song complete</h2><p class="muted">${esc(song.name)}${r.chartBeat0 != null ? ` · notes from the song (${S.songChart})` : ''}</p>
-    <div class="bigscore">${acc}</div><p class="center muted">accuracy</p>
-    <div class="tiles">${tile('Points', r.stat.points.toLocaleString())}${tile('Best combo', r.stat.best)}${tile('Passes', r.passNo)}${tile('XP earned', '+' + Math.round(r.stat.xp))}</div>
+    <div class="bigscore"${r.stat.n ? ` data-count="${Math.round(r.stat.w / r.stat.n * 100)}" data-suf="%"` : ''}>${acc}</div><p class="center muted">accuracy</p>
+    <div class="tiles">${tile('Points', r.stat.points.toLocaleString(), r.stat.points)}${tile('Best combo', r.stat.best, r.stat.best)}${tile('Passes', r.passNo)}${tile('XP earned', '+' + Math.round(r.stat.xp))}</div>
     <div class="actions"><button class="ghost" data-close>Close</button><button class="primary" data-again>Play again</button></div>`);
 }
 function showDailyEnd(d, r) {
@@ -104,9 +106,9 @@ function showDailyEnd(d, r) {
   const streak = dailyStreak();
   const share = `Rhythm Trainer daily ${d.date}: ${Math.round(acc * 100)}% · ${score.toLocaleString()} pts · ${LEVELS[d.level].name} in ${d.meter} · 🔥${streak}`;
   showModal(`<h2>Daily challenge</h2><p class="muted">${d.date} · ${LEVELS[d.level].name} · ${d.meter} · ${d.bpm} BPM</p>
-    <div class="bigscore">${score.toLocaleString()}</div>
+    <div class="bigscore" data-count="${score}">${score.toLocaleString()}</div>
     <p class="center">${isBest && prev ? '<span class="badge">New best today!</span>' : prev && !isBest ? `<span class="muted">Your best today: ${prev.score.toLocaleString()}</span>` : ''}</p>
-    <div class="tiles">${tile('Accuracy', Math.round(acc * 100) + '%')}${tile('Best combo', r.stat.best)}${tile('Streak', streak + ' 🔥')}${tile('XP earned', '+' + Math.round(r.stat.xp))}</div>
+    <div class="tiles">${tile('Accuracy', Math.round(acc * 100) + '%')}${tile('Best combo', r.stat.best, r.stat.best)}${tile('Streak', streak + ' 🔥')}${tile('XP earned', '+' + Math.round(r.stat.xp))}</div>
     <p class="muted center" style="margin-top:14px">New rhythms tomorrow. You can replay today's as often as you like.</p>
     <div class="actions"><button class="ghost" id="shareDaily">Copy result</button><span class="spacer"></span><button class="ghost" data-close>Close</button><button class="primary" data-again>Play again</button></div>`);
   $('#shareDaily').addEventListener('click', () => {

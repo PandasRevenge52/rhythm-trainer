@@ -1,7 +1,7 @@
 // Offline support: try the network first (so a new version shows up on the next load) and fall back to
 // the cached copy when offline. Fonts and icons are the exception: they only change together with the
 // cache name below, so they come straight from the cache when it has them (no network wait on repeat visits).
-const CACHE = 'rhythm-trainer-v39';
+const CACHE = 'rhythm-trainer-v40';
 const CACHE_FIRST = /\.(woff2|svg|png)$/;
 // L4: only the app's own files are cached; charts (120 files, ~8.6 MB, loaded on demand) are not, so the
 // cache can't grow without bound. The last played song is kept separately in IndexedDB for offline replay.

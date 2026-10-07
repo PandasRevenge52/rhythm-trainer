@@ -47,8 +47,10 @@ function settingsChanged() {
   $('#newBtn').title = 'New rhythm with your changed settings (N)';
 }
 function setBpm(v, quiet) {
+  const was = S.bpm;
   S.bpm = Math.max(40, Math.min(220, Math.round(+v || S.bpm))); save();
   $('#bpmNum').value = S.bpm; renderSetupSum();
+  if (S.bpm !== was) nudge($('#bpmNum'), [{opacity: 0.2, transform: `translateY(${S.bpm > was ? 6 : -6}px)`}, {opacity: 1, transform: 'none'}], 200);   // rolls up or down
   if (!run) kick(); else if (!quiet && S.play === 'practice') toast(`${S.bpm} BPM from the next pass`);
 }
 const mark = (sel, fn) => document.querySelectorAll(sel + ' button').forEach(b => b.classList.toggle('on', fn(b.dataset.v)));
@@ -127,6 +129,7 @@ function revealStage() {
 function setPlay(v) {
   if (v === S.play) return;
   if (run) stop(true);
+  const from = S.play;
   S.play = v; save();
   if (v !== 'daily') daily = null;
   if (v === 'song') restoreSong();
@@ -134,6 +137,10 @@ function setPlay(v) {
   if (v === 'endless' && S.level == null) setLevel(2, true);
   if (v !== 'daily') { pattern = newPattern(); queued = null; }
   syncControls(); updateButtons(); refreshIdle(); renderIdle(); renderSong();
+  // the stage slides a little toward the tab you picked (left or right of the old one) and settles, staggered
+  const dx = (MODES.indexOf(v) > MODES.indexOf(from) ? 1 : -1) * 14;
+  ['.toolbar', '.songbar', '.hud', '#paper', '#lane', '.stats'].forEach((q, i) =>
+    nudge($('#stage ' + q), [{opacity: 0.25, transform: `translateX(${dx}px)`}, {opacity: 1, transform: 'none'}], 280, i * 30));
 }
 function setLevel(i, quiet) {
   i = Math.max(0, Math.min(LEVELS.length - 1, i));
@@ -385,3 +392,5 @@ if (location.protocol.startsWith('http') && 'serviceWorker' in navigator) {
   const whenIdle = () => 'requestIdleCallback' in window ? requestIdleCallback(register, {timeout:5000}) : setTimeout(register, 1000);
   if (document.readyState === 'complete') whenIdle(); else addEventListener('load', whenIdle, {once:true});
 }
+// the page's entrance (main.enter in app.css) runs once; after it the class goes, so nothing can replay it
+setTimeout(() => document.querySelector('main').classList.remove('enter'), 800);

@@ -642,6 +642,27 @@ function edgeLight(g, x, y, w, h, c, a, d = 16, edges = 'lrtb') {
   }
   g.globalAlpha = Math.min(1, a); for (const [gr, px, py, pw, ph] of parts) { g.fillStyle = gr; g.fillRect(px, py, pw, ph); } g.globalAlpha = 1;
 }
+// ---------- site-wide motion from script (shared) ----------
+// CSS animations are cut by the reduced-motion rule in app.css; these check the setting themselves, and under
+// reduced motion do nothing (numbers just show their final value). Transform and opacity only, so no layout.
+const stillMQ = matchMedia('(prefers-reduced-motion: reduce)');
+function nudge(el, frames, ms = 220, delay = 0) {
+  if (!el || !el.animate || stillMQ.matches) return;
+  el.animate(frames, {duration: ms, delay, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'backwards'});
+}
+// result numbers count up to their value: <b data-count="13750"> (data-dec decimals, data-suf a suffix such as %)
+function countUp(root, ms = 700) {
+  if (stillMQ.matches) return;
+  const items = [...root.querySelectorAll('[data-count]')].map(el => ({el, to: +el.dataset.count, dec: +(el.dataset.dec || 0), suf: el.dataset.suf || '', end: el.textContent}));
+  if (!items.length) return;
+  const fmt = (v, d) => v.toLocaleString(undefined, {minimumFractionDigits: d, maximumFractionDigits: d}), t0 = performance.now();
+  const step = now => {
+    const k = Math.min(1, (now - t0) / ms);
+    for (const it of items) it.el.textContent = k < 1 ? fmt(it.to * eOut(k), it.dec) + it.suf : it.end;
+    if (k < 1) requestAnimationFrame(step);
+  };
+  step(t0);
+}
 const median = a => { const s = a.slice().sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m-1] + s[m]) / 2; };
 // small seeded generator (mulberry32) for the daily challenge
 function seeded(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }

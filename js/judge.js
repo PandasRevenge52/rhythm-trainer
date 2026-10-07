@@ -195,6 +195,9 @@ function renderStats() {
   const hist = $('#hist');
   hist.innerHTML = history.slice(0, 40).reverse().map(x => `<span title="Pass ${x.pass}: ${Math.round(x.acc*100)}%" style="height:${Math.max(3, x.acc*26)}px"></span>`).join('');
   hist.title = `Session: ${Math.round(session.w / session.n * 100)}% over ${history.length} passes`;
+  // the new pass's score pops and its bar grows in (transform only)
+  nudge(acc, [{transform: 'scale(1.18)'}, {transform: 'none'}], 320);
+  nudge(hist.lastElementChild, [{transform: 'scaleY(0)'}, {transform: 'none'}], 360);
 }
 // U3: phones and tablets (no hover, a finger for a pointer) get tapping hints instead of keys they don't have
 const touchOnly = () => matchMedia('(hover: none) and (pointer: coarse)').matches;

@@ -185,3 +185,19 @@ body.playing .homebtn:hover{opacity:1}
 .mpwarn{color:var(--warn);font-size:13.5px;margin:6px 0 0}
 
 .mpsharenote{font-size:12px;margin:6px 0 0;line-height:1.4}
+
+/* ---------- site-wide motion (phase 2, step 6) ---------- */
+/* the song-select menu's sections arrive one after another; on the page's first paint they rise without
+   fading, like the panel itself (#menu.boot above), so the menu still counts as painted straight away */
+#menu.show .apanel>*{animation:risefade var(--dur-3) var(--ease-out) both}
+#menu.boot .apanel>*{animation-name:rise}
+#menu.show .apanel>:nth-child(2){animation-delay:30ms} #menu.show .apanel>:nth-child(3){animation-delay:60ms}
+#menu.show .apanel>:nth-child(4){animation-delay:90ms} #menu.show .apanel>:nth-child(5){animation-delay:120ms}
+#menu.show .apanel>:nth-child(6){animation-delay:150ms} #menu.show .apanel>:nth-child(n+7){animation-delay:180ms}
+/* results: accuracy and the buttons follow the grade */
+#results.show .grade span{animation:tilein var(--dur-3) var(--ease-out) .18s both}
+#results.show .actions{animation:tilein var(--dur-3) var(--ease-out) .3s both}
+.grade span i{font-style:normal;font-variant-numeric:tabular-nums}
+/* micro-interactions */
+.homebtn svg{transition:transform var(--dur-3) var(--ease-spring)}
+.homebtn:hover svg{transform:translateY(-2px)}

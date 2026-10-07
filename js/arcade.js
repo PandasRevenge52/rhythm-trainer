@@ -609,9 +609,9 @@ function finish() {
   P.xp += xp; P.hits += hits; saveP();
   $('#rTitle').textContent = G.failed ? 'Out of health' : fc ? 'Full combo' : 'Cleared';
   $('#rSong').textContent = `${tr.name} · ${srcName(A$.src)} · ${ADIFF[A$.diff].name}`;
-  $('#rGrade').innerHTML = `<b>${grade}</b><span>${acc.toFixed(2)}%<br><small>${rating}</small></span>${isBest && prev ? '<em class="badge">New best</em>' : ''}`;
-  const tile = (l, v) => `<div class="tile"><b>${v}</b><span>${l}</span></div>`;
-  $('#rTiles').innerHTML = tile('Score', G.score.toLocaleString()) + tile('Max combo', G.maxCombo) +
+  $('#rGrade').innerHTML = `<b>${grade}</b><span><i data-count="${acc.toFixed(2)}" data-dec="2" data-suf="%">${acc.toFixed(2)}%</i><br><small>${rating}</small></span>${isBest && prev ? '<em class="badge">New best</em>' : ''}`;
+  const tile = (l, v, n) => `<div class="tile"><b${n != null ? ` data-count="${n}"` : ''}>${v}</b><span>${l}</span></div>`;   // n: counts up (countUp)
+  $('#rTiles').innerHTML = tile('Score', G.score.toLocaleString(), G.score) + tile('Max combo', G.maxCombo, G.maxCombo) +
     Object.entries(G.counts).map(([k, v]) => tile(k, v)).join('') + tile('XP', '+' + xp);
   const mean = G.offs.length ? G.offs.reduce((a, b) => a + b, 0) / G.offs.length * 1000 : 0;
   // achievements, per-song clears and the leaderboard
@@ -699,7 +699,7 @@ function finish() {
     `You were ${Math.abs(mean).toFixed(0)} ms ${mean < 0 ? 'early' : 'late'} on average. If that happens every time, nudge the keyboard latency ${mean < 0 ? 'down' : 'up'} by about that much.`;
   if (mpOn()) { MP.finished({score:G.score, acc:+acc.toFixed(2), grade, fc, rating, maxCombo:G.maxCombo, counts:{...G.counts}, mean:+mean.toFixed(1),
     maxSick:G.maxSick || 0, holdsOK:G.holdsOK || 0, minHealth:Math.round(G.minHealth), notes:chart.length, xp}); return; }
-  show('results');
+  show('results'); countUp($('#results'));
 }
 
 // ---------- drawing ----------
