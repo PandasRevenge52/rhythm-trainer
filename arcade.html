@@ -61,7 +61,7 @@
       <div class="arow"><span class="lbl">Scroll</span><div class="seg" id="aScroll"><button data-v="down">Down</button><button data-v="up">Up</button></div></div>
       <div class="arow"><span class="lbl">Speed <b id="aSpeedRead"></b></span><input type="range" id="aSpeed" min="1" max="4" step="0.1" aria-label="Scroll speed"></div>
       <div class="arow"><span class="lbl">Music volume <b id="aVolRead"></b></span><input type="range" id="aVol" class="aVol" min="0" max="1" step="0.05" aria-label="Music volume"></div>
-      <div class="arow"><span class="lbl">Timing offset</span><span class="offctl"><button data-off="-5" aria-label="5 ms earlier">−5</button><b id="aOffRead"></b><button data-off="5" aria-label="5 ms later">+5</button><button id="aCal" title="Tap along to clicks to measure it">Test…</button></span></div>
+      <div class="arow"><span class="lbl" title="How late your key presses (and taps) reach the game. The same setting as Keyboard in the trainer's Input settings.">Keyboard latency</span><span class="offctl"><button data-off="-5" aria-label="5 ms earlier">−5</button><b id="aOffRead"></b><button data-off="5" aria-label="5 ms later">+5</button><button id="aCal" title="Tap along to clicks to measure it">Test…</button></span></div>
       <div class="arow keysrow"><span class="lbl">Keys <small class="muted" id="aKeysHint"></small></span>
         <span class="keybinds" id="aKeys">
           <button data-lane="0" aria-label="Key for the left lane"><i style="color:#b69cff">←</i><b></b></button><button data-lane="1" aria-label="Key for the down lane"><i style="color:#5cc8f5">↓</i><b></b></button><button data-lane="2" aria-label="Key for the up lane"><i style="color:#7fdc8a">↑</i><b></b></button><button data-lane="3" aria-label="Key for the right lane"><i style="color:#ff8a8a">→</i><b></b></button>
@@ -147,7 +147,7 @@
       <details class="more aopts"><summary><span>Your options</span><span class="val">just for you</span></summary>
         <div class="arow"><span class="lbl">Scroll</span><div class="seg" id="mpScroll"><button data-v="down">Down</button><button data-v="up">Up</button></div></div>
         <div class="arow"><span class="lbl">Speed <b id="mpSpeedRead"></b></span><input type="range" id="mpSpeed" min="1" max="4" step="0.1" aria-label="Scroll speed"></div>
-        <p class="muted mpnote">Keys, volume and timing offset come from the Arcade's own options. Matches can't be paused, and nobody fails out: everyone plays to the end.</p>
+        <p class="muted mpnote">Keys, volume and keyboard latency come from the Arcade's own options. Matches can't be paused, and nobody fails out: everyone plays to the end.</p>
       </details>
       <p class="mpmsg" id="mpLobbyMsg" role="status"></p>
       <div class="actions"><button class="ghost" id="mpLeave">Leave</button><span class="spacer"></span><button id="mpReady">Ready</button><button class="primary" id="mpStartBtn">Start</button></div>

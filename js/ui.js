@@ -80,7 +80,7 @@ function syncControls() {
   $('#sumCustom').textContent = S.level == null ? 'Custom' : `from ${LEVELS[S.level].name}`;
   $('#sumDisplay').textContent = [S.lane && 'Lane', S.counts && 'Counting'].filter(Boolean).join(' · ') || 'All off';
   $('#sumSounds').textContent = `${CLICK_NAMES[S.clickSound]} · ${KITS[S.hitKit].name}`;
-  $('#sumOffsets').textContent = `Keys ${S.offsets.key} · MIDI ${S.offsets.midi} · Mic ${S.offsets.mic} ms`;
+  $('#sumOffsets').textContent = `Keyboard ${S.offsets.key} · MIDI ${S.offsets.midi} · Mic ${S.offsets.mic} ms`;
   $('#level').value = S.level == null ? 'custom' : String(S.level);
   $('#level').title = S.play === 'endless' ? 'Starting difficulty ([ and ])' : 'Difficulty ([ and ])';
   $('#meter').value = S.meter;

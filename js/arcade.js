@@ -362,7 +362,7 @@ $('#aNoFail').addEventListener('change', e => setA('noFail', e.target.checked));
 $('#aHitSnd').addEventListener('change', e => setA('hitSound', e.target.checked));
 // shared with the trainer; the sound system only picks its buffer size at start, so reload
 $('#aSmooth').addEventListener('change', e => { S.smoothAudio = e.target.checked; save(); location.reload(); });
-// timing offset (shared with the trainer's keyboard offset)
+// keyboard latency (the same setting as the trainer's keyboard offset)
 document.querySelectorAll('[data-off]').forEach(b => b.addEventListener('click', () => { S.offsets.key = Math.round(S.offsets.key + +b.dataset.off); save(); renderMenu(); }));
 // music volume: in the menu and the pause screen; changes apply straight away, even mid-song
 function syncVol() {
@@ -677,7 +677,7 @@ function finish() {
   // random songs: write the next one now, while the results are up, so Again starts straight away
   if (tr.random) setTimeout(loadRandom, 400);
   $('#rNote').textContent = !G.offs.length ? '' : Math.abs(mean) < 8 ? `Your timing averaged ${Math.abs(mean).toFixed(0)} ms off. That's right on it.` :
-    `You were ${Math.abs(mean).toFixed(0)} ms ${mean < 0 ? 'early' : 'late'} on average. If that happens every time, nudge the timing offset ${mean < 0 ? 'down' : 'up'} by about that much.`;
+    `You were ${Math.abs(mean).toFixed(0)} ms ${mean < 0 ? 'early' : 'late'} on average. If that happens every time, nudge the keyboard latency ${mean < 0 ? 'down' : 'up'} by about that much.`;
   if (mpOn()) { MP.finished({score:G.score, acc:+acc.toFixed(2), grade, fc, rating, maxCombo:G.maxCombo, counts:{...G.counts}, mean:+mean.toFixed(1),
     maxSick:G.maxSick || 0, holdsOK:G.holdsOK || 0, minHealth:Math.round(G.minHealth), notes:chart.length, xp}); return; }
   show('results');
@@ -866,7 +866,7 @@ function acStop() { AC.on = false; if (AC.bus) { try { AC.bus.disconnect(); } ca
 function openCal() {
   acStop(); state = 'cal';
   $('#acNum').innerHTML = 'Ready<small>press Start or Enter</small>'; $('#acRing').style.transform = ''; $('#acRing').style.opacity = '';
-  $('#acMsg').textContent = `Your timing offset now: ${S.offsets.key} ms`;
+  $('#acMsg').textContent = `Your keyboard latency now: ${S.offsets.key} ms`;
   $('#acApply').hidden = true; $('#acGo').textContent = 'Start';
   $('#acStrip').querySelectorAll('i').forEach(el => el.remove());
   show('cal');
