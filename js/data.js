@@ -600,6 +600,34 @@ const sizeOf = (() => {
     return s;
   };
 })();
+// ---------- drawing helpers shared by the trainer lane and the Arcade field (hit feedback) ----------
+// Glows are soft ovals drawn once per colour and size into a small canvas and reused, never blur filters per frame.
+const eOut = x => 1 - (1 - x) ** 3, backOut = x => 1 + 2.7 * (x - 1) ** 3 + 1.7 * (x - 1) ** 2;
+const spaced = (g, px) => { if ('letterSpacing' in g) g.letterSpacing = px + 'px'; };
+const rgba = (hex, a) => { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${n >> 8 & 255},${n & 255},${a})`; };
+const ovals = new Map();
+function softOval(c, rx, ry, peak) {
+  const key = `${c}|${rx}|${ry}|${peak}`; let o = ovals.get(key); if (o) return o;
+  const k = 2, cv = document.createElement('canvas'); cv.width = Math.ceil(rx * 2 * k); cv.height = Math.ceil(ry * 2 * k);
+  const g = cv.getContext('2d'); g.scale(k, k * ry / rx);
+  const gr = g.createRadialGradient(rx, rx, 0, rx, rx, rx);
+  gr.addColorStop(0, rgba(c, peak)); gr.addColorStop(0.45, rgba(c, peak * 0.4)); gr.addColorStop(1, rgba(c, 0));
+  g.fillStyle = gr; g.fillRect(0, 0, rx * 2, rx * 2);
+  o = {cv, w: rx * 2, h: ry * 2}; ovals.set(key, o); return o;
+}
+function drawOval(g, o, x, y, a) { if (a <= 0) return; g.globalAlpha = Math.min(1, a); g.drawImage(o.cv, x - o.w / 2, y - o.h / 2, o.w, o.h); g.globalAlpha = 1; }
+// a miss: soft red light just inside a box's edges (the gradients are cached per box, so it's four fills a frame)
+const edgeCaches = new Map();
+function edgeLight(g, x, y, w, h, c, a) {
+  const key = `${x}|${y}|${w}|${h}|${c}`; let parts = edgeCaches.get(key);
+  if (!parts) {
+    const d = 16, mk = (x0, y0, x1, y1) => { const gr = g.createLinearGradient(x0, y0, x1, y1); gr.addColorStop(0, rgba(c, 1)); gr.addColorStop(1, rgba(c, 0)); return gr; };
+    parts = [[mk(x, 0, x + d, 0), x, y, d, h], [mk(x + w, 0, x + w - d, 0), x + w - d, y, d, h], [mk(0, y, 0, y + d), x, y, w, d], [mk(0, y + h, 0, y + h - d), x, y + h - d, w, d]];
+    if (edgeCaches.size > 8) edgeCaches.clear();
+    edgeCaches.set(key, parts);
+  }
+  g.globalAlpha = Math.min(1, a); for (const [gr, px, py, pw, ph] of parts) { g.fillStyle = gr; g.fillRect(px, py, pw, ph); } g.globalAlpha = 1;
+}
 const median = a => { const s = a.slice().sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m-1] + s[m]) / 2; };
 // small seeded generator (mulberry32) for the daily challenge
 function seeded(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }

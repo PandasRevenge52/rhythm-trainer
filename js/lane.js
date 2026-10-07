@@ -42,6 +42,50 @@ function laneLabels(pat) {
   }
   return L;
 }
+// ---------- hit feedback (Mono) ----------   (drawing helpers: softOval, drawOval, edgeLight in data.js)
+// Each grade has its own look, not just its own colour, so they read apart even in fast passages:
+// Perfect = a soft beam of light, a ring and sparks; Good = a ring; OK = a small flash; Miss = no light at all, a hollow
+// note and a soft red light inside the lane's edges. Every glow is a soft oval that stays inside the lane (nothing
+// spills past its edge or onto the next note). With reduced motion: the colours and the judgement text only.
+function hitFx(g, kind, age, y, H, seed) {
+  const c = col[kind];
+  if (kind === 'perfect' && age < 300) {
+    const p = age / 300;
+    drawOval(g, softOval(c, 14, Math.round(Math.min(H * 0.42, y - 2, H - y - 2)), 0.55), HIT_X, y, 1 - p);   // fully faded before the lane's edge
+    g.globalAlpha = 1 - p; g.strokeStyle = c; g.lineWidth = 1.6; g.beginPath(); g.arc(HIT_X, y, 9 + 14 * eOut(p), 0, Math.PI * 2); g.stroke();
+    for (let k = 0; k < 8; k++) { const a = seed + k * 0.785, d = 7 + 16 * eOut(p); g.fillStyle = k % 2 ? c : col.ink; g.fillRect(HIT_X + Math.cos(a) * d - 1.25, y + Math.sin(a) * d * 0.75 - 1.25, 2.5, 2.5); }
+  } else if (kind === 'good' && age < 260) {
+    const p = age / 260; g.globalAlpha = 1 - p; g.strokeStyle = c; g.lineWidth = 2; g.beginPath(); g.arc(HIT_X, y, 9 + 10 * eOut(p), 0, Math.PI * 2); g.stroke();
+  } else if (kind === 'ok' && age < 200) {
+    g.globalAlpha = 0.35 * (1 - age / 200); g.fillStyle = c; g.beginPath(); g.arc(HIT_X, y, 12, 0, Math.PI * 2); g.fill();
+  }
+  g.globalAlpha = 1;
+}
+const comboFx = {shown:0, t:0, drop:null, mile:0};
+function drawCombo(g, W, H, t) {
+  const calm = reducedMotion.matches, cf = comboFx;
+  if (combo !== cf.shown) {
+    if (combo > cf.shown) { cf.t = t; if ([10, 20, 30].includes(combo) || (combo > 30 && combo % 50 === 0)) cf.mile = t; }
+    else if (cf.shown >= 5) cf.drop = {n:cf.shown, t};
+    cf.shown = combo;
+  }
+  const rx = W - 12, y = 21;
+  // milestone: a soft band of light crossing the lane once
+  if (!calm && cf.mile && t - cf.mile < 550) { const p = (t - cf.mile) / 550; drawOval(g, softOval(col.accent, 110, Math.round(H * 0.5), 0.16), -110 + p * (W + 220), H / 2, 1 - p); }
+  g.textAlign = 'right';
+  if (cf.drop && t - cf.drop.t < 450) {   // a miss: the old count turns red and drops away
+    const p = (t - cf.drop.t) / 450; g.globalAlpha = 1 - p; g.fillStyle = col.miss; g.font = '800 19px Figtree, system-ui, sans-serif';
+    g.fillText(cf.drop.n, rx, y + (calm ? 0 : 8 * eOut(p))); g.globalAlpha = 1;
+  } else if (combo >= 5) {
+    const k = calm ? 1 : 1 + 0.14 * Math.max(0, 1 - (t - cf.t) / 120);
+    g.save(); g.translate(rx, y); g.scale(k, k); g.fillStyle = col.ink; g.font = '800 19px Figtree, system-ui, sans-serif'; g.fillText(combo, 0, 0); g.restore();
+    const nw = g.measureText(String(combo)).width;
+    g.font = '800 9.5px Figtree, system-ui, sans-serif'; g.fillStyle = col.muted; spaced(g, 1.5); g.fillText('COMBO', rx - nw - 22, y - 1); spaced(g, 0);
+    const lw = g.measureText('COMBO').width + 4;
+    for (let i = 0; i < 3; i++) { g.fillStyle = mult() > i + 1 ? col.accent : col.line; g.beginPath(); g.arc(rx - nw - 22 - lw - 6 - (2 - i) * 9, y - 4.5, 3, 0, Math.PI * 2); g.fill(); }
+  }
+  g.textAlign = 'center';
+}
 function drawLane(now) {
   if (!S.lane) return;
   const dpr = window.devicePixelRatio || 1, [W, H] = sizeOf(lane);
@@ -71,7 +115,7 @@ function drawLane(now) {
       if (b === bars && i > 0) return;
       const t = s.start + (b*m.len + st) * s.s16, x = X(t); if (x < -2 || x > W + 2) return;
       const bar = i === 0;
-      if (run && now >= t && now < t + m.beats[i] * s.s16) pulse = Math.exp(-(now - t) / (m.beats[i] * s.s16) * 6);
+      if (run && !reducedMotion.matches && now >= t && now < t + m.beats[i] * s.s16) pulse = Math.exp(-(now - t) / (m.beats[i] * s.s16) * 6);
       g.fillStyle = col.line; g.fillRect(x - (bar ? 1 : 0.5), bar ? 8 : mid - 16, bar ? 2 : 1, bar ? H - 30 : 32);
     });
     if (s.type === 'count') {
@@ -116,21 +160,15 @@ function drawLane(now) {
   const fade = g.createLinearGradient(0, 0, HIT_X - 14, 0);
   fade.addColorStop(0, col.lane); fade.addColorStop(1, col.lane + '00');
   if (/^#[0-9a-f]{6}$/i.test(col.lane)) { g.fillStyle = fade; g.fillRect(0, 0, HIT_X - 14, H); }
-  // hit line, glowing on each beat
-  g.fillStyle = col.accent; g.globalAlpha = 0.1 + pulse*0.25;
-  g.beginPath(); g.arc(HIT_X, mid, 16 + pulse*4, 0, Math.PI*2); g.fill();
+  // hit line, with a soft light that brightens on each beat (steady with reduced motion)
+  drawOval(g, softOval(col.accent, 18, Math.min(30, Math.round(H * 0.33)), 0.3), HIT_X, mid, 0.35 + pulse * 0.65);
   g.globalAlpha = 0.9; g.fillStyle = col.ink; g.fillRect(HIT_X - 1, 6, 2, H - 26); g.globalAlpha = 1;
   if (two) {
     g.fillStyle = col.muted; g.font = '700 10.5px system-ui,sans-serif'; g.textAlign = 'left';
     g.fillText('R  J', 8, rowY(0) + 4); g.fillText('L  F', 8, rowY(1) + 4); g.textAlign = 'center';
   }
-  // combo counter
-  if (run && !run.listen && combo >= 5) {
-    g.textAlign = 'right'; g.fillStyle = col.accent; g.font = '800 15px system-ui,sans-serif';
-    g.fillText(`${combo} combo`, W - 12, 21);
-    if (mult() > 1) { g.fillStyle = col.muted; g.font = '700 12px system-ui,sans-serif'; g.fillText(`×${mult()} points`, W - 12, 37); }
-    g.textAlign = 'center';
-  }
+  // combo: one clean number that nudges up on each hit, with the points multiplier as pips (x2 at 10, x3 at 20, x4 at 30)
+  if (run && !run.listen) drawCombo(g, W, H, performance.now());
   // U6: the count-in as one big number over the lane, popping in on each click (it runs off the same audio clock as
   // the lane, so it's exactly in time) and shrinking away as beat 1 of the music arrives
   const cur = run && run.segments.find(s => now >= s.start && now < segEnd(s));
@@ -148,24 +186,30 @@ function drawLane(now) {
       g.translate(W / 2, mid + 2); g.scale(k, k); g.fillText(n, 0, 0); g.restore();
     }
   }
-  // effects
-  const t = performance.now();
+  // hit feedback (see hitFx)
+  const t = performance.now(), calm = reducedMotion.matches;
+  let edge = 0;
   for (let i = fx.length - 1; i >= 0; i--) {
     const f = fx[i], age = t - f.t0;
     if (age > 700) { fx.splice(i, 1); continue; }
-    const c = col[f.c] || col.accent, fy = two && f.voice != null ? rowY(f.voice) : mid;
-    if (f.burst && age < 320) {
-      const p = age / 320;
-      g.strokeStyle = c; g.lineWidth = (f.small ? 2 : 3) * (1 - p); g.globalAlpha = 1 - p;
-      g.beginPath(); g.arc(HIT_X, fy, (f.small ? 10 : 12) + p*(f.small ? 12 : 20), 0, Math.PI*2); g.stroke();
+    const fy = two && f.voice != null ? rowY(f.voice) : mid;
+    if (!calm) {
+      if (f.press) { if (age < 160) { g.strokeStyle = col.ink; g.globalAlpha = 0.35 * (1 - age / 160); g.lineWidth = 1.2; g.beginPath(); g.arc(HIT_X, fy, 11 + age / 16, 0, Math.PI * 2); g.stroke(); } }
+      else if (f.c === 'miss') edge = Math.max(edge, 1 - age / 450);
+      else hitFx(g, f.c, age, fy, H, f.seed);
     }
     if (f.text) {
-      const p = age / 700;
-      g.globalAlpha = p < 0.7 ? 1 : 1 - (p - 0.7)/0.3; g.fillStyle = c; g.font = '700 13px system-ui,sans-serif';
-      g.textAlign = 'left'; g.fillText(f.text, HIT_X + 20, mid - 16 - p*10); g.textAlign = 'center';
+      // the grade first, in capitals, so Perfect / Good / OK / Miss read apart at a glance; early/late detail after it
+      const p = age / 700, a = p < 0.7 ? 1 : 1 - (p - 0.7) / 0.3, y = two ? 16 : mid - 21, sc = calm ? 1 : 0.82 + 0.18 * backOut(Math.min(1, age / 140));
+      g.globalAlpha = a; g.save(); g.translate(HIT_X + 18, y); g.scale(sc, sc); g.textAlign = 'left';
+      g.font = '800 12.5px Figtree, system-ui, sans-serif'; g.fillStyle = col[f.c] || col.accent; spaced(g, 1.2);
+      g.fillText(f.text, 0, 0); const w = g.measureText(f.text).width; spaced(g, 0);
+      if (f.detail) { g.font = '600 11.5px Figtree, system-ui, sans-serif'; g.fillStyle = col.muted; g.fillText(f.detail, w + 8, 0); }
+      g.restore(); g.textAlign = 'center';
     }
     g.globalAlpha = 1;
   }
+  if (edge > 0) edgeLight(g, 0, 0, W, H, col.miss, 0.3 * edge);
 }
 let looping = false;
 function kick() { if (!looping) { looping = true; requestAnimationFrame(loop); } }

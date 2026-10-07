@@ -7,8 +7,7 @@ function grade(n, g, diff) {
   if (g !== 'miss') n.seg.stats.offs.push(diff);
   if (shown.seg === n.seg) setEvClass(n.ev.idx, g);
   const ms = Math.round(Math.abs(diff) * 1000);
-  const text = g === 'perfect' ? 'Perfect' : g === 'miss' ? 'Miss' : `${diff < 0 ? 'Early' : 'Late'} ${ms}ms`;
-  addFx(g, text, g !== 'miss', n.voice);
+  addFx(g, g === 'ok' ? 'OK' : g.toUpperCase(), g === 'good' || g === 'ok' ? `${diff < 0 ? 'early' : 'late'} ${ms} ms` : null, n.voice);
   if (g === 'miss') { combo = 0; run.perfRun = 0; loseLife(); } else scoreHit(g, n.seg);
 }
 function scoreHit(g, seg) {
@@ -35,10 +34,10 @@ function loseLife() {
   renderHud();
   if (game.lives <= 0) { run.over = audioNow() + 1; toast('Out of lives!'); }
 }
-function addFx(colorKey, text, burst, voice) {
+function addFx(grade, text, detail, voice) {
   // only one label at a time, so quick hits never stack unreadably
   for (const f of fx) if (f.text) f.text = null;
-  fx.push({t0:performance.now(), c:colorKey, text, burst, voice}); kick();
+  fx.push({t0:performance.now(), c:grade, text, detail, voice, seed:Math.random() * 6.28}); kick();
 }
 // e: {timeStamp (performance clock, ms), lane: 0 right hand / 1 left hand / null either, src: key|touch|midi|mic}
 function onHit(e) {
@@ -48,7 +47,7 @@ function onHit(e) {
   if (cal.on) { calTap(e.timeStamp, src); return; }
   if (S.hitSound && (src === 'key' || src === 'touch')) hitSound(master, ctx.currentTime, 0.7, e.lane ?? 0);
   if (modalOpen()) return;
-  fx.push({t0:performance.now(), c:'accent', burst:true, small:true, voice:e.lane}); kick();
+  fx.push({t0:performance.now(), press:true, voice:e.lane}); kick();
   if (!run || run.listen) return;
   syncClock();
   run.src[src] = 1;
