@@ -64,6 +64,7 @@ function renderSong() {
   document.querySelectorAll('#songSrcSeg button').forEach(b => b.classList.toggle('on', b.dataset.v === S.songSource));
   document.querySelectorAll('#chartSeg button').forEach(b => b.classList.toggle('on', b.dataset.v === S.songChart));
   $('#chartSeg').hidden = S.songSource !== 'song';
+  $('#stage').dataset.src = S.songSource; renderSetupSum();
   $('#songSetupBtn').hidden = S.songSource !== 'song';
 }
 function songEdited() {

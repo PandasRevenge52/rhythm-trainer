@@ -120,6 +120,8 @@ select{background:var(--chip);border:1px solid transparent;border-radius:var(--r
 .stage[data-play=daily] :is(#level,#meter,#barsSel,.tempo,#pathBtn,#newBtn){display:none}
 /* D4: Endless picks every rhythm itself, so New has nothing to do there */
 .stage[data-play=endless] #newBtn{display:none}
+/* D9: with notes from the song the chart decides the notes, so the difficulty level does nothing */
+.stage[data-play=song][data-src=song] #level{display:none}
 
 /* song bar */
 .songbar{display:none;flex-wrap:wrap;align-items:center;gap:8px 16px;background:var(--chip);border-radius:var(--r-lg);padding:9px 11px 11px;margin:4px 0 8px;position:relative;overflow:hidden;font-size:13.5px}

@@ -106,7 +106,7 @@ if (document.fonts) document.fonts.ready.then(() => placeModeBar(true));   // th
 // U1 (phones): the setup controls fold into one summary row; it says what's set and opens them.
 function renderSetupSum() {
   const lv = $('#level'), name = (lv.options[lv.selectedIndex] || {}).text || '';
-  $('#setupSumText').textContent = [name.replace(/^🔒\s*/, ''), S.meter, `${S.bars} bar${S.bars > 1 ? 's' : ''}`, `${S.bpm} BPM`].join(' · ');
+  $('#setupSumText').textContent = [!chartMode() && name.replace(/^🔒\s*/, ''), S.meter, `${S.bars} bar${S.bars > 1 ? 's' : ''}`, `${S.bpm} BPM`].filter(Boolean).join(' · ');
 }
 // D3: Daily's level, time signature and tempo, read-only, in the row where the setup controls usually are
 function renderDailyInfo() {
