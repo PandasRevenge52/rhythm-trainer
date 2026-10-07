@@ -9,13 +9,22 @@ the live site**. Friends use it.
 - Static HTML, CSS and plain JavaScript. No framework, no build step, no npm dependencies in the app.
 - Scripts are classic `<script defer>` files sharing globals, in a fixed order (see the bottom of each HTML
   file). Don't use ES modules: the app must also run when opened straight from disk (`file://`). A new script
-  goes into the page's script list **and** `sw.js`'s `FILES`.
+  goes into the page's script list **and** `sw.js`'s `FILES`, unless it's loaded on demand (below).
+- Code only some visitors need loads on demand with `loadJS` / `loadAll` / `loadCSS` (`data.js`), which load
+  each file once (two features share `relay.js` and PeerJS). Those files are **deliberately not** in `sw.js`'s
+  `FILES`, so normal visitors never download them; the service worker caches them on first use.
 - `js/data.js` is shared by both pages (settings, storage, achievements, drawing and motion helpers).
   Trainer: `generate`, `notation`, `engine`, `judge`, `lane`, `progress`, `ui`, … Arcade: `arcade.js`,
   `randomsong.js`, `drums.js` (song analysis), and multiplayer loaded on demand (`multiplayer.js`, `relay.js`,
   `js/vendor/peerjs.min.js`).
 - Multiplayer: PeerJS (public 0.peerjs.com signalling) for direct connections, with an encrypted MQTT relay
   (public brokers) as the backup route.
+- "Back up or move progress" (Profile in the trainer, Options in the Arcade), loaded on demand: `transfer.js`
+  (the panel, and "send to my other device" over the multiplayer connection code), `sync.js` (`Saves`: checks
+  every save from outside field by field, combines it, save codes), `qr.js`, `css/transfer.css`. Anything that
+  comes from another device goes through `Saves.check()` first, like multiplayer messages. Its `combine()` is the
+  hardened cross-device merge (`mergeProfile` in `data.js` only merges this browser's own tabs). Settings in
+  `DEVICE_ONLY` (`sync.js`) never leave the device. `optimization/accounts.md` has the design and merge rules.
 - `sw.js`: offline support. Pages and code are network-first; fonts and icons are cache-first. **Bump `CACHE`**
   whenever files are added or removed, or a font or icon changes.
 - Fonts are self-hosted in `fonts/` (Figtree, plus Twemoji for emoji).
@@ -54,6 +63,7 @@ mkdir -p $WORK/main && git archive main | tar -x -C $WORK/main && python3 ghserv
 | Multiplayer, every flow | `MODE=basic URL=<url>/arcade.html node mpflows.js`, then `MODE=code`, then `MODE=drop BLOCK=1` |
 | Returning visitor gets the update | `node returning.js` (after a release, against the live site) |
 | Animation declarations parse | `node animcheck.js` |
+| Saves: merge rules, validator fuzzing, `__proto__`, save codes | `node savetest.js` (needs `NODE_PATH` above) |
 
 Always compare against `main` measured in the same session, with runs alternating. Absolute numbers drift
 between machines and sessions (`report.md` "Read this first").
