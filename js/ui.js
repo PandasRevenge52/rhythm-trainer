@@ -326,6 +326,9 @@ window.addEventListener('keydown', e => {
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   const isHit = e.code in HIT_KEYS, hit = () => onHit({timeStamp:e.timeStamp, src:'key', lane:S.hands === 2 ? HIT_KEYS[e.code] : null});
   if (modalOpen()) {
+    // a focused button, tab or link in the dialog takes Enter and Space itself, and a text field every key
+    // (except while calibrating, where Space is a tap)
+    if (!cal.on && modalCard.contains(e.target) && (e.target.matches('input,select,textarea') || (e.target.matches('button,summary,a[href]') && /^(Enter|NumpadEnter|Space)$/.test(e.code)))) return;
     if (isHit) { e.preventDefault(); if (!e.repeat && cal.on) hit(); return; }
     if (e.code === 'Escape') closeModal();
     else if (e.code === 'Enter' && !e.repeat) {
