@@ -59,10 +59,12 @@ mkdir -p $WORK/main && git archive main | tar -x -C $WORK/main && python3 ghserv
 | Lighthouse, median of 3 | `./lh.sh <label> http://127.0.0.1:8777 3` then `node summarize.js $WORK/lhout/<label>` |
 | Trainer key-press latency (INP) | `PLAY_MS=20000 node trainer.js <url> <label> 4 inp` (and `16` for an old phone) |
 | Trainer frame rate while playing | `node trainer.js <url> <label> 4 fps` (and `16`), phone screen |
+| Cost of one playhead update | `node phcost.js <url> 16` |
+| Saves: merge rules, validator fuzzing, `__proto__`, save codes | `node savetest.js <url>` (runs in the page) |
+| Short recordings for the review page | `node record.js <url> <outdir> b <level> <bpm> [phone]` (MP4 via ffmpeg-static) |
 
 Not rebuilt yet on the Mac (the originals stayed on the old machine): Arcade INP and frame rate, `playcheck.js`,
-`mpflows.js`, `returning.js`, `animcheck.js`, `savetest.js`, `phone-preview.sh`. `optimization/progress.md` lists
-which ones exist on this machine.
+`mpflows.js`, `returning.js`, `animcheck.js`. `optimization/progress.md` lists which ones exist on this machine.
 
 Always compare against `main` measured in the same session, with runs alternating. Absolute numbers drift
 between machines and sessions (`report.md` "Read this first").
