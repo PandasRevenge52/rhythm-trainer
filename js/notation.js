@@ -253,9 +253,9 @@ function setCur(idx) {
 // Jumping playhead: it sits on each note (or rest), creeps a little way towards the next one while the note
 // lasts, then jumps and lands exactly on the next note's beat. Worked out from the audio-clock time every
 // frame, so a slow frame never makes it late; the settle is a squash of the bar, so its position never
-// passes the note. Variations for review: ?ph=a|b|c (b without one), ?ph=smooth for the old steady scroll.
-const PH_VARS = {a:{crawl:0.15, jump:0.09, squash:1}, b:{crawl:0.3, jump:0.12, squash:2}, c:{crawl:0.45, jump:0.15, squash:3}};
-const phKey = (location.search.match(/[?&]ph=(a|b|c|smooth)\b/) || [])[1] || 'b', phVar = PH_VARS[phKey];
+// passes the note. crawl = how far towards the next note it creeps (share of the gap), jump = how long the
+// jump takes (s), squash = how much wider the bar gets as it lands (staff units).
+const phVar = {crawl:0.3, jump:0.12, squash:2};
 const PH_SETTLE = 0.06;   // s, the squash after landing
 // Notes closer together than this (16ths above about 135 BPM) are a fast run: a jump that short would flicker,
 // so the run glides at a steady speed and the jumping starts again after it.
