@@ -199,7 +199,9 @@ function fillSlot(slot, pat) {
   // The playhead is its own layer on top of the staff, moved with a transform: moving it inside the
   // SVG made the browser lay out and repaint the whole staff on every frame.
   if (!slot.phEl) { slot.phEl = document.createElement('div'); slot.phEl.className = 'ph'; slot.phEl.setAttribute('aria-hidden', 'true'); slot.wrap.appendChild(slot.phEl); }
-  slot.phEl.classList.remove('on');
+  // the trail behind the playhead while a long note sounds
+  if (!slot.trEl) { slot.trEl = document.createElement('div'); slot.trEl.className = 'ph trail'; slot.trEl.setAttribute('aria-hidden', 'true'); slot.wrap.appendChild(slot.trEl); }
+  slot.phEl.classList.remove('on'); slot.trEl.style.opacity = '';
   slot.ph = slot.phEl; slot.vbW = W; slot.phH = pat.twoHand ? 110 : 80;
   slot.lay = {perRow};
   slot.svg.classList.remove('fill'); slot.svg.getBoundingClientRect(); slot.svg.classList.add('fill');
@@ -268,8 +270,11 @@ function phStops(pat) {
     st = [];
     for (const e of [...pat.events].sort((a, b) => a.t16 - b.t16)) {
       const last = st[st.length - 1];
-      if (last && Math.abs(last.t16 - e.t16) < 0.01) { if (!e.rest) last.rest = false; continue; }   // two hands on one spot: one stop
-      st.push({t16:e.t16, rest:!!e.rest});
+      if (last && Math.abs(last.t16 - e.t16) < 0.01) {   // two hands on one spot: one stop
+        if (!e.rest) { if (last.rest || e.dur > last.dur) Object.assign(last, {dur:e.dur, voice:e.voice}); last.rest = false; }
+        continue;
+      }
+      st.push({t16:e.t16, rest:!!e.rest, dur:e.dur, voice:e.voice});
     }
     stopCache.set(pat, st);
   }
@@ -279,33 +284,51 @@ function phStops(pat) {
 // (0 to 1) and whether it's resting on a rest.
 function phJump(pat, t16, s16) {
   const st = phStops(pat);
-  if (!phVar || !st.length || t16 < st[0].t16) return {pos:t16, sq:0, rest:false};
+  if (!phVar || !st.length || t16 < st[0].t16) return {pos:t16, sq:0, rest:false, a:null, p:null};
   let i = st.length - 1; while (i > 0 && st[i].t16 > t16) i--;
-  const a = st[i], b = st[i + 1];
-  if (stillMQ.matches) return {pos:a.t16, sq:0, rest:a.rest};
+  const a = st[i], b = st[i + 1], r = {pos:a.t16, sq:0, rest:a.rest, a, p:null};   // p: how far through the jump
+  if (stillMQ.matches) return r;
   const glided = i > 0 && (a.t16 - st[i - 1].t16) * s16 < PH_FAST;   // arrived by gliding: no settle
-  const sinceLand = (t16 - a.t16) * s16, sq = !glided && sinceLand < PH_SETTLE ? 1 - sinceLand / PH_SETTLE : 0;
-  if (b && (b.t16 - a.t16) * s16 < PH_FAST) return {pos:t16, sq, rest:a.rest};
-  if (!b) return {pos:a.t16 + phVar.crawl * (t16 - a.t16), sq, rest:a.rest};   // last note of the line: crawl only
+  const sinceLand = (t16 - a.t16) * s16;
+  r.sq = !glided && sinceLand < PH_SETTLE ? 1 - sinceLand / PH_SETTLE : 0;
+  if (b && (b.t16 - a.t16) * s16 < PH_FAST) { r.pos = t16; return r; }
+  if (!b) { r.pos = a.t16 + phVar.crawl * (t16 - a.t16); return r; }   // last note of the line: crawl only
   const span = b.t16 - a.t16, J = Math.min(phVar.jump, 0.45 * span * s16) / s16, tJ = b.t16 - J;
   const crawlTo = a.t16 + phVar.crawl * span;
-  if (t16 < tJ) return {pos:a.t16 + (crawlTo - a.t16) * (t16 - a.t16) / (tJ - a.t16), sq, rest:a.rest};
-  return {pos:crawlTo + (b.t16 - crawlTo) * eOut((t16 - tJ) / J), sq:0, rest:a.rest};   // eOut(1) = 1: on the note at its beat
+  if (t16 < tJ) { r.pos = a.t16 + (crawlTo - a.t16) * (t16 - a.t16) / (tJ - a.t16); return r; }
+  r.p = (t16 - tJ) / J; r.sq = 0;
+  r.pos = crawlTo + (b.t16 - crawlTo) * eOut(r.p);   // eOut(1) = 1: on the note at its beat
+  return r;
 }
+// Where a point in time (in 16ths from the start of the line) sits on a slot's staff, in staff units, and the
+// scale from staff units to pixels (the SVG is scaled to fit and centred in its line).
+function phXY(sl, pat, at) {
+  const bar = Math.floor(at/pat.barLen), row = Math.floor(bar/sl.lay.perRow), col = bar % sl.lay.perRow;
+  const [sw] = sizeOf(sl.svg), [ww] = sizeOf(sl.wrap);
+  return {x:HEAD + col*barW(pat) + (at - bar*pat.barLen + 0.5)*U, T:row*rowH(pat) + STAFF_TOP, row, k:sw / sl.vbW, left:(ww - sw) / 2};
+}
+// A bar w staff units wide and h tall, centred on (x, y), as a transform for one of the 1px layers.
+const phBox = (p, x, y, w, h) => `translate(${(p.left + (x - w / 2) * p.k).toFixed(2)}px,${((y - h / 2) * p.k).toFixed(2)}px) scale(${(w * p.k).toFixed(3)},${(h * p.k).toFixed(3)})`;
+const TRAIL_MIN = 4.5;   // notes longer than a quarter get a trail
 // s16 (seconds per 16th) is given while playing; without it the playhead moves steadily.
 function movePlayhead(pat, t16, s16) {
-  if (t16 == null || t16 < 0) { ph.classList.remove('on'); setCur(-1); return; }
+  const sl = slots[act], tr = sl.trEl;
+  if (t16 == null || t16 < 0) { ph.classList.remove('on'); if (tr) tr.style.opacity = ''; setCur(-1); return; }
   t16 = Math.min(t16, pat.bars*pat.barLen - 0.001);
   const j = s16 && phVar ? phJump(pat, t16, s16) : null, at = j ? j.pos : t16;
-  const bar = Math.floor(at/pat.barLen), row = Math.floor(bar/lay.perRow), col = bar % lay.perRow;
-  const x = HEAD + col*barW(pat) + (at - bar*pat.barLen + 0.5)*U, T = row*rowH(pat) + STAFF_TOP;
-  // staff units to pixels: the SVG is scaled to fit and centred in its line
-  const sl = slots[act], [sw] = sizeOf(sl.svg), [ww] = sizeOf(sl.wrap), k = sw / sl.vbW;
+  const p = phXY(sl, pat, at), midY = p.T - (pat.twoHand ? 36 : 28) + sl.phH / 2;
   // the settle: wider and a little shorter for a moment after landing, kept centred on the note
-  const sq = j ? j.sq * phVar.squash : 0, w = 3 + sq, h = sl.phH * (1 - 0.04 * sq);
-  ph.style.transform = `translate(${((ww - sw) / 2 + (x - w / 2) * k).toFixed(2)}px,${((T - (pat.twoHand ? 36 : 28) + (sl.phH - h) / 2) * k).toFixed(2)}px) scale(${(w * k).toFixed(3)},${(h * k).toFixed(3)})`;
+  const sq = j ? j.sq * phVar.squash : 0;
+  ph.style.transform = phBox(p, p.x, midY, 3 + sq, sl.phH * (1 - 0.04 * sq));
   if (!ph.classList.contains('on')) ph.classList.add('on');
   ph.classList.toggle('rest', !!(j && j.rest));   // dimmed while it sits on a rest
+  // a faint line from a long note's head to the playhead while the note sounds, fading as the playhead jumps on
+  const a = j && j.a, held = a && !a.rest && a.dur > TRAIL_MIN && t16 < a.t16 + a.dur;
+  const h0 = held && phXY(sl, pat, a.t16), len = held && h0.row === p.row ? p.x - h0.x : 0;
+  if (len > 1) {
+    tr.style.transform = phBox(p, h0.x + len / 2, voiceGeo(pat, a.voice, p.T).y, len, 3);
+    tr.style.opacity = (0.3 * (j.p == null ? 1 : 1 - j.p)).toFixed(3);
+  } else if (tr.style.opacity) tr.style.opacity = '';
   const ev = pat.events.find(e => e.voice === 0 && t16 >= e.t16 && t16 < e.t16 + e.dur);
   setCur(ev ? ev.idx : -1);
   sightMask(t16);
