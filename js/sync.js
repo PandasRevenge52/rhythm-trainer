@@ -122,7 +122,7 @@ const Saves = (() => {
     timing:v => Object.keys(TIMING).includes(v), mode:oneOf(['loop', 'new']), metronome:bool, lane:bool, counts:bool, hitSound:bool,
     play:oneOf(['practice', 'endless', 'daily', 'song']), calBpm:within(20, 300), meter:v => Object.keys(METERS).includes(v), hands:oneOf([1, 2]),
     poly:bool, polyPick:v => v === 'mix' || POLY_RATIOS.some(r => r.id === v), gap:oneOf(['off', 'bars', 'beat1', 'silent']),
-    sight:bool, focus:bool, freePlay:bool, view:oneOf(['notes', 'count']), clickSound:oneOf(['click', 'wood', 'cow', 'hat', 'beep']),
+    sight:bool, focus:bool, freePlay:bool, view:oneOf(['notes', 'count']), playhead:oneOf(['jump', 'smooth']), clickSound:oneOf(['click', 'wood', 'cow', 'hat', 'beep']),
     hitKit:oneOf(['snare', 'clap', 'rim', 'kit']), songSource:oneOf(['gen', 'song']), songChart:oneOf(['easy', 'normal', 'hard']),
     songDrums:v => isObj(v) && Object.keys(v).length === 3 && ['kick', 'snare', 'hat'].every(k => bool(v[k])), songSens:within(0, 1),
     playerName:v => typeof v === 'string' && v.length <= 16,

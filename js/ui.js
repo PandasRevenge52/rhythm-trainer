@@ -75,12 +75,12 @@ function syncControls() {
   $('#metroVol').value = S.metroVol; $('#metroRead').textContent = Math.round(S.metroVol * 100) + '%';
   $('#offKey').value = S.offsets.key; $('#offMidi').value = S.offsets.midi; $('#offMic').value = S.offsets.mic;
   $('#micSens').value = S.micSens;
-  $('#clickSel').value = S.clickSound; $('#kitSel').value = S.hitKit;
+  $('#clickSel').value = S.clickSound; $('#kitSel').value = S.hitKit; $('#phSel').value = S.playhead;
   lane.classList.toggle('off', !S.lane);
   lane.classList.toggle('two', S.hands === 2);
   // one-line summaries on the collapsed parts of the settings sheet
   $('#sumCustom').textContent = S.level == null ? 'Custom' : `from ${LEVELS[S.level].name}`;
-  $('#sumDisplay').textContent = [S.lane && 'Lane', S.counts && 'Counting'].filter(Boolean).join(' · ') || 'All off';
+  $('#sumDisplay').textContent = [S.lane && 'Lane', S.counts && 'Counting', S.playhead === 'smooth' ? 'Smooth playhead' : 'Jumping playhead'].filter(Boolean).join(' · ');
   $('#sumSounds').textContent = `${CLICK_NAMES[S.clickSound]} · ${KITS[S.hitKit].name}`;
   $('#sumOffsets').textContent = `Keyboard ${S.offsets.key} · MIDI ${S.offsets.midi} · Mic ${S.offsets.mic} ms`;
   $('#level').value = S.level == null ? 'custom' : String(S.level);
@@ -216,6 +216,7 @@ $('#gapSeg').addEventListener('click', e => { const b = e.target.closest('button
 $('#clickSel').innerHTML = Object.entries(CLICK_NAMES).map(([k, n]) => `<option value="${k}">${n}</option>`).join('');
 $('#kitSel').innerHTML = Object.entries(KITS).map(([k, v]) => `<option value="${k}">${v.name}</option>`).join('');
 $('#clickSel').addEventListener('change', e => { S.clickSound = e.target.value; save(); ensureAudio(); click(master, ctx.currentTime + 0.02, true); click(master, ctx.currentTime + 0.4, false); });
+$('#phSel').addEventListener('change', e => { S.playhead = e.target.value; save(); syncControls(); });
 $('#kitSel').addEventListener('change', e => { S.hitKit = e.target.value; save(); ensureAudio(); hitSound(master, ctx.currentTime + 0.02, 0.7, 0); if (S.hitKit === 'kit') hitSound(master, ctx.currentTime + 0.35, 0.7, 1); });
 $('#playSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setPlay(b.dataset.v); });
 $('#barsSel').addEventListener('change', e => { S.bars = +e.target.value; save(); syncControls(); freshPattern(); });

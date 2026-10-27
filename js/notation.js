@@ -259,7 +259,8 @@ function setCur(idx) {
 // frame, so a slow frame never makes it late; the settle is a squash of the bar, so its position never
 // passes the note. crawl = how far towards the next note it creeps (share of the gap), jump = how long the
 // jump takes (s), squash = how much wider the bar gets as it lands (staff units).
-const phVar = {crawl:0.3, jump:0.12, squash:2};
+const PH_JUMP = {crawl:0.3, jump:0.12, squash:2};
+let phVar = PH_JUMP;   // null for the Smooth setting (Settings → Display), checked each frame
 const PH_SETTLE = 0.06;   // s, the squash after landing
 // Notes closer together than this (16ths above about 135 BPM) are a fast run: a jump that short would flicker,
 // so the run glides at a steady speed and the jumping starts again after it.
@@ -347,6 +348,7 @@ function phArrive(nx, now) {
 // next (from phNext): the pass after this one, for the jump into it.
 function movePlayhead(pat, t16, s16, next) {
   const sl = slots[act], tr = sl.trEl;
+  phVar = S.playhead === 'smooth' ? null : PH_JUMP;
   if (t16 == null || t16 < 0) { ph.classList.remove('on'); ph.style.opacity = ''; if (tr) tr.style.opacity = ''; phGhost(null); setCur(-1); return; }
   t16 = Math.min(t16, pat.bars*pat.barLen - 0.001);
   const j = s16 && phVar ? phJump(pat, t16, s16, sl.lay.perRow, next ? next.at : null) : null, at = j ? j.pos : t16;
