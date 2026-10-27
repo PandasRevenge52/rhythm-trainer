@@ -38,32 +38,31 @@ the live site**. Friends use it.
 
 ## Running it
 - Quick look: open `index.html` in a browser (no service worker or multiplayer relay from `file://`).
-- Like GitHub Pages (gzip, caching, ETags): `python3 optimization/tools/ghserve.py ~/rhythm-trainer 8777`,
+- Like GitHub Pages (gzip, caching, ETags): `python3 optimization/tools/ghserve.py . 8777` from the repo,
   then http://127.0.0.1:8777/.
 - On a phone: `optimization/tools/phone-preview.sh <branch>` prints a QR code for a temporary https tunnel
   (`--lan` for plain http on the same Wi-Fi). Ctrl+C stops it.
 
-## Measuring tools (`optimization/`, git-ignored, so on this machine only)
+## Measuring tools (`optimization/`, git-ignored, so on each machine only)
 `optimization/progress.md` is the running handoff log. `optimization/report.md` holds the numbers that must not
-regress (section 0 = the current live baseline). Set up once with `optimization/tools/setup.sh`, then:
+regress (section 0 = the current live baseline). Numbers from different machines aren't comparable, so each machine
+keeps its own baseline. The tools work on macOS and Linux. Set up once with `optimization/tools/setup.sh` (Node
+packages, plus Chrome for Testing in `$WORK/cft`), then:
 ```sh
-cd optimization/tools
-export CFT=$(ls -d /tmp/rt-work/cft/chrome/*/chrome-linux64/chrome | tail -1) WORK=/tmp/rt-work NODE_PATH=$PWD/node_modules
-python3 ghserve.py ~/rhythm-trainer 8777 &                                         # the working tree
+cd optimization/tools && . ./env.sh                  # sets CFT, CHROME_PATH, WORK=/tmp/rt-work, NODE_PATH for this OS
+python3 ghserve.py ../.. 8777 &                      # the working tree
 mkdir -p $WORK/main && git archive main | tar -x -C $WORK/main && python3 ghserve.py $WORK/main 8781 &   # live code, to compare against
 ```
 | Check | Command |
 |---|---|
-| Smoke test (15 checks, both pages) | `node smoke.js http://127.0.0.1:8777` |
-| Lighthouse, median of 3 | `./lh-cft.sh <label> http://127.0.0.1:8777 3` then `node summarize.js $WORK/lhout/<label>` |
-| Trainer key-press latency (INP) | `PLAY_MS=30000 node runtime-cft-3s.js <url> <label> 4` (and `16` for an old phone) |
-| Arcade key-press latency (INP) | `node arcadeinp.js <url> <label> 4` (and `16`) |
-| Frame rate while playing | `node fps.js <url> index\|arcade 4` (and `16`), phone screen |
-| Play both pages, desktop and phone (errors, CSP) | `node playcheck.js <url>` |
-| Multiplayer, every flow | `MODE=basic URL=<url>/arcade.html node mpflows.js`, then `MODE=code`, then `MODE=drop BLOCK=1` |
-| Returning visitor gets the update | `node returning.js` (after a release, against the live site) |
-| Animation declarations parse | `node animcheck.js` |
-| Saves: merge rules, validator fuzzing, `__proto__`, save codes | `node savetest.js` (needs `NODE_PATH` above) |
+| Smoke test (both pages, desktop and phone, errors and CSP) | `node smoke.js http://127.0.0.1:8777` |
+| Lighthouse, median of 3 | `./lh.sh <label> http://127.0.0.1:8777 3` then `node summarize.js $WORK/lhout/<label>` |
+| Trainer key-press latency (INP) | `PLAY_MS=20000 node trainer.js <url> <label> 4 inp` (and `16` for an old phone) |
+| Trainer frame rate while playing | `node trainer.js <url> <label> 4 fps` (and `16`), phone screen |
+
+Not rebuilt yet on the Mac (the originals stayed on the old machine): Arcade INP and frame rate, `playcheck.js`,
+`mpflows.js`, `returning.js`, `animcheck.js`, `savetest.js`, `phone-preview.sh`. `optimization/progress.md` lists
+which ones exist on this machine.
 
 Always compare against `main` measured in the same session, with runs alternating. Absolute numbers drift
 between machines and sessions (`report.md` "Read this first").
