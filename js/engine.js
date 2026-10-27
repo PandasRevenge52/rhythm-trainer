@@ -208,9 +208,10 @@ function tick(now) {
   const ci = $('#countin');
   if (seg.type === 'play') {
     ci.classList.remove('show'); lastCount = -1;
-    movePlayhead(seg.pat, (now - seg.start) / seg.s16, seg.s16);
+    movePlayhead(seg.pat, (now - seg.start) / seg.s16, seg.s16, phNext(seg, run.segments[run.segments.indexOf(seg) + 1]));
   } else {
     movePlayhead(seg.pat, null);
+    phArrive(run.segments[run.segments.indexOf(seg) + 1], now);
     const t16 = (now - seg.start) / seg.s16;
     const beat = t16 >= 0 ? beatAt(seg.pat.meter, Math.min(t16, seg.pat.meter.len - 0.01)).i : -1;
     if (beat >= 0 && beat !== lastCount) {

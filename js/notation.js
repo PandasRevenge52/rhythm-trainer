@@ -201,7 +201,9 @@ function fillSlot(slot, pat) {
   if (!slot.phEl) { slot.phEl = document.createElement('div'); slot.phEl.className = 'ph'; slot.phEl.setAttribute('aria-hidden', 'true'); slot.wrap.appendChild(slot.phEl); }
   // the trail behind the playhead while a long note sounds
   if (!slot.trEl) { slot.trEl = document.createElement('div'); slot.trEl.className = 'ph trail'; slot.trEl.setAttribute('aria-hidden', 'true'); slot.wrap.appendChild(slot.trEl); }
-  slot.phEl.classList.remove('on'); slot.trEl.style.opacity = '';
+  // a second playhead that slides into the first note of the next line (or of this sheet when the music moves on)
+  if (!slot.ghEl) { slot.ghEl = document.createElement('div'); slot.ghEl.className = 'ph'; slot.ghEl.setAttribute('aria-hidden', 'true'); slot.wrap.appendChild(slot.ghEl); }
+  slot.phEl.classList.remove('on'); slot.phEl.style.opacity = slot.trEl.style.opacity = slot.ghEl.style.opacity = '';
   slot.ph = slot.phEl; slot.vbW = W; slot.phH = pat.twoHand ? 110 : 80;
   slot.lay = {perRow};
   slot.svg.classList.remove('fill'); slot.svg.getBoundingClientRect(); slot.svg.classList.add('fill');
@@ -281,23 +283,30 @@ function phStops(pat) {
   return st;
 }
 // Where the playhead shows at time t16 (in 16ths from the start of the line), plus its settle squash
-// (0 to 1) and whether it's resting on a rest.
-function phJump(pat, t16, s16) {
+// (0 to 1) and whether it's resting on a rest. nextAt: when the next pass's first note comes, in this line's 16ths.
+// When the next note is on another line (or in the next pass), it creeps no further than the end of its own
+// line, and the jump becomes a fade out there while a second playhead slides into the next note (wrap).
+function phJump(pat, t16, s16, perRow = Infinity, nextAt = null) {
   const st = phStops(pat);
   if (!phVar || !st.length || t16 < st[0].t16) return {pos:t16, sq:0, rest:false, a:null, p:null};
   let i = st.length - 1; while (i > 0 && st[i].t16 > t16) i--;
-  const a = st[i], b = st[i + 1], r = {pos:a.t16, sq:0, rest:a.rest, a, p:null};   // p: how far through the jump
+  const a = st[i], b = st[i + 1] || (nextAt != null ? {t16:nextAt, next:true} : null);
+  const r = {pos:a.t16, sq:0, rest:a.rest, a, b, p:null, wrap:false};   // p: how far through the jump
   if (stillMQ.matches) return r;
   const glided = i > 0 && (a.t16 - st[i - 1].t16) * s16 < PH_FAST;   // arrived by gliding: no settle
   const sinceLand = (t16 - a.t16) * s16;
   r.sq = !glided && sinceLand < PH_SETTLE ? 1 - sinceLand / PH_SETTLE : 0;
-  if (b && (b.t16 - a.t16) * s16 < PH_FAST) { r.pos = t16; return r; }
-  if (!b) { r.pos = a.t16 + phVar.crawl * (t16 - a.t16); return r; }   // last note of the line: crawl only
+  if (b && !b.next && (b.t16 - a.t16) * s16 < PH_FAST) { r.pos = t16; return r; }
+  if (!b) { r.pos = a.t16 + phVar.crawl * (t16 - a.t16); return r; }   // the last note of the run: crawl only
+  const rowOf = t => Math.floor(Math.floor(t / pat.barLen) / perRow);
+  r.wrap = b.next || rowOf(b.t16) !== rowOf(a.t16);
   const span = b.t16 - a.t16, J = Math.min(phVar.jump, 0.45 * span * s16) / s16, tJ = b.t16 - J;
-  const crawlTo = a.t16 + phVar.crawl * span;
+  let crawlTo = a.t16 + phVar.crawl * span;
+  if (r.wrap) crawlTo = Math.max(a.t16, Math.min(crawlTo, (rowOf(a.t16) + 1) * perRow * pat.barLen - 0.6));
   if (t16 < tJ) { r.pos = a.t16 + (crawlTo - a.t16) * (t16 - a.t16) / (tJ - a.t16); return r; }
   r.p = (t16 - tJ) / J; r.sq = 0;
-  r.pos = crawlTo + (b.t16 - crawlTo) * eOut(r.p);   // eOut(1) = 1: on the note at its beat
+  // eOut(1) = 1: on the note at its beat; a wrap only drifts on a little while it fades
+  r.pos = r.wrap ? crawlTo + 0.3 * eOut(r.p) : crawlTo + (b.t16 - crawlTo) * eOut(r.p);
   return r;
 }
 // Where a point in time (in 16ths from the start of the line) sits on a slot's staff, in staff units, and the
@@ -310,18 +319,49 @@ function phXY(sl, pat, at) {
 // A bar w staff units wide and h tall, centred on (x, y), as a transform for one of the 1px layers.
 const phBox = (p, x, y, w, h) => `translate(${(p.left + (x - w / 2) * p.k).toFixed(2)}px,${((y - h / 2) * p.k).toFixed(2)}px) scale(${(w * p.k).toFixed(3)},${(h * p.k).toFixed(3)})`;
 const TRAIL_MIN = 4.5;   // notes longer than a quarter get a trail
+// The second playhead: shown in one sheet at a time, sliding 12 staff units into its note as p goes 0 to 1.
+let phGhostEl = null;
+function phGhost(sl, pat, at, p) {
+  const el = sl && sl.ghEl;
+  if (phGhostEl && phGhostEl !== el) phGhostEl.style.opacity = '';
+  phGhostEl = el;
+  if (!el) return;
+  const q = phXY(sl, pat, at);
+  el.style.transform = phBox(q, q.x - 12 * (1 - eOut(p)), q.T - (pat.twoHand ? 36 : 28) + sl.phH / 2, 3, sl.phH);
+  el.style.opacity = (0.55 * p).toFixed(3);
+}
+// While playing: where the next pass starts, for the jump into it (in this line's 16ths), and which sheet shows it.
+function phNext(seg, nx) {
+  if (!nx || nx.type !== 'play') return null;
+  return {pat:nx.pat, at:(nx.start - seg.start + phStops(nx.pat)[0].t16 * nx.s16) / seg.s16,
+    sl:nx.pat === shown.pat ? slots[act] : slots[1 - act].pat === nx.pat ? slots[1 - act] : null};
+}
+// The count-in: a playhead slides into the first note as beat 1 arrives.
+function phArrive(nx, now) {
+  if (!nx || nx.type !== 'play' || !phVar || stillMQ.matches || nx.pat !== shown.pat) return phGhost(null);
+  const first = phStops(nx.pat)[0], p = 1 - (nx.start + first.t16 * nx.s16 - now) / phVar.jump;
+  if (p <= 0 || p >= 1) return phGhost(null);
+  phGhost(slots[act], nx.pat, first.t16, p);
+}
 // s16 (seconds per 16th) is given while playing; without it the playhead moves steadily.
-function movePlayhead(pat, t16, s16) {
+// next (from phNext): the pass after this one, for the jump into it.
+function movePlayhead(pat, t16, s16, next) {
   const sl = slots[act], tr = sl.trEl;
-  if (t16 == null || t16 < 0) { ph.classList.remove('on'); if (tr) tr.style.opacity = ''; setCur(-1); return; }
+  if (t16 == null || t16 < 0) { ph.classList.remove('on'); ph.style.opacity = ''; if (tr) tr.style.opacity = ''; phGhost(null); setCur(-1); return; }
   t16 = Math.min(t16, pat.bars*pat.barLen - 0.001);
-  const j = s16 && phVar ? phJump(pat, t16, s16) : null, at = j ? j.pos : t16;
+  const j = s16 && phVar ? phJump(pat, t16, s16, sl.lay.perRow, next ? next.at : null) : null, at = j ? j.pos : t16;
   const p = phXY(sl, pat, at), midY = p.T - (pat.twoHand ? 36 : 28) + sl.phH / 2;
   // the settle: wider and a little shorter for a moment after landing, kept centred on the note
   const sq = j ? j.sq * phVar.squash : 0;
   ph.style.transform = phBox(p, p.x, midY, 3 + sq, sl.phH * (1 - 0.04 * sq));
   if (!ph.classList.contains('on')) ph.classList.add('on');
   ph.classList.toggle('rest', !!(j && j.rest));   // dimmed while it sits on a rest
+  // a wrap: this playhead fades out at the end of its line while the second one slides into the next note
+  const wrap = j && j.wrap && j.p != null;
+  ph.style.opacity = wrap ? ((j.rest ? 0.28 : 0.55) * (1 - j.p)).toFixed(3) : '';
+  if (wrap && j.b.next) phGhost(next.sl, next.pat, phStops(next.pat)[0].t16, j.p);
+  else if (wrap) phGhost(sl, pat, j.b.t16, j.p);
+  else phGhost(null);
   // a faint line from a long note's head to the playhead while the note sounds, fading as the playhead jumps on
   const a = j && j.a, held = a && !a.rest && a.dur > TRAIL_MIN && t16 < a.t16 + a.dur;
   const h0 = held && phXY(sl, pat, a.t16), len = held && h0.row === p.row ? p.x - h0.x : 0;
