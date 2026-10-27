@@ -257,6 +257,9 @@ function setCur(idx) {
 const PH_VARS = {a:{crawl:0.15, jump:0.09, squash:1}, b:{crawl:0.3, jump:0.12, squash:2}, c:{crawl:0.45, jump:0.15, squash:3}};
 const phKey = (location.search.match(/[?&]ph=(a|b|c|smooth)\b/) || [])[1] || 'b', phVar = PH_VARS[phKey];
 const PH_SETTLE = 0.06;   // s, the squash after landing
+// Notes closer together than this (16ths above about 135 BPM) are a fast run: a jump that short would flicker,
+// so the run glides at a steady speed and the jumping starts again after it.
+const PH_FAST = 0.11;
 // Every written note and rest of both hands, in time order, worked out once per rhythm.
 const stopCache = new WeakMap();
 function phStops(pat) {
@@ -280,7 +283,9 @@ function phJump(pat, t16, s16) {
   let i = st.length - 1; while (i > 0 && st[i].t16 > t16) i--;
   const a = st[i], b = st[i + 1];
   if (stillMQ.matches) return {pos:a.t16, sq:0, rest:a.rest};
-  const sinceLand = (t16 - a.t16) * s16, sq = sinceLand < PH_SETTLE ? 1 - sinceLand / PH_SETTLE : 0;
+  const glided = i > 0 && (a.t16 - st[i - 1].t16) * s16 < PH_FAST;   // arrived by gliding: no settle
+  const sinceLand = (t16 - a.t16) * s16, sq = !glided && sinceLand < PH_SETTLE ? 1 - sinceLand / PH_SETTLE : 0;
+  if (b && (b.t16 - a.t16) * s16 < PH_FAST) return {pos:t16, sq, rest:a.rest};
   if (!b) return {pos:a.t16 + phVar.crawl * (t16 - a.t16), sq, rest:a.rest};   // last note of the line: crawl only
   const span = b.t16 - a.t16, J = Math.min(phVar.jump, 0.45 * span * s16) / s16, tJ = b.t16 - J;
   const crawlTo = a.t16 + phVar.crawl * span;
