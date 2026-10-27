@@ -208,7 +208,7 @@ function tick(now) {
   const ci = $('#countin');
   if (seg.type === 'play') {
     ci.classList.remove('show'); lastCount = -1;
-    movePlayhead(seg.pat, (now - seg.start) / seg.s16);
+    movePlayhead(seg.pat, (now - seg.start) / seg.s16, seg.s16);
   } else {
     movePlayhead(seg.pat, null);
     const t16 = (now - seg.start) / seg.s16;

@@ -273,6 +273,7 @@ kbd{font:600 11px ui-monospace,monospace;background:var(--chip);border-radius:5p
 .nocounts .cnt,.nocounts .ampdash{display:none}
 .ph{position:absolute;left:0;top:0;width:1px;height:1px;background:var(--accent);opacity:0;transform-origin:0 0;will-change:transform;pointer-events:none}
 .ph.on{opacity:.55}
+.ph.on.rest{opacity:.28}
 .tup{fill:var(--ink);font:italic 700 12px Georgia,serif;text-anchor:middle}
 .tupb{color:var(--ink);opacity:.7}
 @media (max-width:640px){

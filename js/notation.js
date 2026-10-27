@@ -250,15 +250,57 @@ function setCur(idx) {
   if (evEls[idx]) evEls[idx].classList.add('cur');
   shown.cur = idx;
 }
-function movePlayhead(pat, t16) {
+// Jumping playhead: it sits on each note (or rest), creeps a little way towards the next one while the note
+// lasts, then jumps and lands exactly on the next note's beat. Worked out from the audio-clock time every
+// frame, so a slow frame never makes it late; the settle is a squash of the bar, so its position never
+// passes the note. Variations for review: ?ph=a|b|c (b without one), ?ph=smooth for the old steady scroll.
+const PH_VARS = {a:{crawl:0.15, jump:0.09, squash:1}, b:{crawl:0.3, jump:0.12, squash:2}, c:{crawl:0.45, jump:0.15, squash:3}};
+const phKey = (location.search.match(/[?&]ph=(a|b|c|smooth)\b/) || [])[1] || 'b', phVar = PH_VARS[phKey];
+const PH_SETTLE = 0.06;   // s, the squash after landing
+// Every written note and rest of both hands, in time order, worked out once per rhythm.
+const stopCache = new WeakMap();
+function phStops(pat) {
+  let st = stopCache.get(pat);
+  if (!st) {
+    st = [];
+    for (const e of [...pat.events].sort((a, b) => a.t16 - b.t16)) {
+      const last = st[st.length - 1];
+      if (last && Math.abs(last.t16 - e.t16) < 0.01) { if (!e.rest) last.rest = false; continue; }   // two hands on one spot: one stop
+      st.push({t16:e.t16, rest:!!e.rest});
+    }
+    stopCache.set(pat, st);
+  }
+  return st;
+}
+// Where the playhead shows at time t16 (in 16ths from the start of the line), plus its settle squash
+// (0 to 1) and whether it's resting on a rest.
+function phJump(pat, t16, s16) {
+  const st = phStops(pat);
+  if (!phVar || !st.length || t16 < st[0].t16) return {pos:t16, sq:0, rest:false};
+  let i = st.length - 1; while (i > 0 && st[i].t16 > t16) i--;
+  const a = st[i], b = st[i + 1];
+  if (stillMQ.matches) return {pos:a.t16, sq:0, rest:a.rest};
+  const sinceLand = (t16 - a.t16) * s16, sq = sinceLand < PH_SETTLE ? 1 - sinceLand / PH_SETTLE : 0;
+  if (!b) return {pos:a.t16 + phVar.crawl * (t16 - a.t16), sq, rest:a.rest};   // last note of the line: crawl only
+  const span = b.t16 - a.t16, J = Math.min(phVar.jump, 0.45 * span * s16) / s16, tJ = b.t16 - J;
+  const crawlTo = a.t16 + phVar.crawl * span;
+  if (t16 < tJ) return {pos:a.t16 + (crawlTo - a.t16) * (t16 - a.t16) / (tJ - a.t16), sq, rest:a.rest};
+  return {pos:crawlTo + (b.t16 - crawlTo) * eOut((t16 - tJ) / J), sq:0, rest:a.rest};   // eOut(1) = 1: on the note at its beat
+}
+// s16 (seconds per 16th) is given while playing; without it the playhead moves steadily.
+function movePlayhead(pat, t16, s16) {
   if (t16 == null || t16 < 0) { ph.classList.remove('on'); setCur(-1); return; }
   t16 = Math.min(t16, pat.bars*pat.barLen - 0.001);
-  const bar = Math.floor(t16/pat.barLen), row = Math.floor(bar/lay.perRow), col = bar % lay.perRow;
-  const x = HEAD + col*barW(pat) + (t16 - bar*pat.barLen + 0.5)*U, T = row*rowH(pat) + STAFF_TOP;
+  const j = s16 && phVar ? phJump(pat, t16, s16) : null, at = j ? j.pos : t16;
+  const bar = Math.floor(at/pat.barLen), row = Math.floor(bar/lay.perRow), col = bar % lay.perRow;
+  const x = HEAD + col*barW(pat) + (at - bar*pat.barLen + 0.5)*U, T = row*rowH(pat) + STAFF_TOP;
   // staff units to pixels: the SVG is scaled to fit and centred in its line
   const sl = slots[act], [sw] = sizeOf(sl.svg), [ww] = sizeOf(sl.wrap), k = sw / sl.vbW;
-  ph.style.transform = `translate(${((ww - sw) / 2 + (x - 1.5) * k).toFixed(2)}px,${((T - (pat.twoHand ? 36 : 28)) * k).toFixed(2)}px) scale(${(3 * k).toFixed(3)},${(sl.phH * k).toFixed(3)})`;
+  // the settle: wider and a little shorter for a moment after landing, kept centred on the note
+  const sq = j ? j.sq * phVar.squash : 0, w = 3 + sq, h = sl.phH * (1 - 0.04 * sq);
+  ph.style.transform = `translate(${((ww - sw) / 2 + (x - w / 2) * k).toFixed(2)}px,${((T - (pat.twoHand ? 36 : 28) + (sl.phH - h) / 2) * k).toFixed(2)}px) scale(${(w * k).toFixed(3)},${(h * k).toFixed(3)})`;
   if (!ph.classList.contains('on')) ph.classList.add('on');
+  ph.classList.toggle('rest', !!(j && j.rest));   // dimmed while it sits on a rest
   const ev = pat.events.find(e => e.voice === 0 && t16 >= e.t16 && t16 < e.t16 + e.dur);
   setCur(ev ? ev.idx : -1);
   sightMask(t16);
