@@ -116,6 +116,9 @@ const Saves = (() => {
   const oneOf = list => v => list.includes(v);
   const bool = v => typeof v === 'boolean', within = (lo, hi) => v => typeof v === 'number' && Number.isFinite(v) && v >= lo && v <= hi;
   const set = (list, max) => v => Array.isArray(v) && v.length <= max && new Set(v).size === v.length && v.every(x => list.includes(x));
+  // your own keys: null (the defaults), or known rows each with up to 4 key codes, no key on two rows
+  const keymap = ids => v => v === null || (isObj(v) && Object.keys(v).every(k => ids.includes(k)) && (seen => Object.values(v).every(a =>
+    Array.isArray(a) && a.length <= 4 && a.every(c => typeof c === 'string' && /^[A-Za-z0-9]{1,24}$/.test(c) && !seen.has(c) && seen.add(c))))(new Set()));
   const RULES = {
     level:v => v === null || (Number.isInteger(v) && v >= 0 && v < LEVELS.length), bpm:within(20, 400), bars:oneOf([1, 2, 4]),
     notes:set([8, 4, 2, 1], 4), rests:set([8, 4, 2, 1], 4), extras:set(EXTRAS.map(e => e.id), EXTRAS.length), restChance:within(0, 1),
@@ -126,6 +129,7 @@ const Saves = (() => {
     hitKit:oneOf(['snare', 'clap', 'rim', 'kit']), songSource:oneOf(['gen', 'song']), songChart:oneOf(['easy', 'normal', 'hard']),
     songDrums:v => isObj(v) && Object.keys(v).length === 3 && ['kick', 'snare', 'hat'].every(k => bool(v[k])), songSens:within(0, 1),
     playerName:v => typeof v === 'string' && v.length <= 16,
+    hitKeys:keymap(Object.keys(HIT_KEYS_DEFAULT)), kitKeys:keymap(Object.keys(KIT_KEYS_DEFAULT)),
     'arcade.diff':oneOf(DIFFS), 'arcade.src':v => typeof v === 'string' && SRC.test(v), 'arcade.speed':within(1, 4), 'arcade.down':bool,
     'arcade.noFail':bool, 'arcade.hitSound':bool, 'arcade.random':bool,
     'arcade.keys':v => Array.isArray(v) && v.length === 4 && new Set(v).size === 4 && v.every(k => typeof k === 'string' && /^[A-Za-z0-9]{1,24}$/.test(k)),
