@@ -129,7 +129,7 @@ const Kit = (() => {
     // the hi-hat: its cymbals play closed; Open and Foot are buttons of their own under it
     const a = ART.hh;
     s += box('art hh', 'hhc', 'hh', place('hhc', 'hh'), `<span class="draw" data-draw="hh">${svgOf(a.w, a.h, DRAW.hh(a))}</span><span class="flash"></span><span class="kname"><b>Hi-hat</b></span>`);
-    for (const id of ['hhc', 'hho', 'hhp', 'xstick']) s += box('pill', id, PIECES[id].art || '', placePill(id), `<b>${PIECES[id].short}</b>${chips(id)}`);
+    for (const id of ['hhc', 'hho', 'hhp', 'xstick']) s += box('kpill', id, PIECES[id].art || '', placePill(id), `<b>${PIECES[id].short}</b>${chips(id)}`);
     return s;
   }
 
@@ -139,7 +139,7 @@ const Kit = (() => {
   function show(id) {
     if (!root) return;
     const btn = root.querySelector(`.kp.art[data-id="${id}"]`) || root.querySelector(`.kp.art[data-art="${PIECES[id].art}"]`);
-    const pill = root.querySelector(`.kp.pill[data-id="${id}"]`);
+    const pill = root.querySelector(`.kp.kpill[data-id="${id}"]`);
     for (const el of [btn, pill]) { const f = el && el.querySelector('.flash'); if (f && f.animate) f.animate([{opacity:0.28}, {opacity:0}], {duration:220, easing:'ease-out'}); }
     if (pill && pill.animate) pill.animate([{opacity:0.55}, {opacity:1}], {duration:160, easing:'ease-out'});
     const d = btn && btn.querySelector('.draw');
