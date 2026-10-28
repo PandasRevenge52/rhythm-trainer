@@ -19,10 +19,13 @@ const Kit = (() => {
     xstick:{name:'Cross-stick', short:'Rim', src:'xstick', pan:-0.08, art:'snare'},
     kick:  {name:'Kick', src:'kick', pan:0},
   };
-  const KEYS = {kick:['Space', 'KeyB'], snare:['KeyF', 'KeyJ'], xstick:['KeyG'], hhc:['KeyD', 'KeyK'], hho:['KeyE', 'KeyI'], hhp:['KeyA'],
-    t1:['KeyT'], t2:['KeyY'], t3:['KeyU'], crash:['KeyW'], ride:['KeyO']};
-  const keyName = c => c === 'Space' ? 'Space' : c.replace(/^Key|^Digit/, '');
-  const byKey = {}; for (const [id, ks] of Object.entries(KEYS)) for (const k of ks) byKey[k] = id;
+  // your keys (the Keys button; saved as S.kitKeys, null = the defaults in data.js)
+  const keysNow = () => ({...Object.fromEntries(Object.keys(KIT_KEYS_DEFAULT).map(id => [id, []])), ...(S.kitKeys || KIT_KEYS_DEFAULT)});
+  let KEYS = keysNow(), byKey = {};
+  const rebuild = () => { byKey = {}; for (const [id, ks] of Object.entries(KEYS)) for (const k of ks) byKey[k] = id; };
+  rebuild();
+  const keyName = keyLabel;   // data.js
+  const ORDER = ['kick', 'snare', 'xstick', 'hhc', 'hho', 'hhp', 't1', 't2', 't3', 'crash', 'ride'];
   const JUDGED = new Set(['snare', 'xstick']);   // while a rhythm plays, these are the hits it's graded on
   const KEY_VEL = 0.8, MAX_VOICES = 4;
 
@@ -116,8 +119,8 @@ const Kit = (() => {
   }
   const pos = (L, id) => { const v = L[id]; return v.length === 3 ? `${(v[0] / L.W * 100).toFixed(2)}%,${(v[1] / L.H * 100).toFixed(2)}%,${(ART[id].w * v[2] / L.W * 100).toFixed(2)}%` : `${(v[0] / L.W * 100).toFixed(2)}%,${(v[1] / L.H * 100).toFixed(2)}%`; };
   function markup() {
-    const chips = id => `<span class="keys">${KEYS[id].map(k => `<kbd>${keyName(k)}</kbd>`).join('')}</span>`;
-    const box = (cls, id, artId, style, inner) => `<button type="button" class="kp ${cls}" data-id="${id}" data-art="${artId || ''}" style="${style}" aria-label="${PIECES[id].name}, ${KEYS[id].map(keyName).join(' or ')}">${inner}</button>`;
+    const chips = id => `<span class="keys" data-keys="${id}">${chipsHTML(id)}</span>`;
+    const box = (cls, id, artId, style, inner) => `<button type="button" class="kp ${cls}" data-id="${id}" data-art="${artId || ''}" style="${style}" aria-label="${label(id)}">${inner}</button>`;
     const place = (id, artId = id) => { const [wx, wy, ww] = pos(LAYOUT.wide, artId).split(','), [nx, ny, nw] = pos(LAYOUT.narrow, artId).split(','); return `--x:${wx};--y:${wy};--w:${ww};--nx:${nx};--ny:${ny};--nw:${nw};--ar:${ART[artId].w}/${ART[artId].h}`; };
     const placePill = id => { const [wx, wy] = pos(LAYOUT.wide, id).split(','), [nx, ny] = pos(LAYOUT.narrow, id).split(','); return `--x:${wx};--y:${wy};--nx:${nx};--ny:${ny}`; };
     let s = `<div class="kit-bg-wide">${stands(LAYOUT.wide)}</div><div class="kit-bg-narrow">${stands(LAYOUT.narrow)}</div>`;
@@ -131,6 +134,16 @@ const Kit = (() => {
     s += box('art hh', 'hhc', 'hh', place('hhc', 'hh'), `<span class="draw" data-draw="hh">${svgOf(a.w, a.h, DRAW.hh(a))}</span><span class="flash"></span><span class="kname"><b>Hi-hat</b></span>`);
     for (const id of ['hhc', 'hho', 'hhp', 'xstick']) s += box('kpill', id, PIECES[id].art || '', placePill(id), `<b>${PIECES[id].short}</b>${chips(id)}`);
     return s;
+  }
+
+  const chipsHTML = id => KEYS[id].map(k => `<kbd>${esc(keyName(k))}</kbd>`).join('');
+  const label = id => `${PIECES[id].name}, ${KEYS[id].length ? KEYS[id].map(k => spokenKey(k)).join(' or ') : 'no key'}`;
+  const spokenKey = k => ({'←':'Left arrow', '→':'Right arrow', '↑':'Up arrow', '↓':'Down arrow'})[keyName(k)] || keyName(k);
+  // after the keys change: the keys printed on each piece, and what screen readers hear
+  function refreshKeys() {
+    if (!root) return;
+    root.querySelectorAll('[data-keys]').forEach(el => el.innerHTML = chipsHTML(el.dataset.keys));
+    root.querySelectorAll('.kp').forEach(b => b.setAttribute('aria-label', b.classList.contains('hh') ? label('hhc') : label(b.dataset.id)));
   }
 
   // ---- hits: the sound first, then the picture ----
@@ -159,19 +172,38 @@ const Kit = (() => {
   let open = false;
   function build() {
     root = $('#kit');
-    root.innerHTML = `<div class="kit-stage">${markup()}</div>` +
+    root.innerHTML = `<div class="kit-bar"><button type="button" id="kitKeysBtn" aria-expanded="false" aria-controls="kitKeymap">Keys</button></div>` +
+      `<div class="kit-stage">${markup()}</div><div class="kit-keymap" id="kitKeymap" hidden></div>` +
       `<p class="kit-foot"><span id="kitState" aria-live="polite"></span><span class="kit-credit">Drum sounds: <a href="https://archive.org/details/SalamanderDrumkit" target="_blank" rel="noopener">Salamander Drumkit</a> by Alexander Holm, <a href="https://creativecommons.org/licenses/by-sa/3.0/" target="_blank" rel="noopener">CC BY-SA 3.0</a></span></p>`;
     const stage = root.querySelector('.kit-stage');
-    // taps and clicks: pointerdown, so a tap sounds without waiting for the click
+    // taps and clicks: pointerdown, so a tap sounds without waiting for the click. While choosing keys, picking a
+    // piece waits for its key instead.
     stage.addEventListener('pointerdown', e => {
       const b = e.target.closest('.kp'); if (!b || e.button > 0) return;
-      e.preventDefault(); hit(b.dataset.id, e, e.pointerType === 'mouse' ? 'key' : 'touch');
+      e.preventDefault();
+      if (km) km.wait(b.dataset.id); else hit(b.dataset.id, e, e.pointerType === 'mouse' ? 'key' : 'touch');
     });
     // a focused piece plays with Enter or Space (and that key doesn't also play its own drum)
     stage.addEventListener('keydown', e => {
       const b = e.target.closest('.kp'); if (!b || !/^(Enter|NumpadEnter|Space)$/.test(e.code)) return;
-      e.preventDefault(); e.stopPropagation(); if (!e.repeat) hit(b.dataset.id, e, 'key');
+      e.preventDefault(); e.stopPropagation();
+      if (e.repeat) return;
+      if (km) km.wait(b.dataset.id); else hit(b.dataset.id, e, 'key');
     });
+    $('#kitKeysBtn').addEventListener('click', () => km ? km.close() : openKeys());
+  }
+  // ---- choosing keys (js/keymap.js) ----
+  let km = null;
+  async function openKeys() {
+    const btn = $('#kitKeysBtn'), host = $('#kitKeymap'), stage = root.querySelector('.kit-stage');
+    try { await openKeymap(); } catch (e) { toast("Couldn't open the keys. Check your connection."); return; }
+    host.hidden = false; btn.setAttribute('aria-expanded', 'true'); stage.classList.add('mapping');
+    km = Keymap.open(host, {targets:ORDER.map(id => ({id, name:PIECES[id].name})), map:KEYS, defaults:KIT_KEYS_DEFAULT, max:4, noun:'drum key',
+      intro:'Pick a drum on the kit (or Add key in its row), then press the key you want.',
+      warn:typeof SHORTCUTS !== 'undefined' ? SHORTCUTS : {}, warnNote:'While the kit is open, %k will play the %t drum instead.',
+      save:m => { S.kitKeys = JSON.stringify(m) === JSON.stringify(KIT_KEYS_DEFAULT) ? null : m; save(); KEYS = keysNow(); rebuild(); refreshKeys(); },
+      onWait:id => root.querySelectorAll('.kp').forEach(b => b.classList.toggle('waiting', !!id && (b.dataset.id === id || (b.classList.contains('hh') && id === 'hhc')))),
+      done:() => { km = null; host.hidden = true; btn.setAttribute('aria-expanded', 'false'); stage.classList.remove('mapping'); btn.focus(); }});
   }
   async function setOpen(on) {
     open = on;
@@ -179,7 +211,7 @@ const Kit = (() => {
     root.hidden = !on;
     $('#kitBtn').setAttribute('aria-pressed', String(on));
     document.body.classList.toggle('kit-on', on);
-    if (!on) return;
+    if (!on) { if (km) km.close(); return; }
     const st = $('#kitState');
     if (!buf) {
       st.textContent = 'Loading the drums…';
@@ -195,5 +227,5 @@ const Kit = (() => {
     if (!e.repeat) hit(id, e, 'key');
     return true;
   }
-  return {toggle:() => setOpen(!open), setOpen, key, play, get open() { return open; }, get format() { return used; }, PIECES, KEYS};
+  return {toggle:() => setOpen(!open), setOpen, key, play, get open() { return open; }, get format() { return used; }, PIECES, get keys() { return KEYS; }};
 })();

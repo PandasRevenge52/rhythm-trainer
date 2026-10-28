@@ -2,6 +2,13 @@
    the cymbals so green/blue/amber/red still only ever mean timing. Pieces move with transform and opacity only. */
 :root{--kit-shell:#1b1d20; --kit-hoop:#5a5d63; --kit-head:#2b2e32; --kit-brass:#8f7a52; --kit-brass-hi:#b39b6c; --kit-brass-lo:#5e5037}
 #kit{margin-top:10px;border-top:1px solid var(--line);padding-top:10px}
+.kit-bar{display:flex;justify-content:flex-end;margin-bottom:2px}
+.kit-bar button{font-size:13px;padding:6px 12px}
+.kit-bar button[aria-expanded=true]{border-color:var(--ink)}
+.kit-keymap{max-width:860px;margin:10px auto 0}
+/* choosing keys: picking a piece waits for its key; the waiting piece is outlined */
+.kit-stage.mapping .kp{cursor:pointer}
+.kp.waiting{outline:2px dashed var(--ink);outline-offset:3px}
 .kit-stage{position:relative;aspect-ratio:640/430;max-width:860px;margin:0 auto;container-type:inline-size;touch-action:manipulation;user-select:none;-webkit-user-select:none}
 .kit-bg-wide,.kit-bg-narrow{position:absolute;inset:0}
 .kit-bg-narrow{display:none}
