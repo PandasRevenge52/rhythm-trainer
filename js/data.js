@@ -600,6 +600,8 @@ const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;', '<':'&lt;', '
 const loaded = {};
 const loadJS = src => loaded[src] || (loaded[src] = new Promise((res, rej) => { const e = document.createElement('script'); e.src = src; e.onload = res; e.onerror = () => { delete loaded[src]; rej(); }; document.head.appendChild(e); }));
 const loadAll = list => list.reduce((p, src) => p.then(() => loadJS(src)), Promise.resolve());
+const loadCSS = href => loaded[href] || (loaded[href] = new Promise(res => { const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = href; l.onload = l.onerror = res; document.head.appendChild(l); }));
+const openKit = () => Promise.all([loadJS('js/kit.js'), loadCSS('css/kit.css')]).then(() => Kit.toggle());   // drum mode
 const openTransfer = code => loadAll(['js/sync.js', 'js/transfer.js']).then(() => Xfer.open(code));   // "Back up or move progress"
 const fmtTime = s => `${Math.floor(s/60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 const near = (a, b) => Math.abs(a - b) < 1e-6;

@@ -293,6 +293,7 @@ $('#setBtn').addEventListener('click', () => setDrawer(!drawerOpen()));
 $('#sideClose').addEventListener('click', () => setDrawer(false));
 scrim.addEventListener('click', () => setDrawer(false));
 $('#inputChip').addEventListener('click', () => setDrawer(true, '#grpInput'));
+$('#kitBtn').addEventListener('click', () => openKit().catch(() => toast("Couldn't open the drum kit. Check your connection.")));
 addEventListener('resize', () => { if (drawerOpen()) { const m = drawerModal(); scrim.hidden = !m; drawer.setAttribute('aria-modal', String(m)); document.body.classList.toggle('side-docked', !m); } });
 // keep Tab inside the sheet while it's a modal overlay
 drawer.addEventListener('keydown', e => {
@@ -338,6 +339,8 @@ window.addEventListener('keydown', e => {
     }
     return;
   }
+  // with the drum kit open, its keys play drums (the snare's are graded like hit keys while a rhythm plays)
+  if (typeof Kit !== 'undefined' && Kit.key(e)) return;
   if (isHit) { e.preventDefault(); if (!e.repeat) hit(); return; }
   if (e.repeat) return;
   switch (e.code) {
