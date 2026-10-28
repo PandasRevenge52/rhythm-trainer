@@ -210,7 +210,8 @@ function hitKbds(join = ', ', last = ' or ') {
 }
 function idleText() {
   const m = hitKeyMap(), hands = m.left[0] && m.right[0] ? `Left hand ${kbd(m.left[0])}, right hand ${kbd(m.right[0])}.` : `Hit with ${hitKbds()}.`;
-  const keys = touchOnly() ? 'Tap the staff or lane to hit.' : S.hands === 2 ? hands : `Hit with ${hitKbds()}.`;
+  const kit = typeof Kit !== 'undefined' && Kit.open;   // the drum kit's own keys and drum
+  const keys = kit ? Kit.hint() : touchOnly() ? 'Tap the staff or lane to hit.' : S.hands === 2 ? hands : `Hit with ${hitKbds()}.`;
   if (S.play === 'endless') return `Survive as long as you can. Misses and hits on rests cost a life, and a clean pass wins one back. It speeds up every pass.` +
     (P.endlessBest ? ` Best: <b>${P.endlessBest.toLocaleString()}</b>` : '');
   if (S.play === 'daily') {

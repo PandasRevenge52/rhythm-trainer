@@ -2,7 +2,9 @@
    the cymbals so green/blue/amber/red still only ever mean timing. Pieces move with transform and opacity only. */
 :root{--kit-shell:#1b1d20; --kit-hoop:#5a5d63; --kit-head:#2b2e32; --kit-brass:#8f7a52; --kit-brass-hi:#b39b6c; --kit-brass-lo:#5e5037}
 #kit{margin-top:10px;border-top:1px solid var(--line);padding-top:10px}
-.kit-bar{display:flex;justify-content:flex-end;margin-bottom:2px}
+.kit-bar{display:flex;justify-content:flex-end;align-items:center;flex-wrap:wrap;gap:8px 12px;margin-bottom:2px}
+.kit-rhythm{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+.kit-rhythm select{font-size:13px}
 .kit-bar button{font-size:13px;padding:6px 12px}
 .kit-bar button[aria-expanded=true]{border-color:var(--ink)}
 .kit-keymap{max-width:860px;margin:10px auto 0}

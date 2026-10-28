@@ -130,6 +130,7 @@ const Saves = (() => {
     songDrums:v => isObj(v) && Object.keys(v).length === 3 && ['kick', 'snare', 'hat'].every(k => bool(v[k])), songSens:within(0, 1),
     playerName:v => typeof v === 'string' && v.length <= 16,
     hitKeys:keymap(Object.keys(HIT_KEYS_DEFAULT)),
+    kitRhythm:oneOf(['snare', 'kick', 'hh', 't1', 't2', 't3', 'crash', 'ride']),
     kitKeys:keymap(['kick', 'snare', 'xstick', 'hhc', 'hho', 'hhp', 't1', 't2', 't3', 'crash', 'ride']),   // the drum kit's pieces (js/kit.js)
     'arcade.diff':oneOf(DIFFS), 'arcade.src':v => typeof v === 'string' && SRC.test(v), 'arcade.speed':within(1, 4), 'arcade.down':bool,
     'arcade.noFail':bool, 'arcade.hitSound':bool, 'arcade.random':bool,

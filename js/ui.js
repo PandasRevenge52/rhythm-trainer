@@ -338,8 +338,9 @@ window.addEventListener('keydown', e => {
   // a focused control in the settings sheet keeps its own keys (Space toggles, arrows adjust)
   if (drawer.contains(e.target) && e.target.matches('button,input,select,summary')) return;
   if (e.ctrlKey || e.metaKey || e.altKey) return;
-  // a focused button on the key screen or the kit's bar takes Enter and Space itself (not Start, not a drum)
-  if (!modalOpen() && e.target.closest && e.target.closest('.km, .kit-bar') && /^(Enter|NumpadEnter|Space)$/.test(e.code)) return;
+  // a focused button on the key screen or the kit's bar takes Enter and Space itself (not Start, not a drum), and the
+  // kit's Rhythm on list every key (arrows and letters choose in it)
+  if (!modalOpen() && e.target.closest && (e.target.closest('.kit-bar select') || (e.target.closest('.km, .kit-bar') && /^(Enter|NumpadEnter|Space)$/.test(e.code)))) return;
   const isHit = e.code in HIT_KEYS, hit = () => onHit({timeStamp:e.timeStamp, src:'key', lane:S.hands === 2 ? HIT_KEYS[e.code] : null});
   if (modalOpen()) {
     // a focused button, tab or link in the dialog takes Enter and Space itself, and a text field every key

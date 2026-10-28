@@ -28,7 +28,12 @@ const Kit = (() => {
   rebuild();
   const keyName = keyLabel;   // data.js
   const ORDER = ['kick', 'snare', 'xstick', 'hhc', 'hho', 'hhp', 't1', 't2', 't3', 'crash', 'ride'];
-  const JUDGED = new Set(['snare', 'xstick']);   // while a rhythm plays, these are the hits it's graded on
+  // the drum a rhythm is played on (S.kitRhythm, chosen on the kit): while a rhythm plays only its hits are graded,
+  // the other drums play freely, and Listen plays the rhythm on it
+  const RHYTHM = {snare:{name:'Snare', ids:['snare', 'xstick']}, kick:{name:'Kick', ids:['kick']}, hh:{name:'Hi-hat', ids:['hhc', 'hho', 'hhp']},
+    t1:{name:'High tom', ids:['t1']}, t2:{name:'Mid tom', ids:['t2']}, t3:{name:'Floor tom', ids:['t3']}, crash:{name:'Crash', ids:['crash']}, ride:{name:'Ride', ids:['ride']}};
+  const rhythm = () => RHYTHM[S.kitRhythm] || RHYTHM.snare;
+  const judged = id => rhythm().ids.includes(id);
   // MIDI drum kits and pads (General MIDI drum notes, plus the edge notes some e-kits send for the hi-hat)
   const MIDI_NOTES = {35:'kick', 36:'kick', 38:'snare', 40:'snare', 39:'snare', 37:'xstick', 42:'hhc', 22:'hhc', 44:'hhp', 46:'hho', 26:'hho',
     48:'t1', 50:'t1', 45:'t2', 47:'t2', 41:'t3', 43:'t3', 49:'crash', 57:'crash', 52:'crash', 55:'crash', 51:'ride', 59:'ride', 53:'ride'};
@@ -63,14 +68,15 @@ const Kit = (() => {
   }
   // vel 0..1 (MIDI velocity / 127; keys and taps use KEY_VEL). Soft hits use the softer recordings, and every hit's
   // volume follows its velocity on a gentle curve, as the Salamander mapping does.
-  function play(id, vel = KEY_VEL, t = ctx.currentTime) {
+  // out: where to send it (the trainer's Listen sends it through its own output, so Stop silences it)
+  function play(id, vel = KEY_VEL, t = ctx.currentTime, out = null) {
     const p = PIECES[id]; if (!buf || !p) return;
     const set = takes[p.src], layer = set.soft && vel < 0.55 ? 'soft' : 'hard', list = set[layer] || set.soft, key = p.src + layer;
     const i = next[key] = ((next[key] ?? Math.floor(Math.random() * list.length)) + 1 + (list.length > 2 && Math.random() < 0.3 ? 1 : 0)) % list.length;
     const [s, len] = list[i], n = ctx.createBufferSource(), g = ctx.createGain();
     n.buffer = buf; if (p.rate) n.playbackRate.value = p.rate;
     g.gain.value = Math.min(1.3, (vel / KEY_VEL) ** 1.5) * 10 ** ((Math.random() * 3 - 1.5) / 20);   // ±1.5 dB at random
-    n.connect(g).connect(pans[id]);
+    n.connect(g).connect(out || pans[id]);
     n.start(t, s, len);
     const v = {n, g, end:t + len / (p.rate || 1)};
     // no more than a few at once per piece: the oldest fades out (fast rolls stay light on phones)
@@ -170,9 +176,19 @@ const Kit = (() => {
   // a hit from a key, a tap or MIDI: sound now; while a rhythm plays, snare hits are graded like any hit
   function hit(id, ev, src, vel = KEY_VEL) {
     play(id, vel);
-    if (JUDGED.has(id)) onHit({timeStamp:ev.timeStamp, src, lane:null, quiet:true});
+    if (judged(id)) onHit({timeStamp:ev.timeStamp, src, lane:null, quiet:true});
     show(id, vel);
   }
+  // audio.js asks first for the rhythm's own sound (Listen, taps on the lane): the rhythm drum, and with two hands the
+  // second voice on the kick (on the snare when the rhythm is on the kick)
+  function rhythmSound(dest, t, v, voice) {
+    if (!open || !buf) return false;
+    const main = rhythm().ids[0], id = voice === 1 ? (main === 'kick' ? 'snare' : 'kick') : main;
+    play(id, v, t, dest);
+    return true;
+  }
+  const hint = () => { const r = rhythm(), ks = [...new Set(r.ids.flatMap(id => KEYS[id]))].slice(0, 3).map(k => `<kbd>${esc(keyName(k))}</kbd>`);
+    return `Play the rhythm on the ${r.name.toLowerCase()}${ks.length ? ` (${ks.join(' ')})` : ''}. The other drums play freely.`; };
   // input.js asks first for every MIDI note-on: true if the open kit played it (velocity 1-127 sets how loud)
   function midi(note, velocity, ev) {
     const id = open && buf && MIDI_NOTES[note]; if (!id) return false;
@@ -184,7 +200,8 @@ const Kit = (() => {
   let open = false;
   function build() {
     root = $('#kit');
-    root.innerHTML = `<div class="kit-bar"><button type="button" id="kitKeysBtn" aria-expanded="false" aria-controls="kitKeymap">Keys</button></div>` +
+    root.innerHTML = `<div class="kit-bar"><label class="kit-rhythm">Rhythm on <select id="kitRhythm">${Object.entries(RHYTHM).map(([k, r]) => `<option value="${k}">${r.name}</option>`).join('')}</select></label>` +
+      `<button type="button" id="kitKeysBtn" aria-expanded="false" aria-controls="kitKeymap">Keys</button></div>` +
       `<div class="kit-stage">${markup()}</div><div class="kit-keymap" id="kitKeymap" hidden></div>` +
       `<p class="kit-foot"><span id="kitState" aria-live="polite"></span><span class="kit-credit">Drum sounds: <a href="https://archive.org/details/SalamanderDrumkit" target="_blank" rel="noopener">Salamander Drumkit</a> by Alexander Holm, <a href="https://creativecommons.org/licenses/by-sa/3.0/" target="_blank" rel="noopener">CC BY-SA 3.0</a></span></p>`;
     const stage = root.querySelector('.kit-stage');
@@ -203,6 +220,8 @@ const Kit = (() => {
       if (km) km.wait(b.dataset.id); else hit(b.dataset.id, e, 'key');
     });
     $('#kitKeysBtn').addEventListener('click', () => km ? km.close() : openKeys());
+    const sel = $('#kitRhythm'); sel.value = RHYTHM[S.kitRhythm] ? S.kitRhythm : 'snare';
+    sel.addEventListener('change', () => { S.kitRhythm = sel.value; save(); renderIdle(); });
   }
   // ---- choosing keys (js/keymap.js) ----
   let km = null;
@@ -223,6 +242,7 @@ const Kit = (() => {
     root.hidden = !on;
     $('#kitBtn').setAttribute('aria-pressed', String(on));
     document.body.classList.toggle('kit-on', on);
+    if (!run) renderIdle();
     if (!on) { if (km) km.close(); return; }
     const st = $('#kitState');
     if (!buf) {
@@ -230,6 +250,7 @@ const Kit = (() => {
       try { await load(); } catch (e) { st.textContent = "Couldn't load the drum sounds. Check your connection and open the kit again."; return; }
     }
     st.textContent = 'Play with the keys on each drum, or tap the drums.';
+    if (!run) renderIdle();
   }
   // the page's key handler asks first: true if this key is a drum (and it has been played)
   function key(e) {
@@ -239,5 +260,5 @@ const Kit = (() => {
     if (!e.repeat) hit(id, e, 'key');
     return true;
   }
-  return {toggle:() => setOpen(!open), setOpen, key, midi, play, get open() { return open; }, get format() { return used; }, PIECES, get keys() { return KEYS; }};
+  return {toggle:() => setOpen(!open), setOpen, key, midi, play, rhythmSound, hint, get open() { return open; }, get format() { return used; }, PIECES, get keys() { return KEYS; }};
 })();
