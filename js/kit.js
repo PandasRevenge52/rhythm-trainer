@@ -19,7 +19,9 @@ const Kit = (() => {
     xstick:{name:'Cross-stick', short:'Rim', src:'xstick', pan:-0.08, art:'snare'},
     kick:  {name:'Kick', src:'kick', pan:0},
   };
-  // your keys (the Keys button; saved as S.kitKeys, null = the defaults in data.js)
+  // your keys (the Keys button; saved as S.kitKeys, null = these defaults)
+  const KIT_KEYS_DEFAULT = {kick:['Space', 'KeyB'], snare:['KeyF', 'KeyJ'], xstick:['KeyG'], hhc:['KeyD', 'KeyK'], hho:['KeyE', 'KeyI'], hhp:['KeyA'],
+    t1:['KeyT'], t2:['KeyY'], t3:['KeyU'], crash:['KeyW'], ride:['KeyO']};
   const keysNow = () => ({...Object.fromEntries(Object.keys(KIT_KEYS_DEFAULT).map(id => [id, []])), ...(S.kitKeys || KIT_KEYS_DEFAULT)});
   let KEYS = keysNow(), byKey = {};
   const rebuild = () => { byKey = {}; for (const [id, ks] of Object.entries(KEYS)) for (const k of ks) byKey[k] = id; };
@@ -196,11 +198,11 @@ const Kit = (() => {
   let km = null;
   async function openKeys() {
     const btn = $('#kitKeysBtn'), host = $('#kitKeymap'), stage = root.querySelector('.kit-stage');
-    try { await openKeymap(); } catch (e) { toast("Couldn't open the keys. Check your connection."); return; }
+    try { await Promise.all([openKeymap(), loadJS('js/trainerkeys.js')]); } catch (e) { toast("Couldn't open the keys. Check your connection."); return; }
     host.hidden = false; btn.setAttribute('aria-expanded', 'true'); stage.classList.add('mapping');
     km = Keymap.open(host, {targets:ORDER.map(id => ({id, name:PIECES[id].name})), map:KEYS, defaults:KIT_KEYS_DEFAULT, max:4, noun:'drum key',
       intro:'Pick a drum on the kit (or Add key in its row), then press the key you want.',
-      warn:typeof SHORTCUTS !== 'undefined' ? SHORTCUTS : {}, warnNote:'While the kit is open, %k will play the %t instead.',
+      warn:SHORTCUTS, warnNote:'While the kit is open, %k will play the %t instead.',
       save:m => { S.kitKeys = JSON.stringify(m) === JSON.stringify(KIT_KEYS_DEFAULT) ? null : m; save(); KEYS = keysNow(); rebuild(); refreshKeys(); },
       onWait:id => root.querySelectorAll('.kp').forEach(b => b.classList.toggle('waiting', !!id && (b.dataset.id === id || (b.classList.contains('hh') && id === 'hhc')))),
       done:() => { km = null; host.hidden = true; btn.setAttribute('aria-expanded', 'false'); stage.classList.remove('mapping'); btn.focus(); }});

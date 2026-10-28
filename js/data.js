@@ -603,10 +603,9 @@ const loadAll = list => list.reduce((p, src) => p.then(() => loadJS(src)), Promi
 const loadCSS = href => loaded[href] || (loaded[href] = new Promise(res => { const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = href; l.onload = l.onerror = res; document.head.appendChild(l); }));
 const openKit = () => Promise.all([loadJS('js/kit.js'), loadCSS('css/kit.css')]).then(() => Kit.toggle());   // drum mode
 // your own keys (chosen on js/keymap.js's screen): the settings hold null until changed, so a new default still reaches
-// everyone who never changed theirs. Codes are layout-free (KeyF is the key where F is on a US keyboard).
+// everyone who never changed theirs. Codes are layout-free (KeyF is the key where F is on a US keyboard). The drum
+// kit's defaults are in js/kit.js.
 const HIT_KEYS_DEFAULT = {any:['Space'], left:['KeyF', 'KeyD'], right:['KeyJ', 'KeyK']};
-const KIT_KEYS_DEFAULT = {kick:['Space', 'KeyB'], snare:['KeyF', 'KeyJ'], xstick:['KeyG'], hhc:['KeyD', 'KeyK'], hho:['KeyE', 'KeyI'], hhp:['KeyA'],
-  t1:['KeyT'], t2:['KeyY'], t3:['KeyU'], crash:['KeyW'], ride:['KeyO']};
 const openKeymap = () => Promise.all([loadJS('js/keymap.js'), loadCSS('css/keymap.css')]);
 const KEY_SYM = {Space:'Space', ArrowLeft:'←', ArrowRight:'→', ArrowUp:'↑', ArrowDown:'↓', BracketLeft:'[', BracketRight:']', Semicolon:';', Quote:"'",
   Comma:',', Period:'.', Slash:'/', Backslash:'\\', Minus:'-', Equal:'=', Backquote:'`', IntlBackslash:'\\', Enter:'Enter', NumpadEnter:'Enter', Escape:'Esc', Tab:'Tab'};
