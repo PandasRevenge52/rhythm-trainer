@@ -29,6 +29,9 @@ const Kit = (() => {
   const keyName = keyLabel;   // data.js
   const ORDER = ['kick', 'snare', 'xstick', 'hhc', 'hho', 'hhp', 't1', 't2', 't3', 'crash', 'ride'];
   const JUDGED = new Set(['snare', 'xstick']);   // while a rhythm plays, these are the hits it's graded on
+  // MIDI drum kits and pads (General MIDI drum notes, plus the edge notes some e-kits send for the hi-hat)
+  const MIDI_NOTES = {35:'kick', 36:'kick', 38:'snare', 40:'snare', 39:'snare', 37:'xstick', 42:'hhc', 22:'hhc', 44:'hhp', 46:'hho', 26:'hho',
+    48:'t1', 50:'t1', 45:'t2', 47:'t2', 41:'t3', 43:'t3', 49:'crash', 57:'crash', 52:'crash', 55:'crash', 51:'ride', 59:'ride', 53:'ride'};
   const KEY_VEL = 0.8, MAX_VOICES = 4;
 
   // ---- sound ----
@@ -151,11 +154,12 @@ const Kit = (() => {
   // ---- hits: the sound first, then the picture ----
   const still = () => stillMQ.matches;
   let root = null;
-  function show(id) {
+  function show(id, vel = KEY_VEL) {
     if (!root) return;
     const btn = root.querySelector(`.kp.art[data-id="${id}"]`) || root.querySelector(`.kp.art[data-art="${PIECES[id].art}"]`);
     const pill = root.querySelector(`.kp.kpill[data-id="${id}"]`);
-    for (const el of [btn, pill]) { const f = el && el.querySelector('.flash'); if (f && f.animate) f.animate([{opacity:0.28}, {opacity:0}], {duration:220, easing:'ease-out'}); }
+    const peak = (0.1 + 0.22 * Math.min(1, vel)).toFixed(2);   // harder hits light up more
+    for (const el of [btn, pill]) { const f = el && el.querySelector('.flash'); if (f && f.animate) f.animate([{opacity:peak}, {opacity:0}], {duration:220, easing:'ease-out'}); }
     if (pill && pill.animate) pill.animate([{opacity:0.55}, {opacity:1}], {duration:160, easing:'ease-out'});
     const d = btn && btn.querySelector('.draw');
     if (!d || !d.animate || still()) return;
@@ -163,11 +167,17 @@ const Kit = (() => {
     d.animate(cym ? [{transform:'rotate(0)'}, {transform:'rotate(3.5deg)'}, {transform:'rotate(-2deg)'}, {transform:'rotate(0.8deg)'}, {transform:'rotate(0)'}]
       : [{transform:'scale(1)'}, {transform:'scale(0.965)'}, {transform:'scale(1)'}], {duration:cym ? 480 : 150, easing:'cubic-bezier(.2,.8,.2,1)'});
   }
-  // a hit from a key, a tap or (later) MIDI: sound now; while a rhythm plays, snare hits are graded like any hit
+  // a hit from a key, a tap or MIDI: sound now; while a rhythm plays, snare hits are graded like any hit
   function hit(id, ev, src, vel = KEY_VEL) {
     play(id, vel);
     if (JUDGED.has(id)) onHit({timeStamp:ev.timeStamp, src, lane:null, quiet:true});
-    show(id);
+    show(id, vel);
+  }
+  // input.js asks first for every MIDI note-on: true if the open kit played it (velocity 1-127 sets how loud)
+  function midi(note, velocity, ev) {
+    const id = open && buf && MIDI_NOTES[note]; if (!id) return false;
+    hit(id, ev, 'midi', velocity / 127);
+    return true;
   }
 
   // ---- the panel ----
@@ -229,5 +239,5 @@ const Kit = (() => {
     if (!e.repeat) hit(id, e, 'key');
     return true;
   }
-  return {toggle:() => setOpen(!open), setOpen, key, play, get open() { return open; }, get format() { return used; }, PIECES, get keys() { return KEYS; }};
+  return {toggle:() => setOpen(!open), setOpen, key, midi, play, get open() { return open; }, get format() { return used; }, PIECES, get keys() { return KEYS; }};
 })();

@@ -6,6 +6,7 @@ const LOW_NOTES = new Set([35, 36, 41, 43, 45, 47]);
 function midiMessage(e) {
   const [st, note, vel] = e.data;
   if ((st & 0xf0) !== 0x90 || !vel) return;   // note-on with velocity only
+  if (typeof Kit !== 'undefined' && Kit.midi(note, vel, e)) { midiFlash(); return; }   // the open drum kit plays it, as loud as it was hit
   onHit({timeStamp:e.timeStamp, src:'midi', lane:S.hands === 2 ? (LOW_NOTES.has(note) ? 1 : 0) : null});
   midiFlash();
 }
