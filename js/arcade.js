@@ -18,7 +18,6 @@ A$.keys = [...A$.keys]; A$.keyNames = [...A$.keyNames];   // own copies, so rebi
 let KEYS = {};
 const buildKeys = () => { KEYS = {ArrowLeft:0, ArrowDown:1, ArrowUp:2, ArrowRight:3}; A$.keys.forEach((c, i) => KEYS[c] = i); };
 buildKeys();
-const RESERVED = ['Escape', 'Enter', 'NumpadEnter', 'Space', 'Tab'];   // pause, start and skip keep their keys
 const DIRS = [-90, 180, 0, 90];   // arrow rotation per lane: ← ↓ ↑ →
 // Every colour drawn on the field comes from the page's colour tokens (css/app.css), so the canvas always matches the menus.
 const TOK = (() => { const cs = getComputedStyle(document.documentElement); return n => cs.getPropertyValue('--' + n).trim(); })();
@@ -984,34 +983,33 @@ $('#acApply').addEventListener('click', () => {
 $('#acPad').addEventListener('pointerdown', e => { e.preventDefault(); if (AC.on) acTap(e.timeStamp); else acRun(); });
 
 // ---------- keys ----------
-// rebinding: click a lane's key in Options, then press the key you want (Esc cancels)
-let binding = null;
-const keyName = e => e.key && e.key.length === 1 && e.key !== ' ' ? e.key.toUpperCase() : e.code.replace(/^Key|^Digit/, '').replace(/^Numpad/, 'Num ').replace(/(Left|Right)$/, ' $1');
+// your lane keys: Options → Keys → Change… opens the same screen as the trainer's hit keys and the drum kit
+// (js/keymap.js). One key per lane; a key already on another lane swaps over, so every lane keeps one.
+const LANE_ROWS = [['0', 'Left lane ←'], ['1', 'Down lane ↓'], ['2', 'Up lane ↑'], ['3', 'Right lane →']];
 function renderKeys() {
-  document.querySelectorAll('#aKeys button[data-lane]').forEach(b => {
-    const i = +b.dataset.lane;
-    b.classList.toggle('on', binding === i);
-    b.querySelector('b').textContent = binding === i ? '…' : A$.keyNames[i];
-  });
-  $('#aKeysHint').textContent = binding != null ? 'Press a key for this lane (Esc to cancel)' : '';
-  $('#aKeysMenu').innerHTML = A$.keyNames.map(k => `<kbd>${esc(k)}</kbd>`).join(' ');
+  const caps = A$.keyNames.map(k => `<kbd>${esc(k)}</kbd>`).join(' ');
+  $('#aKeysMenu').innerHTML = caps; $('#aKeysNow').innerHTML = caps;
 }
-$('#aKeys').addEventListener('click', e => {
-  const b = e.target.closest('button'); if (!b) return;
-  if (b.id === 'aKeysReset') { A$.keys = [...DEFAULT_KEYS]; A$.keyNames = [...DEFAULT_KEY_NAMES]; binding = null; save(); buildKeys(); renderKeys(); return; }
-  binding = binding === +b.dataset.lane ? null : +b.dataset.lane; renderKeys();
+let akm = null;
+$('#aKeysEdit').addEventListener('click', () => {
+  if (akm) return akm.close();
+  openKeymap().then(() => {
+    const host = $('#aKeymap'), btn = $('#aKeysEdit');
+    host.hidden = false; btn.setAttribute('aria-expanded', 'true');
+    const asMap = (keys) => Object.fromEntries(keys.map((c, i) => [String(i), [c]]));
+    const never = Object.fromEntries([['Space', 'Space skips the intro'], ['ArrowLeft'], ['ArrowDown'], ['ArrowUp'], ['ArrowRight']].map(([c, why]) => [c, why || 'The arrow keys always play their own lanes']));
+    akm = Keymap.open(host, {targets:LANE_ROWS.map(([id, name]) => ({id, name})), map:asMap(A$.keys), defaults:asMap(DEFAULT_KEYS), max:1, min:1, noun:'lane key', never,
+      intro:'Choose Change on a lane, then press the key you want. The arrow keys always work too.',
+      save:(m, names) => {
+        const old = Object.fromEntries(A$.keys.map((c, i) => [c, A$.keyNames[i]]));
+        A$.keys = LANE_ROWS.map(([id]) => m[id][0]);
+        A$.keyNames = A$.keys.map((c, i) => names[c] || old[c] || (c === DEFAULT_KEYS[i] ? DEFAULT_KEY_NAMES[i] : keyLabel(c)));
+        save(); buildKeys(); renderKeys();
+      },
+      done:() => { akm = null; host.hidden = true; btn.setAttribute('aria-expanded', 'false'); btn.focus(); }});
+  }).catch(() => $('#aKeysNow').textContent = "Couldn't open the keys. Check your connection.");
 });
 addEventListener('keydown', e => {
-  if (binding != null) {
-    e.preventDefault(); e.stopPropagation();
-    if (e.code === 'Escape') { binding = null; renderKeys(); return; }
-    if (RESERVED.includes(e.code)) { $('#aKeysHint').textContent = `${keyName(e)} is taken (pause / start / skip). Pick another key.`; return; }
-    // a key already on another lane swaps over, so no two lanes share a key
-    const other = A$.keys.indexOf(e.code);
-    if (other >= 0 && other !== binding) { A$.keys[other] = A$.keys[binding]; A$.keyNames[other] = A$.keyNames[binding]; }
-    A$.keys[binding] = e.code; A$.keyNames[binding] = keyName(e);
-    binding = null; save(); buildKeys(); renderKeys(); return;
-  }
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (state === 'cal') {
     if (e.code in KEYS || e.code === 'Space') { e.preventDefault(); if (!e.repeat && AC.on) acTap(e.timeStamp); }
