@@ -317,14 +317,36 @@ for (const el of [$('#paper'), lane]) el.addEventListener('pointerdown', e => {
   onHit({timeStamp:e.timeStamp, src:'touch', lane:S.hands === 2 && el === lane ? (lower ? 1 : 0) : null});
 });
 
-// Hit keys: F/D = left hand, J/K = right hand, Space = whichever hand has the next note.
-const HIT_KEYS = {Space:null, KeyF:1, KeyD:1, KeyJ:0, KeyK:0};
+// Hit keys (Settings → Input → Hit keys; by default F/D = left hand, J/K = right hand, Space = whichever hand has the
+// next note): key code -> lane (1 left, 0 right, null either).
+const HAND_LANE = {any:null, left:1, right:0};
+let HIT_KEYS = {};
+function buildHitKeys(idle = true) {
+  const m = hitKeyMap(); HIT_KEYS = {};
+  for (const h in HAND_LANE) for (const c of m[h] || []) HIT_KEYS[c] = HAND_LANE[h];
+  const list = a => a.map(kbd).join(' ') || 'none';
+  $('#hitKeysSum').innerHTML = `${list(m.any)} · left ${list(m.left)} · right ${list(m.right)}`;
+  $('#keysHit').innerHTML = Object.keys(HIT_KEYS).map(kbd).join(' ');
+  $('#keysHands').innerHTML = `${list(m.left)} left · ${list(m.right)} right`;
+  if (idle && !run) renderIdle();
+}
+// the trainer's other keys, named when a hit key or drum key would take one over
+const SHORTCUTS = {KeyL:'Listen', KeyN:'New rhythm', KeyC:'counting on and off', KeyH:'two hands on and off', KeyM:'the learning path', KeyV:'notes or counting',
+  KeyP:'your profile', Digit1:'Practice', Digit2:'Endless', Digit3:'Daily', Digit4:'Song', BracketLeft:'easier', BracketRight:'harder', ArrowUp:'faster', ArrowDown:'slower'};
+$('#hitKeysBtn').addEventListener('click', () => openKeymap().then(() => {
+  showModal(`<h2>Hit keys</h2><p class="muted">With one hand, every hit key plays. With two hands, Left and Right keys play that hand, and Any hand plays whichever hand has the next note.</p><div id="kmHost"></div>`, 'keys');
+  Keymap.open($('#kmHost'), {targets:[{id:'any', name:'Any hand'}, {id:'left', name:'Left hand'}, {id:'right', name:'Right hand'}],
+    map:hitKeyMap(), defaults:HIT_KEYS_DEFAULT, max:4, minTotal:1, noun:'hit key', warn:SHORTCUTS, warnNote:'As a hit key it will play %t instead.',
+    save:m => { S.hitKeys = JSON.stringify(m) === JSON.stringify(HIT_KEYS_DEFAULT) ? null : m; save(); buildHitKeys(); }, done:closeModal});
+}).catch(() => toast("Couldn't open the keys. Check your connection.")));
 window.addEventListener('keydown', e => {
   if (e.code === 'Escape' && drawerOpen() && !modalOpen()) { e.preventDefault(); setDrawer(false); return; }
   if (e.target.type === 'number') { if (e.key === 'Enter') e.target.blur(); return; }
   // a focused control in the settings sheet keeps its own keys (Space toggles, arrows adjust)
   if (drawer.contains(e.target) && e.target.matches('button,input,select,summary')) return;
   if (e.ctrlKey || e.metaKey || e.altKey) return;
+  // a focused button on the key screen or the kit's bar takes Enter and Space itself (not Start, not a drum)
+  if (!modalOpen() && e.target.closest && e.target.closest('.km, .kit-bar') && /^(Enter|NumpadEnter|Space)$/.test(e.code)) return;
   const isHit = e.code in HIT_KEYS, hit = () => onHit({timeStamp:e.timeStamp, src:'key', lane:S.hands === 2 ? HIT_KEYS[e.code] : null});
   if (modalOpen()) {
     // a focused button, tab or link in the dialog takes Enter and Space itself, and a text field every key
@@ -370,6 +392,7 @@ addEventListener('resize', () => { if (narrow() !== wasNarrow) { wasNarrow = nar
 
 // ---------- start up ----------
 readColors();
+buildHitKeys(false);
 if (S.play === 'daily') buildDaily();
 pattern = S.play === 'daily' ? daily.pats[0] : newPattern();
 syncControls();

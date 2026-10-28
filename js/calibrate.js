@@ -11,7 +11,7 @@ function openCal() {
   if (run) stop(true);
   const offs = Object.entries(S.offsets).map(([k, v]) => `${SRC_NAMES[k]} ${v} ms`).join(' · ');
   showModal(`<h2>Latency calibration</h2>
-    <p class="muted">Tap on every click with the input you play with: <kbd>Space</kbd>/<kbd>F</kbd>/<kbd>J</kbd>, the circle, a MIDI pad, or claps into the microphone. It counts you in with 4 clicks, then you tap along to 12.</p>
+    <p class="muted">Tap on every click with the input you play with: ${hitKbds('/', '/')}, the circle, a MIDI pad, or claps into the microphone. It counts you in with 4 clicks, then you tap along to 12.</p>
     <div class="field"><div class="name">Click speed</div><div class="chips" id="calSpeed"><button data-v="50">Slow</button><button data-v="60">Medium</button><button data-v="80">Fast</button></div></div>
     <div class="calPad" id="calPad"><div class="ring lead" id="calRing"></div><div class="calNum" id="calNum">Ready<small>press Start</small></div></div>
     <div class="calStrip" id="calStrip"><em style="left:0%;transform:none">−250 ms</em><em style="left:50%">on the click</em><em style="left:100%;transform:translateX(-100%)">+250 ms</em></div>
