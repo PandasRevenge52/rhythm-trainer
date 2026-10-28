@@ -31,4 +31,7 @@
 - Works offline once loaded, and can be installed like an app.
 - Built with plain HTML, CSS and JavaScript: no framework and no build step.
 
+## Credits
+- Drum samples: [Salamander Drumkit](https://archive.org/details/SalamanderDrumkit) by Alexander Holm, CC BY-SA 3.0. The adapted samples in `sounds/kit/` stay under CC BY-SA 3.0 (see [`sounds/kit/LICENSE.md`](sounds/kit/LICENSE.md)). That licence covers only those sample files, not the rest of the project.
+
 Made by Kaeson.

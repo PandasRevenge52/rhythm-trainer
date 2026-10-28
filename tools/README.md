@@ -34,3 +34,18 @@ tools/make-charts --force ~/Music    # redo everything
 
 The `charts` folder is small and safe to commit, so other computers get the charts with `git pull`
 without running the tool.
+
+# Drum mode samples
+
+`sounds/kit/` holds the drum mode's sounds: takes from the **Salamander Drumkit by Alexander Holm** (CC BY-SA
+3.0), cut down and compressed into one file (`kit.webm`, Opus, and `kit.m4a`, HE-AAC, for browsers without
+Opus), with `kit.json` listing where each take starts. Only those sample files are under CC BY-SA
+(`sounds/kit/LICENSE.md`). The full Salamander download stays out of the repo. To rebuild the pack:
+
+```sh
+curl -LO https://archive.org/download/SalamanderDrumkit/salamanderDrumkit.tar.bz2   # 388 MB, MD5 af8e2067668a7f438e7d981877fb771f
+mkdir salamander && tar -xjf salamanderDrumkit.tar.bz2 -C salamander
+node tools/make-kit.js salamander          # needs ffmpeg with libopus (FFMPEG=/path/to/ffmpeg to pick one)
+```
+
+The takes, lengths and levels are set in `PIECES` at the top of `tools/make-kit.js`.
