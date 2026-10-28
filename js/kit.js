@@ -28,6 +28,7 @@ const Kit = (() => {
 
   // ---- sound ----
   let buf = null, takes = null, bus = null, loading = null, used = '';
+  const pans = {};   // one panner per piece, made once, so a hit only makes its source and gain
   const next = {}, voices = {}, ringing = [];
   // Codecs add a delay at the start (Opus about none, HE-AAC 66 ms in some browsers), so it's measured once on the
   // first take, then each take's real first sample is found near where it should be.
@@ -36,12 +37,13 @@ const Kit = (() => {
     const on = (a, b) => { a = Math.max(0, Math.round(a * r)); b = Math.round(b * r); let peak = 0; for (let k = a; k < b; k++) peak = Math.max(peak, Math.abs(d[k] || 0)); let i = a; while (i < b && Math.abs(d[i]) < peak * 0.05) i++; return i / r; };
     const first = Math.min(...Object.values(takes).flatMap(o => Object.values(o).flat().map(t => t[0])));
     const shift = on(first - 0.02, first + 0.2) - first;
-    for (const id in takes) for (const L in takes[id]) takes[id][L] = takes[id][L].map(([s, len]) => [Math.max(0, on(s + shift - 0.015, s + shift + 0.03) - 0.002), len]);
+    for (const id in takes) for (const L in takes[id]) takes[id][L] = takes[id][L].map(([s, len]) => [Math.max(0, on(s + shift - 0.015, s + shift + 0.03) - 0.0005), len]);   // 0.5 ms before the hit
   }
   function load() {
     return loading || (loading = (async () => {
       ensureAudio();
       bus = ctx.createGain(); bus.gain.value = 0.9; bus.connect(master);
+      for (const [id, p] of Object.entries(PIECES)) { if (ctx.createStereoPanner) { pans[id] = ctx.createStereoPanner(); pans[id].pan.value = p.pan; pans[id].connect(bus); } else pans[id] = bus; }
       const get = async f => { const r = await fetch('sounds/kit/' + f); if (!r.ok) throw new Error(r.status); return r; };
       takes = (await (await get('kit.json')).json()).takes;
       try { buf = await ctx.decodeAudioData(await (await get('kit.webm')).arrayBuffer()); used = 'Opus'; }
@@ -57,10 +59,10 @@ const Kit = (() => {
     const p = PIECES[id]; if (!buf || !p) return;
     const set = takes[p.src], layer = set.soft && vel < 0.55 ? 'soft' : 'hard', list = set[layer] || set.soft, key = p.src + layer;
     const i = next[key] = ((next[key] ?? Math.floor(Math.random() * list.length)) + 1 + (list.length > 2 && Math.random() < 0.3 ? 1 : 0)) % list.length;
-    const [s, len] = list[i], n = ctx.createBufferSource(), g = ctx.createGain(), pan = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
+    const [s, len] = list[i], n = ctx.createBufferSource(), g = ctx.createGain();
     n.buffer = buf; if (p.rate) n.playbackRate.value = p.rate;
     g.gain.value = Math.min(1.3, (vel / KEY_VEL) ** 1.5) * 10 ** ((Math.random() * 3 - 1.5) / 20);   // ±1.5 dB at random
-    if (pan) { pan.pan.value = p.pan; n.connect(g).connect(pan).connect(bus); } else n.connect(g).connect(bus);
+    n.connect(g).connect(pans[id]);
     n.start(t, s, len);
     const v = {n, g, end:t + len / (p.rate || 1)};
     // no more than a few at once per piece: the oldest fades out (fast rolls stay light on phones)
