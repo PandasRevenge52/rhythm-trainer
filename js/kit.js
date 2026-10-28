@@ -200,7 +200,7 @@ const Kit = (() => {
     host.hidden = false; btn.setAttribute('aria-expanded', 'true'); stage.classList.add('mapping');
     km = Keymap.open(host, {targets:ORDER.map(id => ({id, name:PIECES[id].name})), map:KEYS, defaults:KIT_KEYS_DEFAULT, max:4, noun:'drum key',
       intro:'Pick a drum on the kit (or Add key in its row), then press the key you want.',
-      warn:typeof SHORTCUTS !== 'undefined' ? SHORTCUTS : {}, warnNote:'While the kit is open, %k will play the %t drum instead.',
+      warn:typeof SHORTCUTS !== 'undefined' ? SHORTCUTS : {}, warnNote:'While the kit is open, %k will play the %t instead.',
       save:m => { S.kitKeys = JSON.stringify(m) === JSON.stringify(KIT_KEYS_DEFAULT) ? null : m; save(); KEYS = keysNow(); rebuild(); refreshKeys(); },
       onWait:id => root.querySelectorAll('.kp').forEach(b => b.classList.toggle('waiting', !!id && (b.dataset.id === id || (b.classList.contains('hh') && id === 'hhc')))),
       done:() => { km = null; host.hidden = true; btn.setAttribute('aria-expanded', 'false'); stage.classList.remove('mapping'); btn.focus(); }});
