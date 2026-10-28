@@ -1,6 +1,6 @@
 'use strict';
 // ---------- drum mode: a drum kit to play ----------
-// Loaded only when someone opens the kit, with the samples in sounds/kit/.
+// Loaded only when someone opens the kit (openKit() in data.js), with css/kit.css and the samples in sounds/kit/.
 // Sounds: the Salamander Drumkit by Alexander Holm (CC BY-SA 3.0, sounds/kit/LICENSE.md), one compressed file of
 // takes listed in kit.json. Each hit plays the next take of its piece, a little louder or softer at random, so
 // repeats don't sound like a machine; a closed or foot hi-hat cuts off a ringing open one.
@@ -71,5 +71,127 @@ const Kit = (() => {
   }
   function fade(v, t, tc) { try { v.g.gain.setTargetAtTime(0, t, tc); v.n.stop(t + tc * 8); } catch (e) {} }
 
-  return {load, play, PIECES, KEYS, get format() { return used; }};
+  // ---- the drawing (front view) ----
+  // Every piece is a button holding its own small drawing (w×h art units), placed at x, y and scaled by s in the wide
+  // layout (640×430) and the phone layout (360×640). Moving a whole button with transform/opacity is cheap; the
+  // stands and floor are one still drawing behind them.
+  const ART = {
+    crash: {w:180, h:84}, ride:{w:196, h:84}, hh:{w:116, h:56},
+    t1:{w:100, h:96}, t2:{w:104, h:98}, t3:{w:130, h:146}, snare:{w:116, h:70}, kick:{w:200, h:200},
+  };
+  const LAYOUT = {
+    wide:   {W:640, H:430, crash:[58, 52, 1], ride:[408, 76, 1], hh:[12, 178, 1], hhc:[8, 242], hho:[8, 274], hhp:[24, 378], t1:[212, 146, 1], t2:[326, 146, 1],
+             t3:[440, 236, 1], snare:[108, 244, 1], xstick:[96, 322], kick:[220, 226, 1]},
+    narrow: {W:360, H:640, crash:[6, 20, 0.9], ride:[176, 34, 0.9], hh:[6, 196, 0.92], hhc:[4, 256], hho:[64, 256], hhp:[14, 586], t1:[110, 150, 0.9], t2:[216, 160, 0.9],
+             t3:[236, 330, 0.88], snare:[8, 338, 0.95], xstick:[4, 412], kick:[86, 400, 0.92]},
+  };
+  const BRASS = 'var(--kit-brass)', LO = 'var(--kit-brass-lo)', HI = 'var(--kit-brass-hi)', SHELL = 'var(--kit-shell)', HOOP = 'var(--kit-hoop)', HEAD = 'var(--kit-head)';
+  const svgOf = (w, h, body) => `<svg viewBox="0 0 ${w} ${h}" aria-hidden="true" focusable="false">${body}</svg>`;
+  const cymbal = (w, h, rx, tilt) => `<g transform="rotate(${tilt} ${w / 2} ${h * 0.42})"><ellipse cx="${w / 2}" cy="${h * 0.42}" rx="${rx}" ry="${rx * 0.12}" fill="${BRASS}" stroke="${LO}" stroke-width="1.5"/><ellipse cx="${w / 2}" cy="${h * 0.42 - 3}" rx="${rx * 0.22}" ry="${rx * 0.06}" fill="${HI}"/></g>`;
+  function drum(w, h, rx, ry, depth) {
+    const top = ry + 3, x0 = w / 2 - rx, x1 = w / 2 + rx;
+    return `<path d="M${x0} ${top} V${top + depth} A${rx} ${ry} 0 0 0 ${x1} ${top + depth} V${top}" fill="${SHELL}" stroke="${HOOP}" stroke-width="2"/>` +
+      `<ellipse cx="${w / 2}" cy="${top}" rx="${rx}" ry="${ry}" fill="${HEAD}" stroke="${HOOP}" stroke-width="2"/>`;
+  }
+  const DRAW = {
+    crash: a => cymbal(a.w, a.h, 82, -9), ride: a => cymbal(a.w, a.h, 92, 8),
+    hh: a => `<ellipse cx="${a.w / 2}" cy="${a.h * 0.5}" rx="54" ry="6" fill="${BRASS}" stroke="${LO}" stroke-width="1.5"/><ellipse cx="${a.w / 2}" cy="${a.h * 0.5 - 7}" rx="54" ry="6" fill="${BRASS}" stroke="${LO}" stroke-width="1.5"/><ellipse cx="${a.w / 2}" cy="${a.h * 0.5 - 9}" rx="12" ry="3" fill="${HI}"/>`,
+    t1: a => drum(a.w, a.h, 44, 11, 48), t2: a => drum(a.w, a.h, 46, 12, 50), t3: a => drum(a.w, a.h, 60, 15, 96), snare: a => drum(a.w, a.h, 52, 13, 30),
+    kick: a => `<circle cx="100" cy="100" r="96" fill="${SHELL}" stroke="${HOOP}" stroke-width="4"/><circle cx="100" cy="100" r="86" fill="${HEAD}"/>` +
+      Array.from({length:10}, (_, i) => `<circle cx="${(100 + Math.cos(i * Math.PI / 5) * 92).toFixed(1)}" cy="${(100 + Math.sin(i * Math.PI / 5) * 92).toFixed(1)}" r="2.5" fill="${HOOP}"/>`).join(''),
+  };
+  // stands, legs and the floor line for one layout, behind the pieces
+  function stands(L) {
+    const c = (id, fx = 0.5, fy = 0.42) => { const [x, y, s] = L[id], a = ART[id]; return [x + a.w * s * fx, y + a.h * s * fy]; }, floor = L.H - 8;
+    const line = (x, y0, y1) => `<line x1="${x.toFixed(1)}" y1="${y0.toFixed(1)}" x2="${x.toFixed(1)}" y2="${y1}" stroke="${HOOP}" stroke-width="3" stroke-linecap="round"/>`;
+    const legs = (x) => `<path d="M${(x - 22).toFixed(1)} ${floor} L${x.toFixed(1)} ${floor - 30} L${(x + 22).toFixed(1)} ${floor}" fill="none" stroke="${HOOP}" stroke-width="2.5" stroke-linejoin="round"/>`;
+    let s = `<line x1="0" y1="${floor}" x2="${L.W}" y2="${floor}" stroke="var(--line)" stroke-width="2"/>`;
+    for (const id of ['crash', 'ride', 'hh']) { const [x, y] = c(id); s += line(x, y, floor - 30) + legs(x); }
+    const [sx, sy] = c('snare', 0.5, 0.9); s += line(sx, sy, floor - 30) + legs(sx);
+    const [fx, fy] = c('t3', 0.5, 0.95); s += `<line x1="${(fx - 40).toFixed(1)}" y1="${fy.toFixed(1)}" x2="${(fx - 46).toFixed(1)}" y2="${floor}" stroke="${HOOP}" stroke-width="3"/><line x1="${(fx + 40).toFixed(1)}" y1="${fy.toFixed(1)}" x2="${(fx + 46).toFixed(1)}" y2="${floor}" stroke="${HOOP}" stroke-width="3"/>`;
+    const [kx, ky] = c('kick', 0.5, 0.15); for (const id of ['t1', 't2']) { const [tx, ty] = c(id, 0.5, 0.9); s += `<line x1="${tx.toFixed(1)}" y1="${ty.toFixed(1)}" x2="${kx.toFixed(1)}" y2="${ky.toFixed(1)}" stroke="${HOOP}" stroke-width="3"/>`; }
+    return `<svg class="kit-bg" viewBox="0 0 ${L.W} ${L.H}" aria-hidden="true" focusable="false">${s}</svg>`;
+  }
+  const pos = (L, id) => { const v = L[id]; return v.length === 3 ? `${(v[0] / L.W * 100).toFixed(2)}%,${(v[1] / L.H * 100).toFixed(2)}%,${(ART[id].w * v[2] / L.W * 100).toFixed(2)}%` : `${(v[0] / L.W * 100).toFixed(2)}%,${(v[1] / L.H * 100).toFixed(2)}%`; };
+  function markup() {
+    const chips = id => `<span class="keys">${KEYS[id].map(k => `<kbd>${keyName(k)}</kbd>`).join('')}</span>`;
+    const box = (cls, id, artId, style, inner) => `<button type="button" class="kp ${cls}" data-id="${id}" data-art="${artId || ''}" style="${style}" aria-label="${PIECES[id].name}, ${KEYS[id].map(keyName).join(' or ')}">${inner}</button>`;
+    const place = (id, artId = id) => { const [wx, wy, ww] = pos(LAYOUT.wide, artId).split(','), [nx, ny, nw] = pos(LAYOUT.narrow, artId).split(','); return `--x:${wx};--y:${wy};--w:${ww};--nx:${nx};--ny:${ny};--nw:${nw};--ar:${ART[artId].w}/${ART[artId].h}`; };
+    const placePill = id => { const [wx, wy] = pos(LAYOUT.wide, id).split(','), [nx, ny] = pos(LAYOUT.narrow, id).split(','); return `--x:${wx};--y:${wy};--nx:${nx};--ny:${ny}`; };
+    let s = `<div class="kit-bg-wide">${stands(LAYOUT.wide)}</div><div class="kit-bg-narrow">${stands(LAYOUT.narrow)}</div>`;
+    // drawn in back-to-front order: cymbals, toms, then the snare and kick in front
+    for (const id of ['crash', 'ride', 't1', 't2', 't3', 'kick', 'snare']) {
+      const a = ART[id];
+      s += box('art', id, id, place(id), `<span class="draw">${svgOf(a.w, a.h, DRAW[id](a))}</span><span class="flash"></span><span class="kname"><b>${PIECES[id].name}</b>${chips(id)}</span>`);
+    }
+    // the hi-hat: its cymbals play closed; Open and Foot are buttons of their own under it
+    const a = ART.hh;
+    s += box('art hh', 'hhc', 'hh', place('hhc', 'hh'), `<span class="draw" data-draw="hh">${svgOf(a.w, a.h, DRAW.hh(a))}</span><span class="flash"></span><span class="kname"><b>Hi-hat</b></span>`);
+    for (const id of ['hhc', 'hho', 'hhp', 'xstick']) s += box('pill', id, PIECES[id].art || '', placePill(id), `<b>${PIECES[id].short}</b>${chips(id)}`);
+    return s;
+  }
+
+  // ---- hits: the sound first, then the picture ----
+  const still = () => stillMQ.matches;
+  let root = null;
+  function show(id) {
+    if (!root) return;
+    const btn = root.querySelector(`.kp.art[data-id="${id}"]`) || root.querySelector(`.kp.art[data-art="${PIECES[id].art}"]`);
+    const pill = root.querySelector(`.kp.pill[data-id="${id}"]`);
+    for (const el of [btn, pill]) { const f = el && el.querySelector('.flash'); if (f && f.animate) f.animate([{opacity:0.28}, {opacity:0}], {duration:220, easing:'ease-out'}); }
+    if (pill && pill.animate) pill.animate([{opacity:0.55}, {opacity:1}], {duration:160, easing:'ease-out'});
+    const d = btn && btn.querySelector('.draw');
+    if (!d || !d.animate || still()) return;
+    const cym = id === 'crash' || id === 'ride' || PIECES[id].art === 'hh';
+    d.animate(cym ? [{transform:'rotate(0)'}, {transform:'rotate(3.5deg)'}, {transform:'rotate(-2deg)'}, {transform:'rotate(0.8deg)'}, {transform:'rotate(0)'}]
+      : [{transform:'scale(1)'}, {transform:'scale(0.965)'}, {transform:'scale(1)'}], {duration:cym ? 480 : 150, easing:'cubic-bezier(.2,.8,.2,1)'});
+  }
+  // a hit from a key, a tap or (later) MIDI: sound now; while a rhythm plays, snare hits are graded like any hit
+  function hit(id, ev, src, vel = KEY_VEL) {
+    play(id, vel);
+    if (JUDGED.has(id)) onHit({timeStamp:ev.timeStamp, src, lane:null, quiet:true});
+    show(id);
+  }
+
+  // ---- the panel ----
+  let open = false;
+  function build() {
+    root = $('#kit');
+    root.innerHTML = `<div class="kit-stage">${markup()}</div>` +
+      `<p class="kit-foot"><span id="kitState" aria-live="polite"></span><span class="kit-credit">Drum sounds: <a href="https://archive.org/details/SalamanderDrumkit" target="_blank" rel="noopener">Salamander Drumkit</a> by Alexander Holm, <a href="https://creativecommons.org/licenses/by-sa/3.0/" target="_blank" rel="noopener">CC BY-SA 3.0</a></span></p>`;
+    const stage = root.querySelector('.kit-stage');
+    // taps and clicks: pointerdown, so a tap sounds without waiting for the click
+    stage.addEventListener('pointerdown', e => {
+      const b = e.target.closest('.kp'); if (!b || e.button > 0) return;
+      e.preventDefault(); hit(b.dataset.id, e, e.pointerType === 'mouse' ? 'key' : 'touch');
+    });
+    // a focused piece plays with Enter or Space (and that key doesn't also play its own drum)
+    stage.addEventListener('keydown', e => {
+      const b = e.target.closest('.kp'); if (!b || !/^(Enter|NumpadEnter|Space)$/.test(e.code)) return;
+      e.preventDefault(); e.stopPropagation(); if (!e.repeat) hit(b.dataset.id, e, 'key');
+    });
+  }
+  async function setOpen(on) {
+    open = on;
+    if (!root) build();
+    root.hidden = !on;
+    $('#kitBtn').setAttribute('aria-pressed', String(on));
+    document.body.classList.toggle('kit-on', on);
+    if (!on) return;
+    const st = $('#kitState');
+    if (!buf) {
+      st.textContent = 'Loading the drums…';
+      try { await load(); } catch (e) { st.textContent = "Couldn't load the drum sounds. Check your connection and open the kit again."; return; }
+    }
+    st.textContent = 'Play with the keys on each drum, or tap the drums.';
+  }
+  // the page's key handler asks first: true if this key is a drum (and it has been played)
+  function key(e) {
+    if (!open || !buf) return false;
+    const id = byKey[e.code]; if (!id) return false;
+    e.preventDefault();
+    if (!e.repeat) hit(id, e, 'key');
+    return true;
+  }
+  return {toggle:() => setOpen(!open), setOpen, key, play, get open() { return open; }, get format() { return used; }, PIECES, KEYS};
 })();
