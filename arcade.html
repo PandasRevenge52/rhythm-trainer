@@ -62,11 +62,8 @@
       <div class="arow"><span class="lbl">Speed <b id="aSpeedRead"></b></span><input type="range" id="aSpeed" min="1" max="4" step="0.1" aria-label="Scroll speed"></div>
       <div class="arow"><span class="lbl">Music volume <b id="aVolRead"></b></span><input type="range" id="aVol" class="aVol" min="0" max="1" step="0.05" aria-label="Music volume"></div>
       <div class="arow"><span class="lbl" title="How late your key presses (and taps) reach the game. The same setting as Keyboard in the trainer's Input settings.">Keyboard latency</span><span class="offctl"><button data-off="-5" aria-label="5 ms earlier">−5</button><b id="aOffRead"></b><button data-off="5" aria-label="5 ms later">+5</button><button id="aCal" title="Tap along to clicks to measure it">Test…</button></span></div>
-      <div class="arow keysrow"><span class="lbl">Keys <small class="muted" id="aKeysHint"></small></span>
-        <span class="keybinds" id="aKeys">
-          <button data-lane="0" aria-label="Key for the left lane"><i style="color:var(--lane-0)">←</i><b></b></button><button data-lane="1" aria-label="Key for the down lane"><i style="color:var(--lane-1)">↓</i><b></b></button><button data-lane="2" aria-label="Key for the up lane"><i style="color:var(--lane-2)">↑</i><b></b></button><button data-lane="3" aria-label="Key for the right lane"><i style="color:var(--lane-3)">→</i><b></b></button>
-          <button id="aKeysReset" class="ghost" title="Back to D F J K">Reset</button>
-        </span></div>
+      <div class="arow keysrow"><span class="lbl">Keys <span class="keysnow" id="aKeysNow"></span></span><button id="aKeysEdit" aria-expanded="false" aria-controls="aKeymap">Change…</button></div>
+      <div class="akeymap" id="aKeymap" hidden></div>
       <label class="toggle">Hit sounds <input type="checkbox" id="aHitSnd"></label>
       <label class="toggle">No fail <input type="checkbox" id="aNoFail"></label>
       <div class="arow"><span class="lbl">Your progress</span><button id="aXfer">Back up or move…</button></div>

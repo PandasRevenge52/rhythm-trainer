@@ -91,7 +91,10 @@ const KITS = {
   rim:   {name:'Rimshot', play:(d, t, v) => rim(d, t, v)},
   kit:   {name:'Drum kit', play:(d, t, v, voice) => voice === 1 ? bassDrum(d, t, v) : snare(d, t, v)},
 };
-function hitSound(dest, t, v, voice) { (KITS[S.hitKit] || KITS.snare).play(dest, t, v, voice); }
+function hitSound(dest, t, v, voice) {
+  if (typeof Kit !== 'undefined' && Kit.rhythmSound(dest, t, v, voice)) return;   // the drum kit is open: its rhythm drum
+  (KITS[S.hitKit] || KITS.snare).play(dest, t, v, voice);
+}
 function fanfare() {
   ensureAudio();
   const t = ctx.currentTime + 0.05;

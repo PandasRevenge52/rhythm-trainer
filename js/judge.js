@@ -45,7 +45,7 @@ function onHit(e) {
   const src = e.src || 'key';
   // no tap sound during the latency test: it comes out of the speakers late, and you'd tap to that
   if (cal.on) { calTap(e.timeStamp, src); return; }
-  if (S.hitSound && (src === 'key' || src === 'touch')) hitSound(master, ctx.currentTime, 0.7, e.lane ?? 0);
+  if (S.hitSound && !e.quiet && (src === 'key' || src === 'touch')) hitSound(master, ctx.currentTime, 0.7, e.lane ?? 0);   // quiet: the drum kit made its own sound
   if (modalOpen()) return;
   fx.push({t0:performance.now(), press:true, voice:e.lane}); kick();
   if (!run || run.listen) return;
@@ -201,8 +201,17 @@ function renderStats() {
 }
 // U3: phones and tablets (no hover, a finger for a pointer) get tapping hints instead of keys they don't have
 const touchOnly = () => matchMedia('(hover: none) and (pointer: coarse)').matches;
+// the hit keys as key caps: one of each kind ("Space, F or J"), or with two hands the first left and right keys
+const hitKeyMap = () => ({any:[], left:[], right:[], ...(S.hitKeys || HIT_KEYS_DEFAULT)});
+const kbd = c => `<kbd>${esc(keyLabel(c))}</kbd>`;
+function hitKbds(join = ', ', last = ' or ') {
+  const m = hitKeyMap(), ks = [...new Set([m.any[0], m.left[0], m.right[0]].filter(Boolean))];
+  return ks.length > 1 ? ks.slice(0, -1).map(kbd).join(join) + last + kbd(ks.at(-1)) : ks.map(kbd).join('');
+}
 function idleText() {
-  const keys = touchOnly() ? 'Tap the staff or lane to hit.' : S.hands === 2 ? `Left hand <kbd>F</kbd>, right hand <kbd>J</kbd>.` : `Hit with <kbd>Space</kbd>, <kbd>F</kbd> or <kbd>J</kbd>.`;
+  const m = hitKeyMap(), hands = m.left[0] && m.right[0] ? `Left hand ${kbd(m.left[0])}, right hand ${kbd(m.right[0])}.` : `Hit with ${hitKbds()}.`;
+  const kit = typeof Kit !== 'undefined' && Kit.open;   // the drum kit's own keys and drum
+  const keys = kit ? Kit.hint() : touchOnly() ? 'Tap the staff or lane to hit.' : S.hands === 2 ? hands : `Hit with ${hitKbds()}.`;
   if (S.play === 'endless') return `Survive as long as you can. Misses and hits on rests cost a life, and a clean pass wins one back. It speeds up every pass.` +
     (P.endlessBest ? ` Best: <b>${P.endlessBest.toLocaleString()}</b>` : '');
   if (S.play === 'daily') {

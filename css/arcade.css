@@ -81,15 +81,9 @@ body.playing .homebtn:hover{opacity:1}
 /* narrow screens during play: just the house icon (a 44 px target), so the health bar beside it keeps its width */
 @media (max-width:579px){ body.playing .homebtn{min-width:44px;min-height:44px;justify-content:center;padding:8px;gap:0} body.playing .homebtn span{display:none} }
 
-/* keybinds */
-.keysrow{flex-wrap:wrap}
-.keysrow .lbl small{display:block;font-weight:400;font-size:12.5px;margin-top:2px}
-.keybinds{display:inline-flex;gap:6px;flex-wrap:wrap}
-.keybinds button{flex-direction:column;gap:1px;min-width:46px;padding:5px 8px;justify-content:center;line-height:1.1}
-.keybinds button i{font-style:normal;font-size:17px;font-weight:700;line-height:1}
-.keybinds button b{font-size:15px;min-width:1ch}
-.keybinds button.on{border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 35%,transparent)}
-.keybinds #aKeysReset{flex-direction:row;font-size:13px}
+/* lane keys: the current four, and the key screen (css/keymap.css) under them */
+.keysrow .keysnow{display:inline-flex;gap:4px;margin-left:8px}
+.akeymap{margin:4px 0 10px}
 
 /* small motion */
 .aov.show .apanel{animation:panelin var(--dur-2) var(--ease-out)}
@@ -108,8 +102,6 @@ body.playing .homebtn:hover{opacity:1}
 .diffs small{transition:color var(--dur-1)}
 .homebtn{transition:opacity var(--dur-2),transform var(--dur-1),border-color var(--dur-1)}
 .homebtn:hover{transform:translateY(-1px)}
-.keybinds button.on b{animation:blink 1s steps(2) infinite}
-@keyframes blink{50%{opacity:.25}}
 .lb tr{animation:tilein var(--dur-2) var(--ease-out) both}
 
 /* ---------- multiplayer ---------- */

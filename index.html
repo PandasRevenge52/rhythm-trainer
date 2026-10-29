@@ -108,6 +108,7 @@
           <div class="meter" aria-hidden="true"><i id="micLevel"></i></div>
           <p class="hint">Use headphones so the metronome isn't picked up as hits.</p>
         </div>
+        <div class="row"><span class="lbl">Hit keys <span class="hint" id="hitKeysSum"></span></span><button id="hitKeysBtn">Change…</button></div>
         <div class="row"><span class="lbl">Latency</span><button id="calBtn">Calibrate…</button></div>
         <details class="more"><summary><span>Latency offsets</span><span class="val" id="sumOffsets"></span></summary>
           <div class="offs">
@@ -121,7 +122,7 @@
       <section class="grp" id="grpKeys" aria-labelledby="hKeys">
         <h3 id="hKeys">Shortcuts</h3>
         <details class="more"><summary><span>Keyboard shortcuts</span><span class="val">14 keys</span></summary>
-          <table class="keytable"><tr><td>Hit</td><td><kbd>Space</kbd> <kbd>F</kbd> <kbd>J</kbd></td></tr><tr><td>Hit, two hands</td><td><kbd>F</kbd> left · <kbd>J</kbd> right</td></tr><tr><td>Start / stop</td><td><kbd>Enter</kbd></td></tr><tr><td>Stop, close</td><td><kbd>Esc</kbd></td></tr><tr><td>Listen</td><td><kbd>L</kbd></td></tr><tr><td>New rhythm</td><td><kbd>N</kbd></td></tr><tr><td>Easier / harder</td><td><kbd>[</kbd> <kbd>]</kbd></td></tr><tr><td>Tempo</td><td><kbd>↑</kbd> <kbd>↓</kbd></td></tr><tr><td>Notes / Count</td><td><kbd>V</kbd></td></tr><tr><td>Counting</td><td><kbd>C</kbd></td></tr><tr><td>Two hands</td><td><kbd>H</kbd></td></tr><tr><td>Learning path</td><td><kbd>M</kbd></td></tr><tr><td>Profile</td><td><kbd>P</kbd></td></tr><tr><td>Modes</td><td><kbd>1</kbd> Practice · <kbd>2</kbd> Endless · <kbd>3</kbd> Daily · <kbd>4</kbd> Song</td></tr></table>
+          <table class="keytable"><tr><td>Hit</td><td id="keysHit"><kbd>Space</kbd> <kbd>F</kbd> <kbd>J</kbd></td></tr><tr><td>Hit, two hands</td><td id="keysHands"><kbd>F</kbd> left · <kbd>J</kbd> right</td></tr><tr><td>Start / stop</td><td><kbd>Enter</kbd></td></tr><tr><td>Stop, close</td><td><kbd>Esc</kbd></td></tr><tr><td>Listen</td><td><kbd>L</kbd></td></tr><tr><td>New rhythm</td><td><kbd>N</kbd></td></tr><tr><td>Easier / harder</td><td><kbd>[</kbd> <kbd>]</kbd></td></tr><tr><td>Tempo</td><td><kbd>↑</kbd> <kbd>↓</kbd></td></tr><tr><td>Notes / Count</td><td><kbd>V</kbd></td></tr><tr><td>Counting</td><td><kbd>C</kbd></td></tr><tr><td>Two hands</td><td><kbd>H</kbd></td></tr><tr><td>Learning path</td><td><kbd>M</kbd></td></tr><tr><td>Profile</td><td><kbd>P</kbd></td></tr><tr><td>Modes</td><td><kbd>1</kbd> Practice · <kbd>2</kbd> Endless · <kbd>3</kbd> Daily · <kbd>4</kbd> Song</td></tr></table>
         </details>
       </section>
     </div>
@@ -136,6 +137,9 @@
         <button id="listenBtn" title="Hear the rhythm (L)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M11 5L6 9H3v6h3l5 4zM15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>Listen</button>
         <button id="newBtn" class="ghost" title="New rhythm (N)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6"/></svg>New
+        </button>
+        <button id="kitBtn" class="ghost" aria-pressed="false" aria-controls="kit" title="Drum kit: play drums with your keys, a MIDI kit, or by tapping">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="8" rx="8" ry="3"/><path d="M4 8v7c0 1.7 3.6 3 8 3s8-1.3 8-3V8M8 2.5 11 7M16 2.5 13 7"/></svg>Drums
         </button>
       </div>
       <div class="group">
@@ -174,6 +178,7 @@
       <div id="countin"></div>
     </div>
     <canvas id="lane"></canvas>
+    <div id="kit" class="kit" role="region" aria-label="Drum kit" hidden></div>
     <div class="stats">
       <div id="acc"></div>
       <div id="statText">Press <kbd>Enter</kbd> to start. Hit with <kbd>Space</kbd>, <kbd>F</kbd> or <kbd>J</kbd>.</div>

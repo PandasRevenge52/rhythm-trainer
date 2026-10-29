@@ -5,7 +5,7 @@ const DEFAULTS = {level:1, bpm:65, bars:2, notes:[4,2], rests:[4,2], extras:['do
   meter:'4/4', hands:1, poly:false, polyPick:'mix', gap:'off', sight:false, focus:true, freePlay:false,
   offsets:{key:0, midi:0, mic:0}, smoothAudio:false, midi:false, mic:false, micSens:0.5,
   view:'notes', playhead:'jump', clickSound:'click', hitKit:'snare', songSource:'gen', songChart:'normal', songDrums:{kick:true, snare:true, hat:false}, songSens:0.5,
-  playerName:'',
+  playerName:'', hitKeys:null, kitKeys:null, kitRhythm:'snare',
   arcade:{diff:'normal', src:'drums', speed:2.2, down:true, noFail:false, musicVol:0.8, hitSound:false,
     keys:['KeyD', 'KeyF', 'KeyJ', 'KeyK'], keyNames:['D', 'F', 'J', 'K']}};
 const firstRun = (() => { try { return !localStorage.getItem('rhythm-trainer'); } catch (e) { return true; } })();
@@ -600,6 +600,16 @@ const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;', '<':'&lt;', '
 const loaded = {};
 const loadJS = src => loaded[src] || (loaded[src] = new Promise((res, rej) => { const e = document.createElement('script'); e.src = src; e.onload = res; e.onerror = () => { delete loaded[src]; rej(); }; document.head.appendChild(e); }));
 const loadAll = list => list.reduce((p, src) => p.then(() => loadJS(src)), Promise.resolve());
+const loadCSS = href => loaded[href] || (loaded[href] = new Promise(res => { const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = href; l.onload = l.onerror = res; document.head.appendChild(l); }));
+const openKit = () => Promise.all([loadJS('js/kit.js'), loadCSS('css/kit.css')]).then(() => Kit.toggle());   // drum mode
+// your own keys (chosen on js/keymap.js's screen): the settings hold null until changed, so a new default still reaches
+// everyone who never changed theirs. Codes are layout-free (KeyF is the key where F is on a US keyboard). The drum
+// kit's defaults are in js/kit.js.
+const HIT_KEYS_DEFAULT = {any:['Space'], left:['KeyF', 'KeyD'], right:['KeyJ', 'KeyK']};
+const openKeymap = () => Promise.all([loadJS('js/keymap.js'), loadCSS('css/keymap.css')]);
+const KEY_SYM = {Space:'Space', ArrowLeft:'←', ArrowRight:'→', ArrowUp:'↑', ArrowDown:'↓', BracketLeft:'[', BracketRight:']', Semicolon:';', Quote:"'",
+  Comma:',', Period:'.', Slash:'/', Backslash:'\\', Minus:'-', Equal:'=', Backquote:'`', IntlBackslash:'\\', Enter:'Enter', NumpadEnter:'Enter', Escape:'Esc', Tab:'Tab'};
+const keyLabel = code => KEY_SYM[code] || code.replace(/^Key|^Digit/, '').replace(/^Numpad/, 'Num ');
 const openTransfer = code => loadAll(['js/sync.js', 'js/transfer.js']).then(() => Xfer.open(code));   // "Back up or move progress"
 const fmtTime = s => `${Math.floor(s/60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 const near = (a, b) => Math.abs(a - b) < 1e-6;

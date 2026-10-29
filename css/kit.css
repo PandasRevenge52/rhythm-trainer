@@ -1,0 +1,52 @@
+/* Drum mode (js/kit.js), loaded only when the kit is opened. The kit in the Mono greys, with one muted brass for
+   the cymbals so green/blue/amber/red still only ever mean timing. Pieces move with transform and opacity only. */
+:root{--kit-shell:#1b1d20; --kit-hoop:#5a5d63; --kit-head:#2b2e32; --kit-brass:#8f7a52; --kit-brass-hi:#b39b6c; --kit-brass-lo:#5e5037}
+#kit{margin-top:10px;border-top:1px solid var(--line);padding-top:10px}
+.kit-bar{display:flex;justify-content:flex-end;align-items:center;flex-wrap:wrap;gap:8px 12px;margin-bottom:2px}
+.kit-rhythm{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+.kit-rhythm select{font-size:13px}
+.kit-bar button{font-size:13px;padding:6px 12px}
+.kit-bar button[aria-expanded=true]{border-color:var(--ink)}
+.kit-keymap{max-width:860px;margin:10px auto 0}
+/* choosing keys: picking a piece waits for its key; the waiting piece is outlined */
+.kit-stage.mapping .kp{cursor:pointer}
+.kp.waiting{outline:2px dashed var(--ink);outline-offset:3px}
+.kit-stage{position:relative;aspect-ratio:640/430;max-width:860px;margin:0 auto;container-type:inline-size;touch-action:manipulation;user-select:none;-webkit-user-select:none}
+.kit-bg-wide,.kit-bg-narrow{position:absolute;inset:0}
+.kit-bg-narrow{display:none}
+.kit-bg svg,.kit-bg{width:100%;height:100%;display:block}
+.kp{position:absolute;left:var(--x);top:var(--y);padding:0;margin:0;border:0;background:none;color:var(--ink);cursor:pointer;border-radius:var(--r-md);-webkit-tap-highlight-color:transparent}
+.kp:hover{background:none}
+.kp:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.kp.art{width:var(--w);aspect-ratio:var(--ar);display:block}
+.kp .draw,.kp .flash{position:absolute;inset:0;display:block}
+.kp .draw svg{width:100%;height:100%;display:block;overflow:visible}
+.kp .draw{transform-origin:50% 45%}
+.kp .flash{background:radial-gradient(closest-side,var(--ink),transparent);opacity:0;pointer-events:none}
+/* names and keys: real text, sized to the drawing */
+.kp .kname{position:absolute;left:50%;top:62%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:3px;white-space:nowrap;pointer-events:none;font-size:clamp(10px,2cqw,13px);padding:2px 6px;border-radius:var(--r-sm);background:color-mix(in srgb,var(--panel) 78%,transparent)}
+.kp .kname b{font-weight:700}
+.kp[data-id=kick] .kname{top:40%;background:none}
+.kp[data-id=t1] .kname,.kp[data-id=t2] .kname{top:38%;background:none}
+.kp[data-id=t3] .kname{top:34%;background:none}
+.kp[data-id=snare] .kname{top:30%;flex-direction:row;gap:5px;background:none}
+.kp.hh .kname{top:72%}
+.kp .keys{display:flex;gap:3px}
+.kp kbd{font-size:.92em;line-height:1.5}
+/* the hi-hat's Open and Foot buttons, and the snare's Rim */
+.kp.kpill{display:flex;align-items:center;gap:5px;padding:4px 8px;background:var(--chip);border:1px solid var(--edge);border-radius:var(--r-pill);font-size:clamp(10px,2cqw,13px);overflow:hidden}
+.kp.kpill:hover{background:var(--raise)}
+.kp.kpill .keys{gap:2px}
+.kit-foot{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px 16px;margin:8px 0 0;font-size:12.5px;color:var(--muted)}
+.kit-foot a{color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.kit-foot a:hover{color:var(--ink)}
+/* phones: a taller arrangement so every piece stays big enough to tap */
+@media (max-width:600px){
+  .kit-stage{aspect-ratio:360/640}
+  .kit-bg-wide{display:none} .kit-bg-narrow{display:block}
+  .kp{left:var(--nx);top:var(--ny)}
+  .kp.art{width:var(--nw)}
+  .kp .kname,.kp.kpill{font-size:clamp(10px,3.4cqw,13px)}
+}
+/* touch-only screens: no keys to show */
+@media (hover:none) and (pointer:coarse){ .kp .keys{display:none} }

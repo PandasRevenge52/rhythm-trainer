@@ -294,6 +294,7 @@ $('#setBtn').addEventListener('click', () => setDrawer(!drawerOpen()));
 $('#sideClose').addEventListener('click', () => setDrawer(false));
 scrim.addEventListener('click', () => setDrawer(false));
 $('#inputChip').addEventListener('click', () => setDrawer(true, '#grpInput'));
+$('#kitBtn').addEventListener('click', () => openKit().catch(() => toast("Couldn't open the drum kit. Check your connection.")));
 addEventListener('resize', () => { if (drawerOpen()) { const m = drawerModal(); scrim.hidden = !m; drawer.setAttribute('aria-modal', String(m)); document.body.classList.toggle('side-docked', !m); } });
 // keep Tab inside the sheet while it's a modal overlay
 drawer.addEventListener('keydown', e => {
@@ -317,14 +318,30 @@ for (const el of [$('#paper'), lane]) el.addEventListener('pointerdown', e => {
   onHit({timeStamp:e.timeStamp, src:'touch', lane:S.hands === 2 && el === lane ? (lower ? 1 : 0) : null});
 });
 
-// Hit keys: F/D = left hand, J/K = right hand, Space = whichever hand has the next note.
-const HIT_KEYS = {Space:null, KeyF:1, KeyD:1, KeyJ:0, KeyK:0};
+// Hit keys (Settings → Input → Hit keys; by default F/D = left hand, J/K = right hand, Space = whichever hand has the
+// next note): key code -> lane (1 left, 0 right, null either).
+const HAND_LANE = {any:null, left:1, right:0};
+let HIT_KEYS = {};
+function buildHitKeys(idle = true) {
+  const m = hitKeyMap(); HIT_KEYS = {};
+  for (const h in HAND_LANE) for (const c of m[h] || []) HIT_KEYS[c] = HAND_LANE[h];
+  const list = a => a.map(kbd).join(' ') || 'none';
+  $('#hitKeysSum').innerHTML = `${list(m.any)} · left ${list(m.left)} · right ${list(m.right)}`;
+  $('#keysHit').innerHTML = Object.keys(HIT_KEYS).map(kbd).join(' ');
+  $('#keysHands').innerHTML = `${list(m.left)} left · ${list(m.right)} right`;
+  if (idle && !run) renderIdle();
+}
+$('#hitKeysBtn').addEventListener('click', () => Promise.all([openKeymap(), loadJS('js/trainerkeys.js')]).then(() => openHitKeys())
+  .catch(() => toast("Couldn't open the keys. Check your connection.")));
 window.addEventListener('keydown', e => {
   if (e.code === 'Escape' && drawerOpen() && !modalOpen()) { e.preventDefault(); setDrawer(false); return; }
   if (e.target.type === 'number') { if (e.key === 'Enter') e.target.blur(); return; }
   // a focused control in the settings sheet keeps its own keys (Space toggles, arrows adjust)
   if (drawer.contains(e.target) && e.target.matches('button,input,select,summary')) return;
   if (e.ctrlKey || e.metaKey || e.altKey) return;
+  // a focused button on the key screen or the kit's bar takes Enter and Space itself (not Start, not a drum), and the
+  // kit's Rhythm on list every key (arrows and letters choose in it)
+  if (!modalOpen() && e.target.closest && (e.target.closest('.kit-bar select') || (e.target.closest('.km, .kit-bar') && /^(Enter|NumpadEnter|Space)$/.test(e.code)))) return;
   const isHit = e.code in HIT_KEYS, hit = () => onHit({timeStamp:e.timeStamp, src:'key', lane:S.hands === 2 ? HIT_KEYS[e.code] : null});
   if (modalOpen()) {
     // a focused button, tab or link in the dialog takes Enter and Space itself, and a text field every key
@@ -339,6 +356,8 @@ window.addEventListener('keydown', e => {
     }
     return;
   }
+  // with the drum kit open, its keys play drums (the snare's are graded like hit keys while a rhythm plays)
+  if (typeof Kit !== 'undefined' && Kit.key(e)) return;
   if (isHit) { e.preventDefault(); if (!e.repeat) hit(); return; }
   if (e.repeat) return;
   switch (e.code) {
@@ -368,6 +387,7 @@ addEventListener('resize', () => { if (narrow() !== wasNarrow) { wasNarrow = nar
 
 // ---------- start up ----------
 readColors();
+buildHitKeys(false);
 if (S.play === 'daily') buildDaily();
 pattern = S.play === 'daily' ? daily.pats[0] : newPattern();
 syncControls();
