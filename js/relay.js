@@ -120,7 +120,11 @@ class RelayConn {
   }
   on(ev, fn) { (this.handlers[ev] = this.handlers[ev] || []).push(fn); }
   emit(ev, x) { for (const fn of this.handlers[ev] || []) fn(x); }
-  raw(m) { sealMsg(this.me, m).then(bytes => { if (!bytes) return; this.client.pub(this.toTopic, bytes); for (const c of this.others) c.pub(this.toTopic, bytes); }).catch(() => {}); }
+  // encrypting takes a moment, so each send is kept in Relay.sending until it's out (see Relay.closeSoon)
+  raw(m) {
+    const p = sealMsg(this.me, m).then(bytes => { if (!bytes) return; this.client.pub(this.toTopic, bytes); for (const c of this.others) c.pub(this.toTopic, bytes); }).catch(() => {});
+    Relay.sending.add(p); p.then(() => Relay.sending.delete(p));
+  }
   // the host answered through this broker: use only it from now on
   lock(client) { if (!this.others.length) return; if (client !== this.client) this.others.push(this.client); this.client = client; for (const c of this.others) if (c !== client) c.close(); this.others = []; }
   send(m) { if (this.open) this.raw(m); }
@@ -134,7 +138,10 @@ class RelayConn {
 }
 
 const Relay = {
-  clients:[], conns:new Map(), pending:new Map(), key:null,
+  clients:[], conns:new Map(), pending:new Map(), key:null, sending:new Set(),
+  // close a broker connection once the messages still being encrypted have gone out (at most 1 s), so a goodbye
+  // sent just before leaving arrives and the others see "left" instead of waiting for a lost connection
+  closeSoon(c) { Promise.race([Promise.all([...this.sending]), new Promise(r => setTimeout(r, 1000))]).then(() => c.close()); },
   // host: listen on every broker that answers; onConn gets a RelayConn for each new guest
   async listen(code, onConn, secret) {
     this.stop();
@@ -181,11 +188,11 @@ const Relay = {
     const rc = new RelayConn('h', got[0], base + 'h', me);
     rc.others = got.slice(1);
     this.conns.set('h', rc);   // so leaving says goodbye straight away
-    rc.on('close', () => { for (const c of [rc.client, ...rc.others]) c.close(); });
+    rc.on('close', () => { for (const c of [rc.client, ...rc.others]) this.closeSoon(c); });
     for (const c of got) {
       c.sub(base + me, async bytes => { const o = await openMsg(bytes); if (!o || o.f !== 'h' || typeof o.m !== 'object') return; rc.lock(c); rc.got(o.m); });
     }
     return rc;
   },
-  stop() { this.key = null; for (const rc of [...this.conns.values()]) rc.close(); this.conns.clear(); this.pending.clear(); for (const c of this.clients) c.close(); this.clients = []; },
+  stop() { this.key = null; for (const rc of [...this.conns.values()]) rc.close(); this.conns.clear(); this.pending.clear(); for (const c of this.clients) this.closeSoon(c); this.clients = []; },
 };
