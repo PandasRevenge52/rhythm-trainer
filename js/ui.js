@@ -75,7 +75,10 @@ function syncControls() {
   $('#metroVol').value = S.metroVol; $('#metroRead').textContent = Math.round(S.metroVol * 100) + '%';
   $('#offKey').value = S.offsets.key; $('#offMidi').value = S.offsets.midi; $('#offMic').value = S.offsets.mic;
   $('#micSens').value = S.micSens;
-  $('#clickSel').value = S.clickSound; $('#kitSel').value = S.hitKit; $('#phSel').value = S.playhead;
+  $('#clickSel').value = S.clickSound; $('#kitSel').value = S.hitKit;
+  // Controls newer than the last release are checked first (here and with ?.): a returning visitor's first visit can
+  // still get the older cached index.html with these scripts, and it should run without them instead of crashing.
+  if ($('#phSel')) $('#phSel').value = S.playhead;
   lane.classList.toggle('off', !S.lane);
   lane.classList.toggle('two', S.hands === 2);
   // one-line summaries on the collapsed parts of the settings sheet
@@ -216,7 +219,7 @@ $('#gapSeg').addEventListener('click', e => { const b = e.target.closest('button
 $('#clickSel').innerHTML = Object.entries(CLICK_NAMES).map(([k, n]) => `<option value="${k}">${n}</option>`).join('');
 $('#kitSel').innerHTML = Object.entries(KITS).map(([k, v]) => `<option value="${k}">${v.name}</option>`).join('');
 $('#clickSel').addEventListener('change', e => { S.clickSound = e.target.value; save(); ensureAudio(); click(master, ctx.currentTime + 0.02, true); click(master, ctx.currentTime + 0.4, false); });
-$('#phSel').addEventListener('change', e => { S.playhead = e.target.value; save(); syncControls(); });
+$('#phSel')?.addEventListener('change', e => { S.playhead = e.target.value; save(); syncControls(); });
 $('#kitSel').addEventListener('change', e => { S.hitKit = e.target.value; save(); ensureAudio(); hitSound(master, ctx.currentTime + 0.02, 0.7, 0); if (S.hitKit === 'kit') hitSound(master, ctx.currentTime + 0.35, 0.7, 1); });
 $('#playSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setPlay(b.dataset.v); });
 $('#barsSel').addEventListener('change', e => { S.bars = +e.target.value; save(); syncControls(); freshPattern(); });
@@ -294,7 +297,7 @@ $('#setBtn').addEventListener('click', () => setDrawer(!drawerOpen()));
 $('#sideClose').addEventListener('click', () => setDrawer(false));
 scrim.addEventListener('click', () => setDrawer(false));
 $('#inputChip').addEventListener('click', () => setDrawer(true, '#grpInput'));
-$('#kitBtn').addEventListener('click', () => openKit().catch(() => toast("Couldn't open the drum kit. Check your connection.")));
+$('#kitBtn')?.addEventListener('click', () => openKit().catch(() => toast("Couldn't open the drum kit. Check your connection.")));
 addEventListener('resize', () => { if (drawerOpen()) { const m = drawerModal(); scrim.hidden = !m; drawer.setAttribute('aria-modal', String(m)); document.body.classList.toggle('side-docked', !m); } });
 // keep Tab inside the sheet while it's a modal overlay
 drawer.addEventListener('keydown', e => {
@@ -326,12 +329,13 @@ function buildHitKeys(idle = true) {
   const m = hitKeyMap(); HIT_KEYS = {};
   for (const h in HAND_LANE) for (const c of m[h] || []) HIT_KEYS[c] = HAND_LANE[h];
   const list = a => a.map(kbd).join(' ') || 'none';
-  $('#hitKeysSum').innerHTML = `${list(m.any)} · left ${list(m.left)} · right ${list(m.right)}`;
-  $('#keysHit').innerHTML = Object.keys(HIT_KEYS).map(kbd).join(' ');
-  $('#keysHands').innerHTML = `${list(m.left)} left · ${list(m.right)} right`;
+  const put = (id, html) => { const el = $(id); if (el) el.innerHTML = html; };   // missing on an older cached index.html
+  put('#hitKeysSum', `${list(m.any)} · left ${list(m.left)} · right ${list(m.right)}`);
+  put('#keysHit', Object.keys(HIT_KEYS).map(kbd).join(' '));
+  put('#keysHands', `${list(m.left)} left · ${list(m.right)} right`);
   if (idle && !run) renderIdle();
 }
-$('#hitKeysBtn').addEventListener('click', () => Promise.all([openKeymap(), loadJS('js/trainerkeys.js')]).then(() => openHitKeys())
+$('#hitKeysBtn')?.addEventListener('click', () => Promise.all([openKeymap(), loadJS('js/trainerkeys.js')]).then(() => openHitKeys())
   .catch(() => toast("Couldn't open the keys. Check your connection.")));
 window.addEventListener('keydown', e => {
   if (e.code === 'Escape' && drawerOpen() && !modalOpen()) { e.preventDefault(); setDrawer(false); return; }
