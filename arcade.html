@@ -57,8 +57,9 @@
     <p class="muted achart" id="aChartInfo"></p>
 
     <details class="more aopts">
-      <summary><span>Options</span><span class="val">keys, scroll, speed, volume, timing</span></summary>
+      <summary><span>Options</span><span class="val">keys, scroll, field width, speed, volume, timing</span></summary>
       <div class="arow"><span class="lbl">Scroll</span><div class="seg" id="aScroll"><button data-v="down">Down</button><button data-v="up">Up</button></div></div>
+      <div class="arow"><span class="lbl">Field width</span><div class="seg" id="aWidth" role="group" aria-label="Field width"><button data-v="narrow">Narrow</button><button data-v="normal">Normal</button><button data-v="wide">Wide</button></div></div>
       <div class="arow"><span class="lbl">Speed <b id="aSpeedRead"></b></span><input type="range" id="aSpeed" min="1" max="4" step="0.1" aria-label="Scroll speed"></div>
       <div class="arow"><span class="lbl">Music volume <b id="aVolRead"></b></span><input type="range" id="aVol" class="aVol" min="0" max="1" step="0.05" aria-label="Music volume"></div>
       <div class="arow"><span class="lbl" title="How late your key presses (and taps) reach the game. The same setting as Keyboard in the trainer's Input settings.">Keyboard latency</span><span class="offctl"><button data-off="-5" aria-label="5 ms earlier">−5</button><b id="aOffRead"></b><button data-off="5" aria-label="5 ms later">+5</button><button id="aCal" title="Tap along to clicks to measure it">Test…</button></span></div>

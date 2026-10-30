@@ -356,6 +356,7 @@ function renderMenu() {
   mark('#aSrc', v => srcParts(A$.src).has(v));
   mark('#aDiff', v => v === A$.diff);
   mark('#aScroll', v => (v === 'down') === A$.down);
+  mark('#aWidth', v => v === (A$.width || 'normal'));
   $('#aSpeed').value = A$.speed; $('#aSpeedRead').textContent = A$.speed.toFixed(1);
   $('#aNoFail').checked = A$.noFail; $('#aHitSnd').checked = !!A$.hitSound; $('#aSmooth').checked = !!S.smoothAudio;
   $('#aOffRead').textContent = `${S.offsets.key > 0 ? '+' : ''}${S.offsets.key} ms`;
@@ -371,6 +372,7 @@ const togglePart = (src, v) => { const parts = srcParts(src); if (parts.has(v)) 
 $('#aSrc').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setA('src', togglePart(A$.src, b.dataset.v)); });
 $('#aDiff').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setA('diff', b.dataset.v); });
 $('#aScroll').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setA('down', b.dataset.v === 'down'); });
+$('#aWidth').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { setA('width', b.dataset.v); draw(); } });
 $('#aSpeed').addEventListener('input', e => setA('speed', +e.target.value));
 $('#aNoFail').addEventListener('change', e => setA('noFail', e.target.checked));
 $('#aHitSnd').addEventListener('change', e => setA('hitSound', e.target.checked));
@@ -726,14 +728,14 @@ function noteArrow(x, y, size, lane) {
 // ---------- layout ----------
 // The field grows with the screen's height (the distance you read notes over), not its width: a lane is 15% of the
 // height, never less than it always was (112 px, or what fits a phone's width) and never more than LANE_MAX, so all
-// four lanes stay within one glance on a big monitor. Everything drawn for the field (the targets' distance from the
-// edge, scroll speed, effects, text) scales with it as k, so a big screen is the same game, bigger, and notes take as
-// long to fall as on a laptop. The side panels scale (hs) with the room beside the field. In a match the other
-// players' fields go on the right, as big as the room allows.
-const LANE_MAX = 180, HUD_L = 190, HUD_R = 240, MP_GAP = 18;   // side panels: score | combo, standings
+// four lanes stay within one glance on a big monitor. Options → Field width scales that. Everything drawn for the
+// field (the targets' distance from the edge, scroll speed, effects, text) scales with it as k, so a big screen is
+// the same game, bigger, and notes take as long to fall as on a laptop. The side panels scale (hs) with the room
+// beside the field. In a match the other players' fields go on the right, as big as the room allows.
+const FIELD_SCALE = {narrow:0.85, normal:1, wide:1.2}, LANE_MAX = 180, HUD_L = 190, HUD_R = 240, MP_GAP = 18;   // side panels: score | combo, standings
 function layout(W, H) {
-  const fit = (W - 32) / LANES;
-  const laneW = Math.min(fit, LANE_MAX, Math.max(Math.min(112, fit), H * 0.15)), fw = laneW * LANES, k = Math.max(1, laneW / 112);
+  const f = FIELD_SCALE[A$.width] || 1, fit = (W - 32) / LANES;
+  const laneW = Math.min(fit, LANE_MAX * f, Math.max(Math.min(112, fit), H * 0.15) * f), fw = laneW * LANES, k = Math.max(1, laneW / 112);
   const L = {laneW, fw, k, x0:(W - fw) / 2, hud:W > fw + 400, hs:1, others:null};
   const n = mpOn() ? MP.others().length : 0;
   if (!L.hud) return L;
