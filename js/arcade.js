@@ -723,8 +723,18 @@ function noteArrow(x, y, size, lane) {
     return gr;
   }, BG);
 }
-// where the lanes start: centred, or further left in a match to make room for the other players
-const fieldX0 = (W, fw) => (W - fw) / 2 - (mpOn() ? MP.shift(W, fw) : 0);
+// ---------- layout ----------
+// The field grows with the screen's height (the distance you read notes over), not its width: a lane is 15% of the
+// height, never less than it always was (112 px, or what fits a phone's width) and never more than LANE_MAX, so all
+// four lanes stay within one glance on a big monitor. Everything drawn for the field (the targets' distance from the
+// edge, scroll speed, effects, text) scales with it as k, so a big screen is the same game, bigger, and notes take as
+// long to fall as on a laptop. In a match the lanes move left to make room for the other players.
+const LANE_MAX = 180;
+function layout(W, H) {
+  const fit = (W - 32) / LANES;
+  const laneW = Math.min(fit, LANE_MAX, Math.max(Math.min(112, fit), H * 0.15)), fw = laneW * LANES, k = Math.max(1, laneW / 112);
+  return {laneW, fw, k, x0:(W - fw) / 2 - (mpOn() ? MP.shift(W, fw) : 0), hud:W > fw + 400, hs:1};
+}
 const BG = TOK('bg'), FIELD = TOK('panel'), LINE = TOK('line'), INK = TOK('ink'), MUTED = TOK('muted'), CHIP = TOK('chip'), ACCENT = TOK('accent'),
   MISS_COL = TOK('miss'), REST = TOK('rest'), RECEPTOR = TOK('receptor'), BAR = TOK('field-bar'), WARN = TOK('warn');
 function draw() {
@@ -733,8 +743,8 @@ function draw() {
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
   g.fillStyle = BG; g.fillRect(0, 0, W, H);
   if (!G) return;
-  const laneW = Math.min(112, (W - 32) / LANES), fw = laneW * LANES, x0 = fieldX0(W, fw), size = laneW * 0.4;
-  const recY = A$.down ? H - 110 : 110, dir = A$.down ? -1 : 1, pps = 420 * A$.speed;   // pixels per second
+  const lay = layout(W, H), {laneW, fw, x0, k, hs} = lay, size = laneW * 0.4;
+  const recY = A$.down ? H - 110 * k : 110 * k, dir = A$.down ? -1 : 1, pps = 420 * A$.speed * k;   // pixels per second
   const t = state === 'play' ? songNow() : G.pausedAt ?? 0;
   const lx = i => x0 + laneW * (i + 0.5), now = performance.now();
   // playfield, with a soft pulse on each bar's downbeat
@@ -789,42 +799,42 @@ function draw() {
   if (!calm) for (const h of G.hits) {
     const age = now - h.t, p = age / 280, c = JUDGE[h.j].col, x = lx(h.lane);
     if (h.j === 0) {
-      const bk = h.j + '|' + laneW; if (!lite) drawOval(g, arcOvals[bk] || (arcOvals[bk] = softOval(c, Math.round(laneW * 0.32), 64, 0.45)), x, recY + dir * 52, 1 - p);   // a short beam: blending big areas every frame is what slows phones
+      const bk = h.j + '|' + laneW; if (!lite) drawOval(g, arcOvals[bk] || (arcOvals[bk] = softOval(c, Math.round(laneW * 0.32), 64, 0.45)), x, recY + dir * 52 * k, 1 - p);   // a short beam: blending big areas every frame is what slows phones
       // the ring never grows past the lane (47% of its width), so the clip never has anything to cut
       const r0 = size * 1.02, r1 = Math.max(r0, laneW * 0.47);
-      g.globalAlpha = 1 - p; g.strokeStyle = c; g.lineWidth = 2.5 * (1 - p) + 1; g.beginPath(); g.arc(x, recY, r0 + (r1 - r0) * eOut(p), 0, Math.PI * 2); g.stroke();
+      g.globalAlpha = 1 - p; g.strokeStyle = c; g.lineWidth = (2.5 * (1 - p) + 1) * k; g.beginPath(); g.arc(x, recY, r0 + (r1 - r0) * eOut(p), 0, Math.PI * 2); g.stroke();
       // sparks fly up the lane in a narrow cone instead of sideways into the walls
       if (!lite) { g.fillStyle = c; for (let k = 0; k < 4; k++) { const a = (k / 3 - 0.5) * 0.85 + Math.sin(h.seed + k) * 0.08, d = size * 0.9 + laneW * 0.8 * eOut(p);
-        g.fillRect(x + Math.sin(a) * d * 0.45 - 1.75, recY + dir * Math.cos(a) * d - 1.75, 3.5, 3.5); } }
+        g.fillRect(x + Math.sin(a) * d * 0.45 - 1.75 * k, recY + dir * Math.cos(a) * d - 1.75 * k, 3.5 * k, 3.5 * k); } }
     } else if (h.j === 1) {
-      if (age < 280) { const q = age / 280, r0 = size * 1.02, r1 = Math.max(r0, laneW * 0.47); g.globalAlpha = 1 - q; g.strokeStyle = c; g.lineWidth = 2; g.beginPath(); g.arc(x, recY, r0 + (r1 - r0) * eOut(q), 0, Math.PI * 2); g.stroke(); }
+      if (age < 280) { const q = age / 280, r0 = size * 1.02, r1 = Math.max(r0, laneW * 0.47); g.globalAlpha = 1 - q; g.strokeStyle = c; g.lineWidth = 2 * k; g.beginPath(); g.arc(x, recY, r0 + (r1 - r0) * eOut(q), 0, Math.PI * 2); g.stroke(); }
     } else if (age < 200) { arrow(x, recY, size, h.lane, c, null, 0.45 * (1 - age / 200)); }
     g.globalAlpha = 1;
   }
   // around the receptor end of the field only (a full-height glow was the costliest thing on a phone)
-  if (!calm && !lite && now - G.missT < 400) { const eh = Math.round(H * 0.45); edgeLight(g, Math.round(x0), A$.down ? H - eh : 0, Math.round(fw), eh, MISS_COL, 0.34 * (1 - (now - G.missT) / 400), 12, A$.down ? 'lrb' : 'lrt'); }
+  if (!calm && !lite && now - G.missT < 400) { const eh = Math.round(H * 0.45); edgeLight(g, Math.round(x0), A$.down ? H - eh : 0, Math.round(fw), eh, MISS_COL, 0.34 * (1 - (now - G.missT) / 400), Math.round(12 * k), A$.down ? 'lrb' : 'lrt'); }
   // a milestone (25, 50, every 50 after): a soft band of light runs up the field once
   if (!calm && !lite && now - G.mileT < 600) { const p = (now - G.mileT) / 600; drawOval(g, softOval(ACCENT, Math.round(fw * 0.5), 90, 0.16), x0 + fw / 2, recY - dir * p * (H + 120), 1 - p); }   // as wide as the field, transparent at its edges
   // hit error meter: where your last hits landed, early to the left, late to the right
-  const emY = recY - dir * (size + 26), emW = Math.min(fw - 20, 220), emX = x0 + fw / 2;
-  g.fillStyle = LINE + '88'; g.fillRect(emX - emW / 2, emY - 1, emW, 2);
-  g.fillStyle = '#ffd47955'; g.fillRect(emX - emW / 2 * (0.045 / 0.166), emY - 3, emW * (0.045 / 0.166), 6);
-  g.fillStyle = INK; g.fillRect(emX - 1, emY - 7, 2, 14);
-  for (const e of G.errs) { const age = now - e.t; if (age > 4000) continue; g.globalAlpha = Math.max(0.15, 1 - age / 4000); g.fillStyle = e.col; g.fillRect(emX + e.dt / 0.166 * emW / 2 - 1, emY - 6, 2, 12); }
+  const emY = recY - dir * (size + 26 * k), emW = Math.min(fw - 20, 220 * k), emX = x0 + fw / 2;
+  g.fillStyle = LINE + '88'; g.fillRect(emX - emW / 2, emY - k, emW, 2 * k);
+  g.fillStyle = '#ffd47955'; g.fillRect(emX - emW / 2 * (0.045 / 0.166), emY - 3 * k, emW * (0.045 / 0.166), 6 * k);
+  g.fillStyle = INK; g.fillRect(emX - k, emY - 7 * k, 2 * k, 14 * k);
+  for (const e of G.errs) { const age = now - e.t; if (age > 4000) continue; g.globalAlpha = Math.max(0.15, 1 - age / 4000); g.fillStyle = e.col; g.fillRect(emX + e.dt / 0.166 * emW / 2 - k, emY - 6 * k, 2 * k, 12 * k); }
   g.globalAlpha = 1;
   // notes fade in under the scoreboard, so it stays readable
-  const fadeH = 104, gr = A$.down ? g.createLinearGradient(0, 0, 0, fadeH) : g.createLinearGradient(0, H, 0, H - fadeH);
+  const fadeH = 104 * k, gr = A$.down ? g.createLinearGradient(0, 0, 0, fadeH) : g.createLinearGradient(0, H, 0, H - fadeH);
   gr.addColorStop(0, BG); gr.addColorStop(0.6, BG + 'e6'); gr.addColorStop(1, BG + '00');
   g.fillStyle = gr; g.fillRect(0, A$.down ? 0 : H - fadeH, W, fadeH);
   // health bar along the edge away from the targets
-  let hbW = Math.min(360, W - 40), hbX = Math.max(20, x0 + fw / 2 - hbW / 2);
-  const hbY = A$.down ? 22 : H - 32;
+  let hbW = Math.min(360 * k, fw - 16, W - 40), hbX = Math.max(20, x0 + fw / 2 - hbW / 2);
+  const hbH = 10 * k, hbY = A$.down ? 22 * k : H - 22 * k - hbH;
   if (A$.down && hbX < homeRight + 12) { hbX = homeRight + 12; hbW = Math.min(hbW, W - hbX - 20); }   // clear of the Home button
-  g.fillStyle = CHIP; g.beginPath(); g.roundRect(hbX, hbY, hbW, 10, 5); g.fill();
-  g.fillStyle = G.health < 25 ? MISS_COL : ACCENT; g.beginPath(); g.roundRect(hbX, hbY, Math.max(4, hbW * G.health / 100), 10, 5); g.fill();
+  g.fillStyle = CHIP; g.beginPath(); g.roundRect(hbX, hbY, hbW, hbH, hbH / 2); g.fill();
+  g.fillStyle = G.health < 25 ? MISS_COL : ACCENT; g.beginPath(); g.roundRect(hbX, hbY, Math.max(4, hbW * G.health / 100), hbH, hbH / 2); g.fill();
   const prog = Math.max(0, Math.min(1, t / tr.buf.duration)), acc = G.judged ? (G.accSum / G.judged * 100).toFixed(2) + '%' : '–';
   const time = `${fmtTime(Math.max(0, t))} / ${fmtTime(tr.buf.duration)}`;
-  if (W > fw + 400) {
+  if (lay.hud) {
     // Score, combo, accuracy and time in a panel beside the lanes, at the height your eyes already
     // are while playing; the judgement tally mirrors it on the other side.
     const px = x0 + fw + 40, py = A$.down ? H * 0.42 : H * 0.18;
@@ -866,22 +876,22 @@ function draw() {
   if (mpOn()) MP.draw(g, {t, pps, recY, dir, W, H, x0, fw, now});
   // judgement popup (the combo lives in the side panel now, not in the middle of the notes)
   // kept clear of the score line at the top (or bottom) on short screens, such as phones in landscape
-  const midY = A$.down ? Math.max(recY - 190, 100) : Math.min(recY + 190, H - 100);
+  const midY = A$.down ? Math.max(recY - 190 * k, 100) : Math.min(recY + 190 * k, H - 100);
   if (G.pop) {
     const age = now - G.pop.t;
     if (age < 600) {
       g.globalAlpha = age < 450 ? 1 : 1 - (age - 450) / 150;
-      g.fillStyle = G.pop.col; g.font = `800 ${calm ? 28 : Math.round(30 - Math.min(age, 80) / 16)}px "Figtree", system-ui, sans-serif`;
+      g.fillStyle = G.pop.col; g.font = `800 ${Math.round((calm ? 28 : 30 - Math.min(age, 80) / 16) * k)}px "Figtree", system-ui, sans-serif`;
       g.fillText(G.pop.text, x0 + fw / 2, midY);
-      if (G.pop.dt != null && G.pop.text !== 'Sick') { g.font = '600 13px "Figtree", system-ui, sans-serif'; g.fillStyle = MUTED; g.fillText(`${G.pop.dt < 0 ? 'early' : 'late'} ${Math.round(Math.abs(G.pop.dt) * 1000)} ms`, x0 + fw / 2, midY + 22); }
+      if (G.pop.dt != null && G.pop.text !== 'Sick') { g.font = `600 ${13 * k}px "Figtree", system-ui, sans-serif`; g.fillStyle = MUTED; g.fillText(`${G.pop.dt < 0 ? 'early' : 'late'} ${Math.round(Math.abs(G.pop.dt) * 1000)} ms`, x0 + fw / 2, midY + 22 * k); }
       g.globalAlpha = 1;
     }
   }
   // count-in and intro skip
   if (state === 'play') {
-    const k = Math.floor((audioNow() - G.countFrom) / G.beat);
-    if (k >= 0 && k < 4) { g.fillStyle = INK; g.font = '800 76px "Figtree", system-ui, sans-serif'; g.fillText(k < 3 ? String(3 - k) : 'Go', x0 + fw / 2, H / 2); }
-    if (canSkip()) { g.fillStyle = MUTED; g.font = '600 14px "Figtree", system-ui, sans-serif'; g.fillText('Space to skip the intro', W / 2, A$.down ? H - 30 : 40); }
+    const beat = Math.floor((audioNow() - G.countFrom) / G.beat);
+    if (beat >= 0 && beat < 4) { g.fillStyle = INK; g.font = `800 ${76 * k}px "Figtree", system-ui, sans-serif`; g.fillText(beat < 3 ? String(3 - beat) : 'Go', x0 + fw / 2, H / 2); }
+    if (canSkip()) { g.fillStyle = MUTED; g.font = `600 ${14 * hs}px "Figtree", system-ui, sans-serif`; g.fillText('Space to skip the intro', W / 2, A$.down ? H - 30 * hs : 40 * hs); }
   }
 }
 // The game runs off the audio clock. If the sound device drops out (Bluetooth reconnecting, the
@@ -1045,7 +1055,7 @@ $('#rMenu').addEventListener('click', toMenu);
 // touch: tap a lane
 cv.addEventListener('pointerdown', e => {
   if (state !== 'play') return;
-  const W = innerWidth, laneW = Math.min(112, (W - 32) / LANES), x0 = fieldX0(W, laneW * LANES), lane = Math.floor((e.clientX - x0) / laneW);
+  const {laneW, x0} = layout(innerWidth, innerHeight), lane = Math.floor((e.clientX - x0) / laneW);
   if (lane >= 0 && lane < LANES) { onLane(lane, e.timeStamp); const up = () => { offLane(lane); removeEventListener('pointerup', up); }; addEventListener('pointerup', up); }
 });
 
