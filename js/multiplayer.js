@@ -12,7 +12,6 @@
 // connection, so a dropout is a pause, not a goodbye. Important messages (song, start, results, hits)
 // are numbered, acknowledged and sent again until they arrive; a player who drops keeps their place
 // for a while and reconnects by themselves; the game itself never waits for the network.
-const MP_PANEL = 290;   // room between your lanes and the first other player, for your score panel
 const MP_VERSION = 4, MP_MAX = 4, MP_PREFIX = 'rt-arcade-', CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const GRACE_LOBBY = 45000, GRACE_MATCH = 120000, GIVE_UP = 90000;   // how long a dropped player keeps their place / keeps trying
 const nowE = () => performance.timeOrigin + performance.now();   // this computer's clock, in ms
@@ -83,7 +82,7 @@ const MP = {
   inGame:false,        // this computer is playing a match right now
   live:new Map(),      // id -> {s, c, mc, a, hp, d, p, js:Map(note id -> judgement), flash:[], done}
   results:new Map(),   // id -> final results
-  offset:0, bestRtt:Infinity, prevSel:null, lay:{on:false}, lostAt:0,
+  offset:0, bestRtt:Infinity, prevSel:null, lostAt:0,
 
   // ---------- connecting ----------
   peerOpts() {
@@ -635,14 +634,6 @@ const MP = {
   others() { return this.players.filter(p => p.id !== this.me && p.inMatch); },
 
   // ---------- drawing the other players while you play ----------
-  shift(W, fw) {
-    const n = this.others().length; if (!n) { this.lay = {on:false}; return 0; }
-    const left = W > fw + 400 ? HUD_L : 16, mw = Math.min(150, (W - left - fw - MP_PANEL - 24) / n - 18);
-    this.lay = {on:mw >= 74 && W > fw + 400, mw};
-    if (!this.lay.on) return 0;
-    const need = fw + MP_PANEL + n * (mw + 18), x0 = Math.max(left, (W - need) / 2);
-    return (W - fw) / 2 - x0;
-  },
   draw(g, v) {
     // your own connection dropped: say so, quietly (the game carries on regardless)
     if (!this.host && this.lostAt) {
@@ -651,14 +642,14 @@ const MP = {
       g.fillStyle = CHIP + 'ee'; g.beginPath(); g.roundRect(v.x0 + v.fw / 2 - w / 2, y - 17, w, 26, 13); g.fill();
       g.fillStyle = WARN; g.textAlign = 'center'; g.fillText(txt, v.x0 + v.fw / 2, y);
     }
-    if (!this.lay.on) return;
-    const {mw} = this.lay, others = this.others(), lw = mw / 4, size = lw * 0.36, tt = v.t - 0.15;   // a little behind, so their hits arrive before their notes reach the line
+    const o = v.lay.others; if (!o) return;   // where and how big: layout() in arcade.js
+    const {mw} = o, others = this.others(), lw = mw / 4, size = lw * 0.36, tt = v.t - 0.15, ms = Math.max(1, Math.min(mw / 150, 1.6));   // a little behind, so their hits arrive before their notes reach the line
     // a shrunken copy of a field: the scroll shrinks with the arrows, so notes keep their spacing instead of stretching out
     v = {...v, pps:v.pps * mw / v.fw * 1.1};
     const lead = this.standings()[0];
     others.forEach((p, k) => {
       const L = this.live.get(p.id) || {s:0, c:0, a:100, hp:50, d:0, js:new Map(), flash:[]}, r = this.results.get(p.id);
-      const mx = v.x0 + v.fw + MP_PANEL + k * (mw + 18), lx = i => mx + lw * (i + 0.5);
+      const mx = o.x + k * (mw + o.gap), lx = i => mx + lw * (i + 0.5);
       g.fillStyle = FIELD; g.fillRect(mx, 0, mw, v.H);
       g.fillStyle = LINE; for (let i = 1; i < 4; i++) g.fillRect(mx + lw * i, 0, 1, v.H);
       for (let i = 0; i < 4; i++) {
@@ -687,23 +678,24 @@ const MP = {
       L.flash = L.flash.filter(f => v.now - f.t < 300);
       for (const f of L.flash) { const a = 1 - (v.now - f.t) / 300; arrow(lx(f.lane), v.recY, size * (1.05 + (1 - a) * 0.4), f.lane, null, JCOL[f.j], a); }
       // name, score and health at the edge away from the targets
-      const hy = v.dir < 0 ? 0 : v.H - 74;
-      g.fillStyle = BG + 'e6'; g.fillRect(mx, hy, mw, 74);
-      g.textAlign = 'left'; g.fillStyle = INK; g.font = '700 13px "Figtree", system-ui, sans-serif';
-      g.fillText(clip(g, (lead && lead.id === p.id && lead.score > 0 ? '👑 ' : '') + p.name, mw - 8), mx + 4, hy + 18);
-      g.font = '800 17px "Figtree", system-ui, sans-serif'; g.fillText((r ? r.score : L.s).toLocaleString(), mx + 4, hy + 40);
-      g.fillStyle = MUTED; g.font = '600 11.5px "Figtree", system-ui, sans-serif';
-      g.fillText(`${(r ? r.acc : L.a).toFixed(1)}% · ${L.c}×`, mx + 4, hy + 57);
-      g.fillStyle = CHIP; g.fillRect(mx + 4, hy + 64, mw - 8, 4);
-      g.fillStyle = L.hp < 25 ? MISS_COL : ACCENT; g.fillRect(mx + 4, hy + 64, Math.max(2, (mw - 8) * L.hp / 100), 4);
+      const hh = 74 * ms, hy = v.dir < 0 ? 0 : v.H - hh, F = (w, px) => `${w} ${px * ms}px "Figtree", system-ui, sans-serif`;
+      g.fillStyle = BG + 'e6'; g.fillRect(mx, hy, mw, hh);
+      g.textAlign = 'left'; g.fillStyle = INK; g.font = F(700, 13);
+      g.fillText(clip(g, (lead && lead.id === p.id && lead.score > 0 ? '👑 ' : '') + p.name, mw - 8), mx + 4 * ms, hy + 18 * ms);
+      g.font = F(800, 17); g.fillText((r ? r.score : L.s).toLocaleString(), mx + 4 * ms, hy + 40 * ms);
+      g.fillStyle = MUTED; g.font = F(600, 11.5);
+      g.fillText(`${(r ? r.acc : L.a).toFixed(1)}% · ${L.c}×`, mx + 4 * ms, hy + 57 * ms);
+      g.fillStyle = CHIP; g.fillRect(mx + 4 * ms, hy + 64 * ms, mw - 8 * ms, 4 * ms);
+      g.fillStyle = L.hp < 25 ? MISS_COL : ACCENT; g.fillRect(mx + 4 * ms, hy + 64 * ms, Math.max(2, (mw - 8 * ms) * L.hp / 100), 4 * ms);
       if (p.state === 'left' || r || p.net === 'lost') {
         g.fillStyle = BG + (r || p.state === 'left' ? 'b3' : '80'); g.fillRect(mx, 0, mw, v.H);
-        g.fillStyle = r ? INK : MUTED; g.textAlign = 'center'; g.font = '800 18px "Figtree", system-ui, sans-serif';
+        g.fillStyle = r ? INK : MUTED; g.textAlign = 'center'; g.font = `800 ${18 * ms}px "Figtree", system-ui, sans-serif`;
         g.fillText(r ? 'Finished' : p.state === 'left' ? 'Left' : 'Reconnecting…', mx + mw / 2, v.H / 2);
       }
       g.textAlign = 'center';
     });
   },
+  // live positions under the score panel
   // live positions under your combo, scaled (s) and as wide (w) as the side panel
   drawStandings(g, px, y, s = 1, w = 200) {
     const rows = this.standings(); if (rows.length < 2) return;

@@ -728,15 +728,27 @@ function noteArrow(x, y, size, lane) {
 // height, never less than it always was (112 px, or what fits a phone's width) and never more than LANE_MAX, so all
 // four lanes stay within one glance on a big monitor. Everything drawn for the field (the targets' distance from the
 // edge, scroll speed, effects, text) scales with it as k, so a big screen is the same game, bigger, and notes take as
-// long to fall as on a laptop. The side panels scale (hs) with the room beside the field. In a match the lanes move
-// left to make room for the other players.
-const LANE_MAX = 180, HUD_L = 190, HUD_R = 240;   // side panels: score | combo, standings
+// long to fall as on a laptop. The side panels scale (hs) with the room beside the field. In a match the other
+// players' fields go on the right, as big as the room allows.
+const LANE_MAX = 180, HUD_L = 190, HUD_R = 240, MP_GAP = 18;   // side panels: score | combo, standings
 function layout(W, H) {
   const fit = (W - 32) / LANES;
   const laneW = Math.min(fit, LANE_MAX, Math.max(Math.min(112, fit), H * 0.15)), fw = laneW * LANES, k = Math.max(1, laneW / 112);
-  const L = {laneW, fw, k, x0:(W - fw) / 2 - (mpOn() ? MP.shift(W, fw) : 0), hud:W > fw + 400, hs:1};
+  const L = {laneW, fw, k, x0:(W - fw) / 2, hud:W > fw + 400, hs:1, others:null};
+  const n = mpOn() ? MP.others().length : 0;
+  if (!L.hud) return L;
   // the side panels grow (hs) with the room beside the field, up to 1.9×
-  if (L.hud && !mpOn()) L.hs = Math.max(1, Math.min((W - fw) / 2 / 260, H / 820, 1.9));
+  const hsFor = side => Math.max(1, Math.min(side / 260, H / 820, 1.9));
+  if (!n) { L.hs = hsFor((W - fw) / 2); return L; }
+  // a match: [your numbers][your field][combo, standings][the others' fields, up to 60% of yours]; the panels shrink
+  // back to 1× before the others' fields get too small (74 px), and below that the others aren't drawn, as before
+  for (const hs of [hsFor(Infinity), 1]) {
+    const sl = HUD_L * hs, sr = HUD_R * hs, room = W - 32 - fw - sl - sr, mw = Math.min(fw * 0.6, room / n - MP_GAP);
+    if (mw < 74) continue;
+    const total = sl + sr + fw + n * (mw + MP_GAP);
+    L.hs = hs; L.x0 = Math.max(16, (W - total) / 2) + sl; L.others = {x:L.x0 + fw + sr + MP_GAP, mw, gap:MP_GAP};
+    return L;
+  }
   return L;
 }
 const BG = TOK('bg'), FIELD = TOK('panel'), LINE = TOK('line'), INK = TOK('ink'), MUTED = TOK('muted'), CHIP = TOK('chip'), ACCENT = TOK('accent'),
@@ -876,7 +888,7 @@ function draw() {
     g.fillStyle = INK; g.font = '600 14px "Figtree", system-ui, sans-serif'; g.textAlign = 'center';
     g.fillText(`${G.score.toLocaleString()}  ·  ${G.combo}×  ·  ${acc}  ·  ${Math.round(prog * 100)}%`, hbX + hbW / 2, hbY + (A$.down ? 32 : -12));
   }
-  if (mpOn()) MP.draw(g, {t, pps, recY, dir, W, H, x0, fw, now});
+  if (mpOn()) MP.draw(g, {t, pps, recY, dir, W, H, x0, fw, now, lay});
   // judgement popup (the combo lives in the side panel now, not in the middle of the notes)
   // kept clear of the score line at the top (or bottom) on short screens, such as phones in landscape
   const midY = A$.down ? Math.max(recY - 190 * k, 100) : Math.min(recY + 190 * k, H - 100);
