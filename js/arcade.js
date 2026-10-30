@@ -36,6 +36,21 @@ function fxLite(now) {
   if (!fxRate.lite && fxRate.avg > 36) fxRate.lite = true; else if (fxRate.lite && fxRate.avg < 28) fxRate.lite = false;
   return fxRate.lite;
 }
+// Canvas sharpness: full device resolution unless frames keep being missed while playing (painting a big field on a
+// large or high-DPI screen can be more than the graphics hardware keeps up with). Then the canvas steps down to 85%,
+// 72%, then 60% of it, stretched to fill, so everything keeps its size. Like fxLite it follows a running average, here
+// of the share of frames that took over 21 ms (a missed frame at 60 Hz; on faster screens, below about 48 fps), so a
+// single hiccup or a short burst of them doesn't count. It only steps down, waits 1.5 s after a song starts or resumes
+// and 1 s between steps, and starts sharp again on the next page load.
+const RES_STEPS = [1, 0.85, 0.72, 0.6];
+const res = {step:0, last:0, missed:0, calmUntil:0};
+function resWatch(now) {
+  const dt = res.last ? now - res.last : 0; res.last = now;
+  if (!dt || dt > 250) return;                                     // the first frame, or back from a pause or a hidden tab
+  res.missed += ((dt > 21 ? 1 : 0) - res.missed) * 0.01;
+  if (now - G.startedAt < 1500 || now < res.calmUntil || res.step === RES_STEPS.length - 1) return;
+  if (res.missed > 0.05) { res.step++; res.missed = 0; res.calmUntil = now + 1000; }
+}
 // timing windows in seconds, points, health change (out of 100) and accuracy weight
 const JUDGE = [
   {name:'Sick', win:0.045, pts:350, hp:2.3, acc:1,    col:'#ffd479'},
@@ -757,7 +772,7 @@ function layout(W, H) {
 const BG = TOK('bg'), FIELD = TOK('panel'), LINE = TOK('line'), INK = TOK('ink'), MUTED = TOK('muted'), CHIP = TOK('chip'), ACCENT = TOK('accent'),
   MISS_COL = TOK('miss'), REST = TOK('rest'), RECEPTOR = TOK('receptor'), BAR = TOK('field-bar'), WARN = TOK('warn');
 function draw() {
-  const dpr = devicePixelRatio || 1, W = innerWidth, H = innerHeight;
+  const dpr = (devicePixelRatio || 1) * RES_STEPS[res.step], W = innerWidth, H = innerHeight;
   if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
   g.fillStyle = BG; g.fillRect(0, 0, W, H);
@@ -930,6 +945,7 @@ function frame() {
       pause('The sound stopped. Your audio device may have disconnected or switched. Press Enter to carry on.');
       draw(); return;
     }
+    resWatch(performance.now());
     if (update()) { draw(); requestAnimationFrame(frame); } else draw();
   } catch (err) {
     // never freeze silently: stop, and say what went wrong
