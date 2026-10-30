@@ -19,7 +19,11 @@ self.addEventListener('fetch', e => {
       if (hit) return hit;
     }
     try {
-      const r = await fetch(e.request, {cache:'no-cache'});
+      // A page (navigation) is fetched as a new request for its URL: Chrome ignores {cache:'no-cache'} on the
+      // navigation request itself and answers from its HTTP cache (up to 10 minutes old), which gave a returning
+      // visitor the old page with the new scripts. redirect:'manual' lets the browser follow any redirect itself.
+      const req = e.request.mode === 'navigate' ? new Request(url.href, {redirect:'manual'}) : e.request;
+      const r = await fetch(req, {cache:'no-cache'});
       if (r.ok && url.origin === location.origin && !NO_CACHE.test(url.pathname)) c.put(e.request, r.clone());
       return r;
     } catch (err) {
