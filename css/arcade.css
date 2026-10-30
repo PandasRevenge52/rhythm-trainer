@@ -4,6 +4,11 @@ body.arcade{overflow:hidden;height:100vh}
 .aov{position:fixed;inset:0;display:none;align-items:center;justify-content:center;padding:16px;background:var(--overlay);z-index:10}
 .aov.show{display:flex}
 .apanel{background:var(--panel);border:1px solid var(--line);border-top-color:var(--edge);border-radius:var(--r-xl);padding:22px 26px 20px;width:min(560px,100%);max-height:calc(100vh - 32px);overflow:auto;box-shadow:0 24px 64px rgba(0,0,0,.5)}
+/* Big screens: the menus are the same layout, only larger. zoom scales everything together, so a line holds the same
+   words as on a laptop instead of stretching wider; the height limit is divided by it so the card still fits. */
+.apanel{zoom:var(--az,1);max-height:calc((100vh - 32px) / var(--az,1))}
+@media (min-width:1700px) and (min-height:1000px){ .apanel{--az:1.2} }
+@media (min-width:2300px) and (min-height:1300px){ .apanel{--az:1.4} }
 .apanel.small{width:min(360px,100%);display:flex;flex-direction:column;gap:10px}
 .apanel.small h2{margin:0 0 4px;text-align:center;font-size:26px}
 .apanel.small button{justify-content:center}
