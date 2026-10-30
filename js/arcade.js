@@ -988,10 +988,11 @@ $('#acPad').addEventListener('pointerdown', e => { e.preventDefault(); if (AC.on
 const LANE_ROWS = [['0', 'Left lane ←'], ['1', 'Down lane ↓'], ['2', 'Up lane ↑'], ['3', 'Right lane →']];
 function renderKeys() {
   const caps = A$.keyNames.map(k => `<kbd>${esc(k)}</kbd>`).join(' ');
-  $('#aKeysMenu').innerHTML = caps; $('#aKeysNow').innerHTML = caps;
+  $('#aKeysMenu').innerHTML = caps;
+  if ($('#aKeysNow')) $('#aKeysNow').innerHTML = caps;   // not on an older cached arcade.html (see ui.js syncControls)
 }
 let akm = null;
-$('#aKeysEdit').addEventListener('click', () => {
+$('#aKeysEdit')?.addEventListener('click', () => {
   if (akm) return akm.close();
   openKeymap().then(() => {
     const host = $('#aKeymap'), btn = $('#aKeysEdit');

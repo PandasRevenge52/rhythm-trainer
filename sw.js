@@ -1,7 +1,7 @@
 // Offline support: try the network first (so a new version shows up on the next load) and fall back to
 // the cached copy when offline. Fonts and icons are the exception: they only change together with the
 // cache name below, so they come straight from the cache when it has them (no network wait on repeat visits).
-const CACHE = 'rhythm-trainer-v41';
+const CACHE = 'rhythm-trainer-v42';
 const CACHE_FIRST = /\.(woff2|svg|png)$/;
 // L4: only the app's own files are cached; charts (120 files, ~8.6 MB, loaded on demand) are not, so the
 // cache can't grow without bound. The last played song is kept separately in IndexedDB for offline replay.
@@ -19,7 +19,11 @@ self.addEventListener('fetch', e => {
       if (hit) return hit;
     }
     try {
-      const r = await fetch(e.request, {cache:'no-cache'});
+      // A page (navigation) is fetched as a new request for its URL: Chrome ignores {cache:'no-cache'} on the
+      // navigation request itself and answers from its HTTP cache (up to 10 minutes old), which gave a returning
+      // visitor the old page with the new scripts. redirect:'manual' lets the browser follow any redirect itself.
+      const req = e.request.mode === 'navigate' ? new Request(url.href, {redirect:'manual'}) : e.request;
+      const r = await fetch(req, {cache:'no-cache'});
       if (r.ok && url.origin === location.origin && !NO_CACHE.test(url.pathname)) c.put(e.request, r.clone());
       return r;
     } catch (err) {
