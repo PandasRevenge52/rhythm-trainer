@@ -1021,6 +1021,8 @@ addEventListener('keydown', e => {
   if (state === 'play' && e.code in KEYS) { e.preventDefault(); if (!e.repeat) onLane(KEYS[e.code], e.timeStamp); return; }
   if (e.repeat) return;
   if (e.code === 'Space' && state === 'play') { e.preventDefault(); skipIntro(); }
+  // Enter pauses a song too (or offers to leave a match), like Escape; while paused it resumes, as before
+  else if ((e.code === 'Enter' || e.code === 'NumpadEnter') && state === 'play') { e.preventDefault(); if (mpOn()) MP.askQuit(); else pause(); }
   else if (e.code === 'Escape' && mpOn()) { if (state === 'play') MP.askQuit(); }
   else if (e.code === 'Escape') { if (state === 'play') pause(); else if (state === 'paused') resume(); else if (state === 'results') toMenu(); }
   else if (e.code === 'Enter' && typeof MP !== 'undefined' && MP.code) { /* the lobby has its own buttons */ }
