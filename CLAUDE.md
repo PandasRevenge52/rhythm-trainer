@@ -25,8 +25,14 @@ the live site**. Friends use it.
   comes from another device goes through `Saves.check()` first, like multiplayer messages. Its `combine()` is the
   hardened cross-device merge (`mergeProfile` in `data.js` only merges this browser's own tabs). Settings in
   `DEVICE_ONLY` (`sync.js`) never leave the device. `optimization/accounts.md` has the design and merge rules.
-- `sw.js`: offline support. Pages and code are network-first; fonts and icons are cache-first. **Bump `CACHE`**
-  whenever files are added or removed, or a font or icon changes.
+- `sw.js`: offline support. Pages and code are network-first (pages are fetched as a new request for their URL:
+  Chrome ignores `cache:'no-cache'` on the navigation request itself and answers from its HTTP cache); the cached
+  copy is only for offline. Fonts and icons are cache-first. **Bump `CACHE` in every release that adds or removes
+  any file** (on-demand files included), or changes a font or icon.
+- A returning visitor's first visit after a release is still answered by their old service worker, so it can get
+  the previous release's cached HTML with the new scripts. **Start-up code checks every element the release adds
+  to the HTML before using it** (`$('#x')?.addEventListener`, `if ($('#x'))`), so an old page runs without the new
+  feature instead of crashing.
 - Fonts are self-hosted in `fonts/` (Figtree, plus Twemoji for emoji).
 - Look ("Mono"): every colour is a token in `css/app.css` `:root`, and the Arcade and multiplayer canvases read
   them with `TOK()`. Glows stay inside their own element. Motion uses the `--dur-*` and `--ease-*` tokens, with
@@ -62,9 +68,16 @@ mkdir -p $WORK/main && git archive main | tar -x -C $WORK/main && python3 ghserv
 | Cost of one playhead update | `node phcost.js <url> 16` |
 | Saves: merge rules, validator fuzzing, `__proto__`, save codes | `node savetest.js <url>` (runs in the page) |
 | Short recordings for the review page | `node record.js <url> <outdir> b <level> <bpm> [phone]` (MP4 via ffmpeg-static) |
+| Multiplayer, every flow (invite link, typed code, relay with a dropout, leave) | `MODE=basic\|code URL=<url>/arcade.html node mpflows.js`, `MODE=drop BLOCK=1 …` |
+| Returning visitor (old service worker and cache → new release) | `node returning.js prime <old url>`, then `node returning.js check <new url>` |
 
-Not rebuilt yet on the Mac (the originals stayed on the old machine): Arcade INP and frame rate, `playcheck.js`,
-`mpflows.js`, `returning.js`, `animcheck.js`. `optimization/progress.md` lists which ones exist on this machine.
+**Returning-visitor test before every release, locally on the merged branch:** serve the live version (the last
+release's commit, `git archive`) on a port, `returning.js prime` it, serve the merged branch on **the same port**
+(the service worker belongs to the origin), then `returning.js check`. The first visit back must have no errors.
+Run it again on the live site after the push, with a profile primed on the live site before the push.
+
+Not rebuilt yet (the originals are in `optimization-old/tools` on the desktop): Arcade INP and frame rate,
+`playcheck.js`, `animcheck.js`. `optimization/progress.md` lists which ones exist on each machine.
 
 Always compare against `main` measured in the same session, with runs alternating. Absolute numbers drift
 between machines and sessions (`report.md` "Read this first").
@@ -84,5 +97,7 @@ between machines and sessions (`report.md` "Read this first").
 - Gameplay effects must not add input latency or drop frames: canvas or transform/opacity only, never
   layout in the game loop.
 - Show visual changes (screenshots or recordings) and get approval before building them out.
+- Before a release: the returning-visitor test locally on the merged branch (above), and `CACHE` bumped if any
+  file was added or removed.
 - After a release: smoke test on the live URL, both pages on desktop and phone with no console or CSP
   errors, the returning-visitor check, a live multiplayer match, then update `progress.md` and `report.md`.
