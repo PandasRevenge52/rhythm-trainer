@@ -637,7 +637,7 @@ const MP = {
   // ---------- drawing the other players while you play ----------
   shift(W, fw) {
     const n = this.others().length; if (!n) { this.lay = {on:false}; return 0; }
-    const left = W > fw + 400 ? 150 : 16, mw = Math.min(150, (W - left - fw - MP_PANEL - 24) / n - 18);
+    const left = W > fw + 400 ? HUD_L : 16, mw = Math.min(150, (W - left - fw - MP_PANEL - 24) / n - 18);
     this.lay = {on:mw >= 74 && W > fw + 400, mw};
     if (!this.lay.on) return 0;
     const need = fw + MP_PANEL + n * (mw + 18), x0 = Math.max(left, (W - need) / 2);
@@ -704,15 +704,15 @@ const MP = {
       g.textAlign = 'center';
     });
   },
-  // live positions under the score panel
-  drawStandings(g, px, y) {
+  // live positions under your combo, scaled (s) and as wide (w) as the side panel
+  drawStandings(g, px, y, s = 1, w = 200) {
     const rows = this.standings(); if (rows.length < 2) return;
-    g.textAlign = 'left'; g.fillStyle = MUTED; g.font = '700 11.5px "Figtree", system-ui, sans-serif'; g.fillText('STANDINGS', px, y);
+    g.textAlign = 'left'; g.fillStyle = MUTED; g.font = `700 ${12 * s}px "Figtree", system-ui, sans-serif`; g.fillText('STANDINGS', px, y);
     rows.forEach((r, i) => {
-      const yy = y + 24 + i * 22;
-      g.fillStyle = r.mine ? ACCENT : r.left ? REST : INK; g.font = `${r.mine ? 700 : 600} 14px "Figtree", system-ui, sans-serif`;
-      g.fillText(`${i + 1}`, px, yy); g.fillText(clip(g, r.name, 100), px + 18, yy);
-      g.textAlign = 'right'; g.fillText(r.left ? 'left' : (r.lost ? '⚠ ' : '') + r.score.toLocaleString(), px + 200, yy); g.textAlign = 'left';
+      const yy = y + (24 + i * 24) * s;
+      g.fillStyle = r.mine ? ACCENT : r.left ? REST : INK; g.font = `${r.mine ? 700 : 600} ${15 * s}px "Figtree", system-ui, sans-serif`;
+      g.fillText(`${i + 1}`, px, yy); g.fillText(clip(g, r.name, w * 0.5), px + 18 * s, yy);
+      g.textAlign = 'right'; g.fillText(r.left ? 'left' : (r.lost ? '⚠ ' : '') + r.score.toLocaleString(), px + w, yy); g.textAlign = 'left';
     });
     g.textAlign = 'center';
   },

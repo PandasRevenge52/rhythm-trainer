@@ -728,12 +728,16 @@ function noteArrow(x, y, size, lane) {
 // height, never less than it always was (112 px, or what fits a phone's width) and never more than LANE_MAX, so all
 // four lanes stay within one glance on a big monitor. Everything drawn for the field (the targets' distance from the
 // edge, scroll speed, effects, text) scales with it as k, so a big screen is the same game, bigger, and notes take as
-// long to fall as on a laptop. In a match the lanes move left to make room for the other players.
-const LANE_MAX = 180;
+// long to fall as on a laptop. The side panels scale (hs) with the room beside the field. In a match the lanes move
+// left to make room for the other players.
+const LANE_MAX = 180, HUD_L = 190, HUD_R = 240;   // side panels: score | combo, standings
 function layout(W, H) {
   const fit = (W - 32) / LANES;
   const laneW = Math.min(fit, LANE_MAX, Math.max(Math.min(112, fit), H * 0.15)), fw = laneW * LANES, k = Math.max(1, laneW / 112);
-  return {laneW, fw, k, x0:(W - fw) / 2 - (mpOn() ? MP.shift(W, fw) : 0), hud:W > fw + 400, hs:1};
+  const L = {laneW, fw, k, x0:(W - fw) / 2 - (mpOn() ? MP.shift(W, fw) : 0), hud:W > fw + 400, hs:1};
+  // the side panels grow (hs) with the room beside the field, up to 1.9×
+  if (L.hud && !mpOn()) L.hs = Math.max(1, Math.min((W - fw) / 2 / 260, H / 820, 1.9));
+  return L;
 }
 const BG = TOK('bg'), FIELD = TOK('panel'), LINE = TOK('line'), INK = TOK('ink'), MUTED = TOK('muted'), CHIP = TOK('chip'), ACCENT = TOK('accent'),
   MISS_COL = TOK('miss'), REST = TOK('rest'), RECEPTOR = TOK('receptor'), BAR = TOK('field-bar'), WARN = TOK('warn');
@@ -835,39 +839,38 @@ function draw() {
   const prog = Math.max(0, Math.min(1, t / tr.buf.duration)), acc = G.judged ? (G.accSum / G.judged * 100).toFixed(2) + '%' : '–';
   const time = `${fmtTime(Math.max(0, t))} / ${fmtTime(tr.buf.duration)}`;
   if (lay.hud) {
-    // Score, combo, accuracy and time in a panel beside the lanes, at the height your eyes already
-    // are while playing; the judgement tally mirrors it on the other side.
-    const px = x0 + fw + 40, py = A$.down ? H * 0.42 : H * 0.18;
-    const label = (txt, y) => { g.fillStyle = MUTED; g.font = '700 11.5px "Figtree", system-ui, sans-serif'; g.fillText(txt, px, y); };
+    // Score, accuracy and the judgement tally on the left of the lanes, the combo and the song on the right, at the
+    // height your eyes already are while playing, scaled (hs) with the room beside the field.
+    const u = v => v * hs, F = (w, px) => `${w} ${u(px)}px "Figtree", system-ui, sans-serif`;
+    const pad = u(40), lx = x0 - pad, rx = x0 + fw + pad, py = A$.down ? H * 0.4 : H * 0.18, room = (HUD_R - 40 - 8) * hs;
+    const label = (txt, x, y) => { g.fillStyle = MUTED; g.font = F(700, 12); g.fillText(txt, x, y); };
+    // big numbers shrink a little rather than run into the field or the other players
+    const fit = (w, px, min, txt, max) => { let s = px; g.font = F(w, s); while (s > min && g.measureText(txt).width > max) { s -= 2; g.font = F(w, s); } };
+    g.textAlign = 'right';
+    label('SCORE', lx, py); g.fillStyle = INK; fit(800, 40, 24, G.score.toLocaleString(), (HUD_L - 40 - 8) * hs); g.fillText(G.score.toLocaleString(), lx, py + u(42));
+    label('ACCURACY', lx, py + u(86)); g.fillStyle = INK; g.font = F(700, 26); g.fillText(acc, lx, py + u(116));
+    if (G.judged) { g.fillStyle = MUTED; g.font = F(600, 14); g.fillText(ratingOf(), lx, py + u(138)); }
+    g.font = F(600, 16); let yy = py + u(182);
+    for (const J of [...JUDGE, {name:'Miss', col:MISS_COL}]) { g.fillStyle = J.col; g.fillText(`${J.name}  ${G.counts[J.name]}`, lx, yy); yy += u(26); }
     g.textAlign = 'left';
-    label('SCORE', py); g.fillStyle = INK; let ss = 30; g.font = `800 ${ss}px "Figtree", system-ui, sans-serif`;
-    while (ss > 20 && g.measureText(G.score.toLocaleString()).width > 228) { ss -= 2; g.font = `800 ${ss}px "Figtree", system-ui, sans-serif`; }
-    g.fillText(G.score.toLocaleString(), px, py + 32);
-    // the combo shrinks a little if it and its best wouldn't fit the panel (big combos, other players beside it)
-    label('COMBO', py + 70);
-    g.font = '600 13px "Figtree", system-ui, sans-serif'; const bw = g.measureText(`best ${G.maxCombo}`).width;
-    let cs = 38; g.font = `800 ${cs}px "Figtree", system-ui, sans-serif`;
-    while (cs > 22 && g.measureText(String(G.combo)).width + 12 + bw > 228) { cs -= 2; g.font = `800 ${cs}px "Figtree", system-ui, sans-serif`; }
+    label('COMBO', rx, py);
+    g.font = F(600, 14); const bw = g.measureText(`best ${G.maxCombo}`).width;
+    fit(800, 50, 26, String(Math.max(G.combo, G.drop ? G.drop.n : 0)), room - u(12) - bw);
     if (G.drop && now - G.drop.t < 450) {   // a miss: the old count turns red and drops away
-      const p = (now - G.drop.t) / 450; g.globalAlpha = 1 - p; g.fillStyle = MISS_COL; g.fillText(G.drop.n, px, py + 108 + (calm ? 0 : 10 * eOut(p))); g.globalAlpha = 1;
+      const p = (now - G.drop.t) / 450; g.globalAlpha = 1 - p; g.fillStyle = MISS_COL; g.fillText(G.drop.n, rx, py + u(50) + (calm ? 0 : u(10) * eOut(p))); g.globalAlpha = 1;
     } else {   // nudges up on each hit
-      const k = calm ? 1 : 1 + 0.12 * Math.max(0, 1 - (now - G.comboT) / 120);
-      g.save(); g.translate(px, py + 108); g.scale(k, k); g.fillStyle = G.combo >= 5 ? INK : MUTED; g.fillText(G.combo, 0, 0); g.restore();
+      const kk = calm ? 1 : 1 + 0.12 * Math.max(0, 1 - (now - G.comboT) / 120);
+      g.save(); g.translate(rx, py + u(50)); g.scale(kk, kk); g.fillStyle = G.combo >= 5 ? INK : MUTED; g.fillText(G.combo, 0, 0); g.restore();
     }
     const dropping = G.drop && now - G.drop.t < 450, cw = g.measureText(String(dropping ? G.drop.n : G.combo)).width;   // place "best" after the number actually drawn
-    g.fillStyle = MUTED; g.font = '600 13px "Figtree", system-ui, sans-serif'; g.fillText(`best ${G.maxCombo}`, px + cw + 12, py + 106);
-    label('ACCURACY', py + 146); g.fillStyle = INK; g.font = '700 22px "Figtree", system-ui, sans-serif'; g.fillText(acc, px, py + 174);
-    if (G.judged) { g.fillStyle = MUTED; g.font = '600 13px "Figtree", system-ui, sans-serif'; g.fillText(ratingOf(), px, py + 194); }
-    label('SONG', py + 232); g.fillStyle = INK; g.font = '600 16px "Figtree", system-ui, sans-serif'; g.fillText(time, px, py + 256);
-    g.fillStyle = LINE; g.beginPath(); g.roundRect(px, py + 266, 150, 5, 2.5); g.fill();
-    g.fillStyle = MUTED; g.beginPath(); g.roundRect(px, py + 266, Math.max(3, 150 * prog), 5, 2.5); g.fill();
-    g.fillStyle = MUTED; g.font = '600 12.5px "Figtree", system-ui, sans-serif'; g.fillText(`${Math.round(prog * 100)}%`, px + 158, py + 272);
-    // tally
-    g.textAlign = 'right'; g.font = '600 15px "Figtree", system-ui, sans-serif';
-    let yy = py + 20;
-    for (const J of [...JUDGE, {name:'Miss', col:MISS_COL}]) { g.fillStyle = J.col; g.fillText(`${J.name}  ${G.counts[J.name]}`, x0 - 32, yy); yy += 26; }
+    g.fillStyle = MUTED; g.font = F(600, 14); g.fillText(`best ${G.maxCombo}`, rx + cw + u(12), py + u(48));
+    const barW = Math.min(room - u(44), u(180));
+    label('SONG', rx, py + u(96)); g.fillStyle = INK; g.font = F(600, 18); g.fillText(time, rx, py + u(122));
+    g.fillStyle = LINE; g.beginPath(); g.roundRect(rx, py + u(134), barW, u(6), u(3)); g.fill();
+    g.fillStyle = MUTED; g.beginPath(); g.roundRect(rx, py + u(134), Math.max(3, barW * prog), u(6), u(3)); g.fill();
+    g.fillStyle = MUTED; g.font = F(600, 13); g.fillText(`${Math.round(prog * 100)}%`, rx + barW + u(8), py + u(141));
     g.textAlign = 'center';
-    if (mpOn()) MP.drawStandings(g, px, py + 310);
+    if (mpOn()) MP.drawStandings(g, rx, py + u(186), hs, room);
   } else {
     // narrow screens: one compact line next to the health bar
     g.fillStyle = INK; g.font = '600 14px "Figtree", system-ui, sans-serif'; g.textAlign = 'center';
