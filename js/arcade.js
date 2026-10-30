@@ -322,7 +322,8 @@ function chartStats(notes) {
 }
 
 // ---------- menu ----------
-const mark = (sel, fn) => document.querySelectorAll(sel + ' button').forEach(b => b.classList.toggle('on', fn(b.dataset.v)));
+// the chosen option buttons, for the eye (.on) and for screen readers (aria-pressed)
+const mark = (sel, fn) => document.querySelectorAll(sel + ' button').forEach(b => { const on = !!fn(b.dataset.v); b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
 const bestKey = () => `${tr.name}|${A$.src}|${A$.diff}`;
 // Star rating on each difficulty button. Each one needs that difficulty's whole chart, so after a new song
 // they're worked out one per task (the selected one first, it's already built) instead of freezing the menu.
